@@ -2,14 +2,17 @@
 logs
 *.log
 
-# Dependencies
-node_modules/
+# Build & Target Output
+target/
+.mvn/
+*.class
 
-# Environment variables
+# Environment variables & secrets
 .env
 .env.local
 
-# IDE
+# IDE Configs
 .vscode/
 .idea/
+*.iml
 .DS_Store
