@@ -30,6 +30,7 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.PostRepository postRepository;
     private final com.wayfare.repository.PostReportRepository postReportRepository;
     private final com.wayfare.repository.PlaceRepository placeRepository;
+    private final com.wayfare.repository.UserActivityLogRepository userActivityLogRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -611,5 +612,114 @@ public class DataInitializer implements CommandLineRunner {
 
             log.info(">>> SUCCESS: Seeded 6 sample community posts with AI Safety metrics and escalation reports!");
         }
+
+        // =====================================================================
+        // SEED SYSTEM AUDIT LOGS (USER_ACTIVITY_LOGS)
+        // =====================================================================
+        if (userActivityLogRepository.count() == 0) {
+            log.info("Seeding realistic system audit and activity logs...");
+
+            User admin = userRepository.findByEmail("admin@gmail.com").orElse(null);
+            User linh = userRepository.findByEmail("linh@gmail.com").orElse(null);
+            User minhanh = userRepository.findByEmail("minhanh@gmail.com").orElse(null);
+            User hoangnam = userRepository.findByEmail("hoangnam@gmail.com").orElse(null);
+            User tuankiet = userRepository.findByEmail("tuankiet@gmail.com").orElse(null);
+
+            List<com.wayfare.entity.UserActivityLog> logs = List.of(
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(admin)
+                            .action("LOGIN")
+                            .details("Quản trị viên đăng nhập vào hệ thống Wayfare Portal")
+                            .ipAddress("127.0.0.1")
+                            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0")
+                            .createdAt(java.time.LocalDateTime.now().minusMinutes(12))
+                            .build(),
+
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(admin)
+                            .action("USER_MANAGEMENT")
+                            .details("Cập nhật trạng thái người dùng: spammer@gmail.com (Trạng thái: LOCKED, Lý do: Báo cáo vi phạm nhiều lần)")
+                            .ipAddress("127.0.0.1")
+                            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0")
+                            .createdAt(java.time.LocalDateTime.now().minusMinutes(25))
+                            .build(),
+
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(minhanh)
+                            .action("RESOLVE_REPORT")
+                            .details("Xử lý báo cáo #102: Khóa tạm thời bài viết vi phạm quảng cáo trái phép của tài khoản @spammer_vn")
+                            .ipAddress("113.161.45.22")
+                            .userAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15")
+                            .createdAt(java.time.LocalDateTime.now().minusHours(1))
+                            .build(),
+
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(linh)
+                            .action("CREATE_ITINERARY")
+                            .details("Tạo mới lịch trình du lịch: 'Khám phá Đà Nẵng - Hội An (3N2Đ)' với ngân sách dự kiến 4.500.000₫")
+                            .ipAddress("171.244.12.89")
+                            .userAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) Mobile/15E148")
+                            .createdAt(java.time.LocalDateTime.now().minusHours(2))
+                            .build(),
+
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(hoangnam)
+                            .action("AI_PLANNER_GENERATE")
+                            .details("Yêu cầu AI lập lộ trình tự động: Điểm đến Sapa, thời gian 3 ngày 2 đêm, phong cách Phiêu lưu & Khám phá")
+                            .ipAddress("14.162.180.50")
+                            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edge/127.0.0.0")
+                            .createdAt(java.time.LocalDateTime.now().minusHours(4))
+                            .build(),
+
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(linh)
+                            .action("LOGIN")
+                            .details("Người dùng đăng nhập thành công qua thiết bị Mobile")
+                            .ipAddress("171.244.12.89")
+                            .userAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) Mobile/15E148")
+                            .createdAt(java.time.LocalDateTime.now().minusHours(5))
+                            .build(),
+
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(tuankiet)
+                            .action("CREATE_POST")
+                            .details("Đăng bài viết mới lên Cộng đồng: 'Lịch trình khám phá Phú Quốc tự túc tiết kiệm cho nhóm bạn'")
+                            .ipAddress("118.69.190.10")
+                            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0")
+                            .createdAt(java.time.LocalDateTime.now().minusHours(8))
+                            .build(),
+
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(admin)
+                            .action("UPDATE_PLACE")
+                            .details("Cập nhật thông tin điểm đến: 'Bà Nà Hills & Cầu Vàng' (Bổ sung giá vé cáp treo mới nhất)")
+                            .ipAddress("127.0.0.1")
+                            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0")
+                            .createdAt(java.time.LocalDateTime.now().minusDays(1))
+                            .build(),
+
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(admin)
+                            .action("ROLE_MANAGEMENT")
+                            .details("Gán vai trò Quản trị viên/Kiểm duyệt (ROLE_ADMIN) cho người dùng Minh Anh (@minhanhtravel)")
+                            .ipAddress("127.0.0.1")
+                            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0")
+                            .createdAt(java.time.LocalDateTime.now().minusDays(1).minusHours(3))
+                            .build(),
+
+                    com.wayfare.entity.UserActivityLog.builder()
+                            .user(tuankiet)
+                            .action("REGISTER")
+                            .details("Đăng ký tài khoản người dùng mới thành công: tuankiet@gmail.com")
+                            .ipAddress("118.69.190.10")
+                            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0")
+                            .createdAt(java.time.LocalDateTime.now().minusDays(2))
+                            .build()
+            );
+
+            userActivityLogRepository.saveAll(logs);
+            log.info(">>> SUCCESS: Seeded {} realistic system audit logs into user_activity_logs!", logs.size());
+        }
     }
 }
+

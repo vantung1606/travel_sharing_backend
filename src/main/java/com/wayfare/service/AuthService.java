@@ -25,6 +25,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ActivityLogService activityLogService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -62,6 +63,7 @@ public class AuthService {
 
         User savedUser = userRepository.save(newUser);
         log.info("User registered successfully. Assigned ID: {}, Handle: {}", savedUser.getId(), savedUser.getHandle());
+        activityLogService.recordLog(savedUser, "REGISTER", "Người dùng tạo tài khoản mới: " + savedUser.getEmail(), "127.0.0.1", "Web Client");
 
         String token = "jwt-access-token-" + UUID.randomUUID();
 
@@ -76,7 +78,7 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         log.info("Attempting login for email: {}", request.getEmail());
 
@@ -92,6 +94,7 @@ public class AuthService {
         }
 
         log.info("Login successful for user ID: {}, email: {}", user.getId(), user.getEmail());
+        activityLogService.recordLog(user, "LOGIN", "Đăng nhập thành công vào hệ thống Wayfare", "127.0.0.1", "Web Client");
 
         String token = "jwt-access-token-" + UUID.randomUUID();
 

@@ -24,6 +24,7 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ActivityLogService activityLogService;
 
     @Transactional(readOnly = true)
     public List<UserDto> getUsers(String keyword, String role, String status) {
@@ -80,6 +81,9 @@ public class AdminUserService {
         }
 
         User saved = userRepository.save(user);
+        String actionType = currentlyLocked ? "USER_UNLOCK" : "USER_LOCK";
+        String details = (currentlyLocked ? "Mở khóa tài khoản: " : "Khóa tài khoản: ") + user.getEmail() + " bởi Admin " + adminEmail;
+        activityLogService.recordLog(user, actionType, details, "127.0.0.1", "Admin Portal");
         return mapToDto(saved);
     }
 
@@ -113,6 +117,7 @@ public class AdminUserService {
         user.setRoles(roles);
         User saved = userRepository.save(user);
         log.info("Successfully updated roles for user id: {} -> {}", userId, roles.stream().map(Role::getName).collect(Collectors.joining(", ")));
+        activityLogService.recordLog(user, "ROLE_MANAGEMENT", "Cập nhật phân quyền tài khoản " + user.getEmail() + " thành " + targetRole + " bởi Admin " + adminEmail, "127.0.0.1", "Admin Portal");
         return mapToDto(saved);
     }
 
