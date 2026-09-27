@@ -47,6 +47,14 @@ public class User {
     @Column(name = "is_verified", nullable = false)
     private Boolean isVerified = true;
 
+    @Builder.Default
+    @Column(length = 20, nullable = false)
+    private String status = "ACTIVE"; // ACTIVE, LOCKED
+
+    @Builder.Default
+    @Column(name = "is_locked", nullable = false)
+    private Boolean isLocked = false;
+
     @Column(name = "travel_style", length = 100)
     private String travelStyle; // e.g., 'Phượt mạo hiểm', 'Nghỉ dưỡng', 'Foodie'
 

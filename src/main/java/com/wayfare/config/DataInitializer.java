@@ -73,11 +73,77 @@ public class DataInitializer implements CommandLineRunner {
                             .handle("@linh_hoang92")
                             .avatarUrl("https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80")
                             .bio("Nhiếp ảnh gia du lịch tự túc và mê khám phá văn hóa bản địa")
+                            .status("ACTIVE")
+                            .isLocked(false)
                             .isVerified(true)
                             .roles(Set.of(userRole))
                             .build();
                     return userRepository.save(user);
                 });
+
+        // Seed Minh Anh (Community Moderator)
+        if (!userRepository.existsByEmail("minhanh@gmail.com")) {
+            userRepository.save(User.builder()
+                    .email("minhanh@gmail.com")
+                    .password(passwordEncoder.encode("password123"))
+                    .fullName("Minh Anh")
+                    .handle("@minhanhtravel")
+                    .avatarUrl("https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80")
+                    .bio("Kiểm duyệt viên cộng đồng WanderAI khu vực miền Bắc")
+                    .status("ACTIVE")
+                    .isLocked(false)
+                    .isVerified(true)
+                    .roles(Set.of(adminRole, userRole))
+                    .build());
+        }
+
+        // Seed Hoàng Nam (Gold Member)
+        if (!userRepository.existsByEmail("hoangnam@gmail.com")) {
+            userRepository.save(User.builder()
+                    .email("hoangnam@gmail.com")
+                    .password(passwordEncoder.encode("password123"))
+                    .fullName("Hoàng Nam")
+                    .handle("@namwanderer")
+                    .avatarUrl("https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80")
+                    .bio("Thành viên Vàng - Đã hoàn thành 18 chuyến đi xuyên Việt")
+                    .status("ACTIVE")
+                    .isLocked(false)
+                    .isVerified(true)
+                    .roles(Set.of(userRole))
+                    .build());
+        }
+
+        // Seed Tuấn Kiệt (Local Guide)
+        if (!userRepository.existsByEmail("tuankiet@gmail.com")) {
+            userRepository.save(User.builder()
+                    .email("tuankiet@gmail.com")
+                    .password(passwordEncoder.encode("password123"))
+                    .fullName("Tuấn Kiệt")
+                    .handle("@tuankiet_phuot")
+                    .avatarUrl("https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80")
+                    .bio("Hướng dẫn viên địa phương chuyên tour trekking Tà Năng - Phan Dũng")
+                    .status("ACTIVE")
+                    .isLocked(false)
+                    .isVerified(true)
+                    .roles(Set.of(userRole))
+                    .build());
+        }
+
+        // Seed Nguyễn Hoàng Long (Banned / Locked account for audit demonstration)
+        if (!userRepository.existsByEmail("long.tourdalat88@gmail.com")) {
+            userRepository.save(User.builder()
+                    .email("long.tourdalat88@gmail.com")
+                    .password(passwordEncoder.encode("password123"))
+                    .fullName("Nguyễn Hoàng Long")
+                    .handle("@tourgiare_dalat")
+                    .avatarUrl("https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=300&q=80")
+                    .bio("Tour Đà Lạt giá rẻ chỉ 499k bao ăn ở trọn gói")
+                    .status("LOCKED")
+                    .isLocked(true)
+                    .isVerified(false)
+                    .roles(Set.of(userRole))
+                    .build());
+        }
 
         // Seed Sample Notifications if repository is empty
         if (notificationRepository.count() == 0) {
