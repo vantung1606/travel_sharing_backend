@@ -21,6 +21,19 @@ public class AdminReportController {
 
     private final AdminReportService adminReportService;
 
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getReportsRoot(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false, defaultValue = "all") String status
+    ) {
+        log.info("REST request to root /api/admin/reports, keyword: '{}', status: '{}'", keyword, status);
+        List<AdminPostDto> posts = adminReportService.getAllArticles(keyword, status);
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("data", posts);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/metrics")
     public ResponseEntity<Map<String, Object>> getMetrics() {
         log.info("REST request to get admin report moderation metrics");
