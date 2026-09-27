@@ -29,6 +29,7 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.ItineraryExpenseRepository itineraryExpenseRepository;
     private final com.wayfare.repository.PostRepository postRepository;
     private final com.wayfare.repository.PostReportRepository postReportRepository;
+    private final com.wayfare.repository.PlaceRepository placeRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -353,6 +354,132 @@ public class DataInitializer implements CommandLineRunner {
                     .build());
 
             log.info(">>> SUCCESS: Seeded sample itineraries (Đà Nẵng, Đà Lạt) with full physical addresses & expenses!");
+        }
+
+        // Additional Itineraries for Multi-User Realism
+        if (itineraryRepository.count() < 4) {
+            User hoangNamUser = userRepository.findByEmail("hoangnam@gmail.com").orElse(adminUser);
+            User tuankietUser = userRepository.findByEmail("tuankiet@gmail.com").orElse(adminUser);
+
+            com.wayfare.entity.Itinerary haGiangTrip = itineraryRepository.save(com.wayfare.entity.Itinerary.builder()
+                    .creator(hoangNamUser)
+                    .title("Chinh phục Cực Bắc & Đèo Mã Pí Lèng 4N3Đ")
+                    .destination("Hà Giang")
+                    .startDate(java.time.LocalDate.now().plusDays(7))
+                    .endDate(java.time.LocalDate.now().plusDays(11))
+                    .budgetTotal(java.math.BigDecimal.valueOf(3200000))
+                    .coverImageUrl("https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80")
+                    .isAiGenerated(true)
+                    .status("ACTIVE")
+                    .build());
+
+            itineraryMemberRepository.save(com.wayfare.entity.ItineraryMember.builder()
+                    .itinerary(haGiangTrip)
+                    .user(hoangNamUser)
+                    .role("OWNER")
+                    .build());
+
+            com.wayfare.entity.Itinerary phuQuocTrip = itineraryRepository.save(com.wayfare.entity.Itinerary.builder()
+                    .creator(tuankietUser)
+                    .title("Khám phá ẩm thực & biển đêm Hòn Thơm Phú Quốc 3N2Đ")
+                    .destination("Phú Quốc")
+                    .startDate(java.time.LocalDate.now().plusDays(20))
+                    .endDate(java.time.LocalDate.now().plusDays(23))
+                    .budgetTotal(java.math.BigDecimal.valueOf(5500000))
+                    .coverImageUrl("https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80")
+                    .isAiGenerated(true)
+                    .status("ACTIVE")
+                    .build());
+
+            itineraryMemberRepository.save(com.wayfare.entity.ItineraryMember.builder()
+                    .itinerary(phuQuocTrip)
+                    .user(tuankietUser)
+                    .role("OWNER")
+                    .build());
+
+            log.info(">>> SUCCESS: Seeded extra itineraries for Hà Giang and Phú Quốc.");
+        }
+
+        // Seed Places if repository is empty
+        if (placeRepository.count() == 0) {
+            log.info("Seeding verified tourist destinations and places...");
+            List<com.wayfare.entity.Place> samplePlaces = List.of(
+                    com.wayfare.entity.Place.builder()
+                            .name("Bãi biển Mỹ Khê")
+                            .description("Một trong sáu bãi biển quyến rũ nhất hành tinh được bình chọn bởi tạp chí Forbes với bờ cát trắng mịn và làn nước trong xanh quanh năm.")
+                            .address("Đường Võ Nguyên Giáp, Phường Phước Mỹ, Quận Sơn Trà")
+                            .city("Đà Nẵng")
+                            .latitude(java.math.BigDecimal.valueOf(16.0617))
+                            .longitude(java.math.BigDecimal.valueOf(108.2472))
+                            .ticketPrice(java.math.BigDecimal.ZERO)
+                            .averageRating(java.math.BigDecimal.valueOf(4.9))
+                            .reviewCount(1280)
+                            .coverImageUrl("https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=800&q=80")
+                            .build(),
+                    com.wayfare.entity.Place.builder()
+                            .name("Sun World Bà Nà Hills & Cầu Vàng")
+                            .description("Quần thể du lịch nghỉ dưỡng kết hợp vui chơi giải trí hàng đầu Việt Nam nổi tiếng với kiệt tác kiến trúc Cầu Vàng trên mây.")
+                            .address("Thôn An Sơn, Xã Hòa Ninh, Huyện Hòa Vang")
+                            .city("Đà Nẵng")
+                            .latitude(java.math.BigDecimal.valueOf(15.9986))
+                            .longitude(java.math.BigDecimal.valueOf(107.9961))
+                            .ticketPrice(java.math.BigDecimal.valueOf(950000))
+                            .averageRating(java.math.BigDecimal.valueOf(4.8))
+                            .reviewCount(2450)
+                            .coverImageUrl("https://images.unsplash.com/photo-1570789210967-2cac24afeb00?auto=format&fit=crop&w=800&q=80")
+                            .build(),
+                    com.wayfare.entity.Place.builder()
+                            .name("Đèo Mã Pí Lèng & Hẻm Vực Tu Sản")
+                            .description("Vua của các con đèo tại Việt Nam uốn lượn trên cao nguyên đá Đồng Văn hùng vĩ với dòng sông Nho Quế xanh như ngọc bích.")
+                            .address("Quốc lộ 4C, Xã Pải Lủng, Huyện Mèo Vạc")
+                            .city("Hà Giang")
+                            .latitude(java.math.BigDecimal.valueOf(23.2428))
+                            .longitude(java.math.BigDecimal.valueOf(105.4192))
+                            .ticketPrice(java.math.BigDecimal.valueOf(120000))
+                            .averageRating(java.math.BigDecimal.valueOf(4.9))
+                            .reviewCount(890)
+                            .coverImageUrl("https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80")
+                            .build(),
+                    com.wayfare.entity.Place.builder()
+                            .name("Phố cổ Hội An")
+                            .description("Di sản văn hóa thế giới được UNESCO công nhận với những dãy nhà cổ màu vàng đặc trưng, đèn lồng rực rỡ và nền ẩm thực phong phú.")
+                            .address("Phường Minh An, TP. Hội An")
+                            .city("Quảng Nam")
+                            .latitude(java.math.BigDecimal.valueOf(15.8801))
+                            .longitude(java.math.BigDecimal.valueOf(108.3380))
+                            .ticketPrice(java.math.BigDecimal.valueOf(120000))
+                            .averageRating(java.math.BigDecimal.valueOf(4.9))
+                            .reviewCount(3120)
+                            .coverImageUrl("https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80")
+                            .build(),
+                    com.wayfare.entity.Place.builder()
+                            .name("Tiệm Cafe Túi Mơ To")
+                            .description("Quán cà phê ngắm hoàng hôn và thung lũng đèn đêm Đà Lạt với khuôn viên hoa cúc họa mi thơ mộng đậm chất vintage.")
+                            .address("Hẻm 31 Sào Nam, Phường 11")
+                            .city("Đà Lạt")
+                            .latitude(java.math.BigDecimal.valueOf(11.9404))
+                            .longitude(java.math.BigDecimal.valueOf(108.4583))
+                            .ticketPrice(java.math.BigDecimal.valueOf(65000))
+                            .averageRating(java.math.BigDecimal.valueOf(4.7))
+                            .reviewCount(950)
+                            .coverImageUrl("https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80")
+                            .build(),
+                    com.wayfare.entity.Place.builder()
+                            .name("Bãi Sao & Quần đảo An Thới")
+                            .description("Bãi biển cát trắng mịn như kem tại Phú Quốc với làn nước phẳng lặng và rạn san hô tự nhiên đa sắc màu tuyệt đẹp.")
+                            .address("Ấp Bãi Sao, Phường An Thới")
+                            .city("Phú Quốc")
+                            .latitude(java.math.BigDecimal.valueOf(10.0526))
+                            .longitude(java.math.BigDecimal.valueOf(104.0321))
+                            .ticketPrice(java.math.BigDecimal.ZERO)
+                            .averageRating(java.math.BigDecimal.valueOf(4.8))
+                            .reviewCount(1420)
+                            .coverImageUrl("https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80")
+                            .build()
+            );
+
+            placeRepository.saveAll(samplePlaces);
+            log.info(">>> SUCCESS: Seeded 6 verified tourist places into database!");
         }
 
         // Seed Sample Community Posts and Reports if empty

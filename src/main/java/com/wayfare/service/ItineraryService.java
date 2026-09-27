@@ -35,6 +35,13 @@ public class ItineraryService {
     }
 
     @Transactional(readOnly = true)
+    public List<ItineraryDto> getAllItineraries() {
+        log.info("Fetching all itineraries across system for admin dashboard");
+        List<Itinerary> list = itineraryRepository.findAll(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        return list.stream().map(this::mapToSummaryDto).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public ItineraryDto getItineraryById(Long id, String email) {
         log.info("Fetching itinerary detail for id: {} requested by: {}", id, email);
         Itinerary itinerary = itineraryRepository.findById(id)

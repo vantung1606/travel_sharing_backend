@@ -26,6 +26,13 @@ public class ItineraryController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách lịch trình thành công", list));
     }
 
+    @GetMapping("/all")
+    public ResponseEntity<ApiResponse<List<ItineraryDto>>> getAllItineraries() {
+        log.info("REST request to get all system itineraries for admin");
+        List<ItineraryDto> list = itineraryService.getAllItineraries();
+        return ResponseEntity.ok(ApiResponse.success("Lấy toàn bộ lịch trình hệ thống thành công", list));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ItineraryDto>> getItineraryById(
             @PathVariable Long id,
