@@ -41,6 +41,9 @@ public class Itinerary {
     @Column(name = "budget_total", precision = 12, scale = 2)
     private BigDecimal budgetTotal;
 
+    @Column(name = "cover_image_url", length = 500)
+    private String coverImageUrl;
+
     @Builder.Default
     @Column(name = "is_ai_generated", nullable = false)
     private Boolean isAiGenerated = false;

@@ -42,6 +42,18 @@ public class ItineraryDetail {
     @Column(name = "estimated_cost", precision = 12, scale = 2)
     private BigDecimal estimatedCost;
 
+    @Column(name = "location_address", length = 255)
+    private String locationAddress;
+
+    @Column(length = 50)
+    private String category; // e.g. 'Văn hóa', 'Ẩm thực', 'Nghỉ dưỡng'
+
+    @Column(name = "ai_tip", columnDefinition = "TEXT")
+    private String aiTip;
+
+    @Column(name = "transit_info", length = 150)
+    private String transitInfo;
+
     @Column(columnDefinition = "TEXT")
     private String note;
 }
