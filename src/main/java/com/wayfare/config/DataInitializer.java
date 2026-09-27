@@ -27,6 +27,8 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.ItineraryDetailRepository itineraryDetailRepository;
     private final com.wayfare.repository.ItineraryMemberRepository itineraryMemberRepository;
     private final com.wayfare.repository.ItineraryExpenseRepository itineraryExpenseRepository;
+    private final com.wayfare.repository.PostRepository postRepository;
+    private final com.wayfare.repository.PostReportRepository postReportRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -351,6 +353,136 @@ public class DataInitializer implements CommandLineRunner {
                     .build());
 
             log.info(">>> SUCCESS: Seeded sample itineraries (Đà Nẵng, Đà Lạt) with full physical addresses & expenses!");
+        }
+
+        // Seed Sample Community Posts and Reports if empty
+        if (postRepository.count() == 0) {
+            log.info("Seeding community posts and reports for content moderation...");
+            User hoangNam = userRepository.findByEmail("hoangnam@gmail.com").orElse(adminUser);
+            User minhAnh = userRepository.findByEmail("minhanh@gmail.com").orElse(adminUser);
+            User tuankiet = userRepository.findByEmail("tuankiet@gmail.com").orElse(adminUser);
+            User longSpam = userRepository.findByEmail("long.tourdalat88@gmail.com").orElse(adminUser);
+            User linh = userRepository.findByEmail("linh@gmail.com").orElse(memberUser);
+
+            // 1. Critical Report: Camping in Cat Tien
+            com.wayfare.entity.Post p1 = postRepository.save(com.wayfare.entity.Post.builder()
+                    .author(hoangNam)
+                    .title("Bí kíp cắm trại cấm lửa tại Vườn Quốc Gia Cát Tiên")
+                    .content("Tối qua nhóm mình lách chốt kiểm lâm vào khu sâu suối Đắc Bông, tìm chỗ cỏ lau hạ lều nhóm lửa cực chill, không ai phát hiện được nhé cả nhà. Nhớ mang theo củi khô chút và dọn dẹp trước bình minh để tránh kiểm lâm tuần tra.")
+                    .category("Nguy cơ an toàn & Pháp luật")
+                    .locationTag("Vườn QG Cát Tiên")
+                    .imageUrl("https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=800&q=80")
+                    .likeCount(14)
+                    .commentCount(8)
+                    .reportsCount(5)
+                    .status("PENDING_REPORT")
+                    .aiSafetyScore(42)
+                    .aiFlagReason("Thông tin nguy hiểm, tuyên truyền cắm trại ở khu bảo tồn nghiêm ngặt không được phép, khuyến khích tự ý đốt lửa trại trong rừng mùa khô gây nguy cơ cháy rừng.")
+                    .reportReason("Thông tin nguy hiểm, tuyên truyền cắm trại ở khu bảo tồn nghiêm ngặt không được phép, khuyến khích tự ý đốt lửa trại trong rừng mùa khô gây nguy cơ cháy rừng.")
+                    .badgeText("5 Lượt báo cáo")
+                    .build());
+
+            postReportRepository.save(com.wayfare.entity.PostReport.builder()
+                    .post(p1)
+                    .reporter(minhAnh)
+                    .category("Nguy cơ an toàn & Pháp luật")
+                    .reason("Vi phạm quy chế phòng chống cháy rừng và luật bảo vệ rừng đặc dụng.")
+                    .status("PENDING")
+                    .build());
+
+            // 2. Critical Report: Visa scam
+            com.wayfare.entity.Post p2 = postRepository.save(com.wayfare.entity.Post.builder()
+                    .author(longSpam)
+                    .title("Dịch vụ làm visa & bán tour giá rẻ không cọc")
+                    .content("Cam kết bao đậu visa Schengen 100% không chứng minh tài chính, bao gồm vé bay khứ hồi giá 50%. Nhắn tin Zalo 0909xxx để nhận quà tặng ngay hôm nay, nhận slot ưu đãi có hạn chỉ 3 ngày duy nhất.")
+                    .category("Spam Thương Mại & Nghi vấn Scam")
+                    .locationTag("Bot Spammer")
+                    .imageUrl("https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80")
+                    .likeCount(2)
+                    .commentCount(1)
+                    .reportsCount(12)
+                    .status("PENDING_REPORT")
+                    .aiSafetyScore(12)
+                    .aiFlagReason("Hệ thống AI Moderation gắn cờ: Phát hiện cấu trúc câu hàng loạt chứa 3 liên kết rút gọn độc hại lạ và 4 số điện thoại Zalo ảo không qua đăng ký đối tác.")
+                    .reportReason("Hệ thống AI Moderation gắn cờ: Phát hiện cấu trúc câu hàng loạt chứa 3 liên kết rút gọn độc hại lạ và 4 số điện thoại Zalo ảo không qua đăng ký đối tác.")
+                    .badgeText("AI Scam 92%")
+                    .build());
+
+            postReportRepository.save(com.wayfare.entity.PostReport.builder()
+                    .post(p2)
+                    .reporter(hoangNam)
+                    .category("Spam Thương Mại & Nghi vấn Scam")
+                    .reason("Quảng cáo dịch vụ tài chính lừa đảo, không có giấy phép du lịch lữ hành quốc tế.")
+                    .status("PENDING")
+                    .build());
+
+            // 3. Dispute Report: Homestay Sa Pa
+            com.wayfare.entity.Post p3 = postRepository.save(com.wayfare.entity.Post.builder()
+                    .author(linh)
+                    .title("Review homestay Sa Pa cực tệ, bị mất đồ")
+                    .content("Phòng ốc ẩm mốc, thái độ nhân viên cực kỳ thiếu tôn trọng. Đặc biệt mình để quên tai nghe AirPods tại bàn lễ tân khi trả phòng và nhân viên chối hoàn toàn, không hỗ trợ check camera.")
+                    .category("Khiếu nại Đánh giá & Bôi nhọ")
+                    .locationTag("Sa Pa, Lào Cai")
+                    .imageUrl("https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80")
+                    .likeCount(38)
+                    .commentCount(19)
+                    .reportsCount(3)
+                    .status("PENDING_REPORT")
+                    .aiSafetyScore(78)
+                    .aiFlagReason("Khiếu nại từ Chủ homestay 'Mây Valley Sa Pa': Khách không có hóa đơn cư trú trùng ngày trên bài đăng. Yêu cầu kiểm tra tính xác thực để tránh gây thiệt hại danh tiếng.")
+                    .reportReason("Khiếu nại từ Chủ homestay 'Mây Valley Sa Pa': Khách không có hóa đơn cư trú trùng ngày trên bài đăng. Yêu cầu kiểm tra tính xác thực để tránh gây thiệt hại danh tiếng.")
+                    .badgeText("Tranh chấp Đối tác")
+                    .build());
+
+            // 4. Safe Community Article: Son Tra Da Nang
+            postRepository.save(com.wayfare.entity.Post.builder()
+                    .author(minhAnh)
+                    .title("Top 5 quán cà phê ngắm hoàng hôn đỉnh nhất bán đảo Sơn Trà")
+                    .content("Đến Đà Nẵng đừng quên ghé bán đảo Sơn Trà vào tầm 16h30 để đón khoảnh khắc hoàng hôn buông xuống biển Mỹ Khê tuyệt đẹp. Các quán gợi ý: Tiệm Cà Phê Chân Mây, Sơn Trà Marina...")
+                    .category("Ẩm thực & Check-in")
+                    .locationTag("Đà Nẵng")
+                    .imageUrl("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80")
+                    .likeCount(45)
+                    .commentCount(12)
+                    .reportsCount(0)
+                    .status("ACTIVE")
+                    .aiSafetyScore(100)
+                    .badgeText("Nội dung an toàn")
+                    .build());
+
+            // 5. Safe Community Article: Ha Giang phượt
+            postRepository.save(com.wayfare.entity.Post.builder()
+                    .author(hoangNam)
+                    .title("Kinh nghiệm phượt Hà Giang mùa hoa tam giác mạch 3N2Đ")
+                    .content("Cung đường đèo Mã Pí Lèng mùa này đẹp nghẹt thở với những cánh đồng hoa tam giác mạch trải dài từ Quản Bạ đến Đồng Văn. Lưu ý chuẩn bị xe máy côn tay bảo dưỡng xích cẩn thận.")
+                    .category("Phượt & Khám phá")
+                    .locationTag("Hà Giang")
+                    .imageUrl("https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80")
+                    .likeCount(128)
+                    .commentCount(34)
+                    .reportsCount(0)
+                    .status("ACTIVE")
+                    .aiSafetyScore(98)
+                    .badgeText("Nội dung an toàn")
+                    .build());
+
+            // 6. Safe Community Article: Phu Quoc
+            postRepository.save(com.wayfare.entity.Post.builder()
+                    .author(tuankiet)
+                    .title("Lịch trình khám phá Phú Quốc tự túc tiết kiệm cho nhóm bạn")
+                    .content("Chia sẻ kinh nghiệm thuê tàu câu mực đêm tại Hòn Móng Tay và lặn ngắm san hô tự nhiên tại quần đảo An Thới. Chi phí chỉ khoảng 1.200.000đ/người cho cả ngày trải nghiệm biển.")
+                    .category("Biển đảo & Nghỉ dưỡng")
+                    .locationTag("Phú Quốc")
+                    .imageUrl("https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80")
+                    .likeCount(89)
+                    .commentCount(22)
+                    .reportsCount(0)
+                    .status("ACTIVE")
+                    .aiSafetyScore(100)
+                    .badgeText("Nội dung an toàn")
+                    .build());
+
+            log.info(">>> SUCCESS: Seeded 6 sample community posts with AI Safety metrics and escalation reports!");
         }
     }
 }

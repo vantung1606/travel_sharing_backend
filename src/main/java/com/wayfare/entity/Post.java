@@ -44,6 +44,30 @@ public class Post {
     @Column(name = "comment_count")
     private Integer commentCount = 0;
 
+    @Builder.Default
+    @Column(name = "status", length = 30)
+    private String status = "ACTIVE"; // ACTIVE, PENDING_REPORT, HIDDEN, REMOVED
+
+    @Column(name = "category", length = 100)
+    private String category; // e.g., "Nguy cơ an toàn & Pháp luật", "Spam Thương Mại"
+
+    @Builder.Default
+    @Column(name = "ai_safety_score")
+    private Integer aiSafetyScore = 98; // 0 to 100
+
+    @Column(name = "ai_flag_reason", columnDefinition = "TEXT")
+    private String aiFlagReason;
+
+    @Builder.Default
+    @Column(name = "reports_count")
+    private Integer reportsCount = 0;
+
+    @Column(name = "report_reason", columnDefinition = "TEXT")
+    private String reportReason;
+
+    @Column(name = "badge_text", length = 100)
+    private String badgeText;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
