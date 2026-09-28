@@ -9,6 +9,7 @@ import com.wayfare.repository.RoleRepository;
 import com.wayfare.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,11 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        return register(request, null);
+    }
+
+    @Transactional
+    public AuthResponse register(RegisterRequest request, HttpServletRequest httpRequest) {
         log.info("Starting user registration for email: {}", request.getEmail());
 
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -63,7 +69,10 @@ public class AuthService {
 
         User savedUser = userRepository.save(newUser);
         log.info("User registered successfully. Assigned ID: {}, Handle: {}", savedUser.getId(), savedUser.getHandle());
-        activityLogService.recordLog(savedUser, "REGISTER", "Người dùng tạo tài khoản mới: " + savedUser.getEmail(), "127.0.0.1", "Web Client");
+
+        String ip = activityLogService.extractClientIp(httpRequest);
+        String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36";
+        activityLogService.recordLog(savedUser, "REGISTER", "Người dùng tạo tài khoản mới: " + savedUser.getEmail(), ip, ua);
 
         String token = "jwt-access-token-" + UUID.randomUUID();
 
@@ -80,6 +89,11 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
+        return login(request, null);
+    }
+
+    @Transactional
+    public AuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
         log.info("Attempting login for email: {}", request.getEmail());
 
         User user = userRepository.findByEmail(request.getEmail())
@@ -94,7 +108,9 @@ public class AuthService {
         }
 
         log.info("Login successful for user ID: {}, email: {}", user.getId(), user.getEmail());
-        activityLogService.recordLog(user, "LOGIN", "Đăng nhập thành công vào hệ thống Wayfare", "127.0.0.1", "Web Client");
+        String ip = activityLogService.extractClientIp(httpRequest);
+        String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36";
+        activityLogService.recordLog(user, "LOGIN", "Đăng nhập thành công vào hệ thống Wayfare Portal", ip, ua);
 
         String token = "jwt-access-token-" + UUID.randomUUID();
 

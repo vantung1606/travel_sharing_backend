@@ -17,6 +17,8 @@ import java.util.Map;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final com.wayfare.service.ActivityLogService activityLogService;
+    private final com.wayfare.repository.UserRepository userRepository;
 
     @GetMapping
     public ResponseEntity<List<NotificationDto>> getNotifications(
@@ -72,7 +74,8 @@ public class NotificationController {
     @PostMapping("/broadcast")
     public ResponseEntity<Map<String, Object>> broadcastNotification(
             @RequestBody NotificationDto request,
-            @RequestParam(value = "senderEmail", required = false, defaultValue = "admin@gmail.com") String senderEmail) {
+            @RequestParam(value = "senderEmail", required = false, defaultValue = "admin@gmail.com") String senderEmail,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
         log.info("REST request to broadcast notification to all users: type={}, message={}", request.getType(), request.getMessage());
         int count = notificationService.sendBroadcastNotification(
                 request.getType(),
@@ -80,6 +83,16 @@ public class NotificationController {
                 request.getTargetUrl(),
                 senderEmail
         );
+
+        try {
+            com.wayfare.entity.User sender = userRepository.findByEmail(senderEmail).orElse(null);
+            String ip = activityLogService.extractClientIp(httpRequest);
+            String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : "Mozilla/5.0";
+            activityLogService.recordLog(sender, "BROADCAST_NOTIFICATION", "Phát thông báo toàn hệ thống đến " + count + " người dùng: " + request.getMessage(), ip, ua);
+        } catch (Exception e) {
+            log.warn("Failed to record activity log for broadcast: {}", e.getMessage());
+        }
+
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Đã phát thông báo thành công đến " + count + " người dùng",
