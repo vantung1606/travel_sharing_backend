@@ -120,7 +120,7 @@ public class PostService {
 
         // 1. Run WanderAI Content Moderation & Safety Inspection
         AiContentModerationService.ModerationResult aiResult =
-                aiContentModerationService.moderate(title, request.getContent(), request.getLocationTag(), request.getCategory());
+                aiContentModerationService.moderate(title, request.getContent(), request.getLocationTag(), request.getCategory(), attachedItinerary != null);
 
         String initialStatus = aiResult.isApproved() ? "ACTIVE" : "PENDING_REVIEW";
         String postCategory = aiResult.isApproved()
