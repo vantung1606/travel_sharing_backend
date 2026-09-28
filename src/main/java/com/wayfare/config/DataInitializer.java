@@ -31,6 +31,8 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.ItineraryExpenseRepository itineraryExpenseRepository;
     private final com.wayfare.repository.PostRepository postRepository;
     private final com.wayfare.repository.PostReportRepository postReportRepository;
+    private final com.wayfare.repository.PostLikeRepository postLikeRepository;
+    private final com.wayfare.repository.PostCommentRepository postCommentRepository;
     private final com.wayfare.repository.PlaceRepository placeRepository;
     private final com.wayfare.repository.UserActivityLogRepository userActivityLogRepository;
     private final PasswordEncoder passwordEncoder;
@@ -613,6 +615,69 @@ public class DataInitializer implements CommandLineRunner {
                     .build());
 
             log.info(">>> SUCCESS: Seeded 6 sample community posts with AI Safety metrics and escalation reports!");
+        }
+
+        // Link community posts with itineraries and seed realistic comments
+        try {
+            List<com.wayfare.entity.Post> allPosts = postRepository.findAll();
+            com.wayfare.entity.Itinerary daNangItin = itineraryRepository.findAll().stream()
+                    .filter(i -> i.getDestination() != null && i.getDestination().contains("Đà Nẵng"))
+                    .findFirst().orElse(null);
+            com.wayfare.entity.Itinerary haGiangItin = itineraryRepository.findAll().stream()
+                    .filter(i -> i.getDestination() != null && i.getDestination().contains("Hà Giang"))
+                    .findFirst().orElse(null);
+            com.wayfare.entity.Itinerary phuQuocItin = itineraryRepository.findAll().stream()
+                    .filter(i -> i.getDestination() != null && i.getDestination().contains("Phú Quốc"))
+                    .findFirst().orElse(null);
+
+            for (com.wayfare.entity.Post p : allPosts) {
+                if (p.getItinerary() == null && "ACTIVE".equals(p.getStatus())) {
+                    if (p.getLocationTag() != null && p.getLocationTag().contains("Đà Nẵng") && daNangItin != null) {
+                        p.setItinerary(daNangItin);
+                        postRepository.save(p);
+                        log.info("Linked post '{}' with itinerary '{}'", p.getTitle(), daNangItin.getTitle());
+                    } else if (p.getLocationTag() != null && p.getLocationTag().contains("Hà Giang") && haGiangItin != null) {
+                        p.setItinerary(haGiangItin);
+                        postRepository.save(p);
+                        log.info("Linked post '{}' with itinerary '{}'", p.getTitle(), haGiangItin.getTitle());
+                    } else if (p.getLocationTag() != null && p.getLocationTag().contains("Phú Quốc") && phuQuocItin != null) {
+                        p.setItinerary(phuQuocItin);
+                        postRepository.save(p);
+                        log.info("Linked post '{}' with itinerary '{}'", p.getTitle(), phuQuocItin.getTitle());
+                    }
+                }
+            }
+
+            if (postCommentRepository.count() == 0) {
+                User linhUser = userRepository.findByEmail("linh@gmail.com").orElse(null);
+                User adminUserRef = userRepository.findByEmail("admin@gmail.com").orElse(null);
+                User hoangNamUser = userRepository.findByEmail("hoangnam@gmail.com").orElse(null);
+
+                for (com.wayfare.entity.Post p : allPosts) {
+                    if ("ACTIVE".equals(p.getStatus()) && p.getItinerary() != null) {
+                        postCommentRepository.save(com.wayfare.entity.PostComment.builder()
+                                .post(p)
+                                .author(linhUser != null ? linhUser : adminUserRef)
+                                .content("Lịch trình đính kèm này chi tiết và hợp lý quá! Mình vừa bấm Sao chép tour vào kho cá nhân rồi, cảm ơn tác giả nhiều nhé!")
+                                .createdAt(LocalDateTime.now().minusHours(3))
+                                .build());
+
+                        postCommentRepository.save(com.wayfare.entity.PostComment.builder()
+                                .post(p)
+                                .author(hoangNamUser != null ? hoangNamUser : adminUserRef)
+                                .content("Quá đỉnh! Điểm đến toàn chỗ đẹp chuẩn phong cách du lịch trải nghiệm.")
+                                .createdAt(LocalDateTime.now().minusHours(1))
+                                .build());
+
+                        // Update comment count
+                        p.setCommentCount(2);
+                        postRepository.save(p);
+                    }
+                }
+                log.info(">>> SUCCESS: Seeded sample comments for active community posts!");
+            }
+        } catch (Exception e) {
+            log.error("Failed to link itineraries or seed comments: {}", e.getMessage());
         }
 
         // =====================================================================

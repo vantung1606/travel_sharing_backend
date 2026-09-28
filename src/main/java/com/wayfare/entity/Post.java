@@ -24,6 +24,10 @@ public class Post {
     @JoinColumn(name = "user_id", nullable = false)
     private User author;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "itinerary_id")
+    private Itinerary itinerary;
+
     @Column(nullable = false, length = 200)
     private String title;
 
