@@ -93,6 +93,49 @@ public class NotificationService {
         return mapToDto(saved);
     }
 
+    @Transactional
+    public NotificationDto sendNotification(User recipient, User actor, String type, String message, String targetUrl) {
+        if (recipient == null) {
+            log.warn("Cannot send notification: recipient is null");
+            return null;
+        }
+        log.info("Sending notification to recipient {}: type={}, message={}", recipient.getEmail(), type, message);
+        Notification notification = Notification.builder()
+                .recipient(recipient)
+                .actor(actor)
+                .type(type != null ? type : "SYSTEM")
+                .message(message)
+                .targetUrl(targetUrl != null ? targetUrl : "#")
+                .isRead(false)
+                .build();
+        Notification saved = notificationRepository.save(notification);
+        return mapToDto(saved);
+    }
+
+    @Transactional
+    public int sendBroadcastNotification(String type, String message, String targetUrl, String senderEmail) {
+        log.info("Broadcasting notification to all users: sender={}, type={}, message={}", senderEmail, type, message);
+        User actor = (senderEmail != null && !senderEmail.isBlank())
+                ? userRepository.findByEmail(senderEmail).orElse(null)
+                : null;
+
+        List<User> allUsers = userRepository.findAll();
+        List<Notification> notifications = allUsers.stream()
+                .map(user -> Notification.builder()
+                        .recipient(user)
+                        .actor(actor)
+                        .type(type != null ? type : "SYSTEM")
+                        .message(message)
+                        .targetUrl(targetUrl != null ? targetUrl : "#")
+                        .isRead(false)
+                        .build())
+                .collect(Collectors.toList());
+
+        notificationRepository.saveAll(notifications);
+        log.info("Broadcasted notification to {} users successfully.", notifications.size());
+        return notifications.size();
+    }
+
     private User getUserByEmailOrDefault(String email) {
         if (email != null && !email.isBlank()) {
             return userRepository.findByEmail(email)

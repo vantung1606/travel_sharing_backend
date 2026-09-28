@@ -25,6 +25,7 @@ public class AdminUserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final ActivityLogService activityLogService;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public List<UserDto> getUsers(String keyword, String role, String status) {
@@ -84,6 +85,20 @@ public class AdminUserService {
         String actionType = currentlyLocked ? "USER_UNLOCK" : "USER_LOCK";
         String details = (currentlyLocked ? "Mở khóa tài khoản: " : "Khóa tài khoản: ") + user.getEmail() + " bởi Admin " + adminEmail;
         activityLogService.recordLog(user, actionType, details, "127.0.0.1", "Admin Portal");
+
+        // Send real notification to the affected user
+        try {
+            notificationService.sendNotification(
+                    user,
+                    null,
+                    "SYSTEM",
+                    currentlyLocked ? "Tài khoản của bạn đã được Quản trị viên mở khóa thành công." : "Tài khoản của bạn đã bị tạm khóa bởi Quản trị viên do vi phạm quy định.",
+                    "/profile"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send lock status notification: {}", e.getMessage());
+        }
+
         return mapToDto(saved);
     }
 
@@ -118,6 +133,20 @@ public class AdminUserService {
         User saved = userRepository.save(user);
         log.info("Successfully updated roles for user id: {} -> {}", userId, roles.stream().map(Role::getName).collect(Collectors.joining(", ")));
         activityLogService.recordLog(user, "ROLE_MANAGEMENT", "Cập nhật phân quyền tài khoản " + user.getEmail() + " thành " + targetRole + " bởi Admin " + adminEmail, "127.0.0.1", "Admin Portal");
+
+        // Send real notification to user
+        try {
+            notificationService.sendNotification(
+                    user,
+                    null,
+                    "SYSTEM",
+                    "Phân quyền tài khoản của bạn đã được nâng cấp lên vai trò: " + targetRole,
+                    "/profile"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send role update notification: {}", e.getMessage());
+        }
+
         return mapToDto(saved);
     }
 

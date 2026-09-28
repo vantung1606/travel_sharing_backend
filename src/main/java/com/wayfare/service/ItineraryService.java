@@ -25,6 +25,8 @@ public class ItineraryService {
     private final ItineraryExpenseRepository itineraryExpenseRepository;
     private final UserRepository userRepository;
     private final PlaceRepository placeRepository;
+    private final NotificationService notificationService;
+    private final ActivityLogService activityLogService;
 
     @Transactional(readOnly = true)
     public List<ItineraryDto> getItinerariesForUser(String email) {
@@ -117,6 +119,27 @@ public class ItineraryService {
         }
 
         log.info("Successfully created itinerary id: {}", saved.getId());
+
+        // Trigger real notification for creator
+        try {
+            notificationService.sendNotification(
+                    creator,
+                    null,
+                    Boolean.TRUE.equals(request.getIsAiGenerated()) ? "AI_READY" : "SYSTEM",
+                    "Lịch trình '" + saved.getTitle() + "' đã được khởi tạo và lưu trữ thành công!",
+                    "/itineraries?id=" + saved.getId()
+            );
+            activityLogService.recordLog(
+                    creator,
+                    Boolean.TRUE.equals(request.getIsAiGenerated()) ? "AI_PLANNER_GENERATE" : "CREATE_ITINERARY",
+                    "Tạo lịch trình mới: '" + saved.getTitle() + "' (" + saved.getDestination() + ")",
+                    "127.0.0.1",
+                    "Web Client"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to dispatch creation notification or activity log: {}", e.getMessage());
+        }
+
         return getItineraryById(saved.getId(), creatorEmail);
     }
 

@@ -68,4 +68,22 @@ public class NotificationController {
         NotificationDto created = notificationService.createNotification(request, email);
         return ResponseEntity.ok(created);
     }
+
+    @PostMapping("/broadcast")
+    public ResponseEntity<Map<String, Object>> broadcastNotification(
+            @RequestBody NotificationDto request,
+            @RequestParam(value = "senderEmail", required = false, defaultValue = "admin@gmail.com") String senderEmail) {
+        log.info("REST request to broadcast notification to all users: type={}, message={}", request.getType(), request.getMessage());
+        int count = notificationService.sendBroadcastNotification(
+                request.getType(),
+                request.getMessage(),
+                request.getTargetUrl(),
+                senderEmail
+        );
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Đã phát thông báo thành công đến " + count + " người dùng",
+                "recipientCount", count
+        ));
+    }
 }
