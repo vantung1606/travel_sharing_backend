@@ -69,6 +69,17 @@ public class AdminReportController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{postId}/approve")
+    public ResponseEntity<Map<String, Object>> approvePost(@PathVariable Long postId) {
+        log.info("REST request to approve post ID: {}", postId);
+        AdminPostDto updated = adminReportService.approvePost(postId);
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Đã phê duyệt xuất bản bài viết #" + postId + " lên Cộng đồng thành công!");
+        response.put("data", updated);
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/{postId}/dismiss")
     public ResponseEntity<Map<String, Object>> dismissReport(@PathVariable Long postId) {
         log.info("REST request to dismiss report for post ID: {}", postId);

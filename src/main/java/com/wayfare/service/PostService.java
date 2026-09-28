@@ -30,6 +30,8 @@ public class PostService {
     private final ItineraryDetailRepository itineraryDetailRepository;
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
+    private final AiContentModerationService aiContentModerationService;
+    private final PostReportRepository postReportRepository;
 
     @Transactional(readOnly = true)
     public List<PostDto> getCommunityPosts(String category, String keyword, String currentUserEmail) {
@@ -45,6 +47,18 @@ public class PostService {
             posts = postRepository.searchPosts(keyword.trim(), "ACTIVE");
         } else {
             posts = postRepository.findByStatusOrderByCreatedAtDesc("ACTIVE");
+        }
+
+        // If a user is logged in, also show their own PENDING_REVIEW posts with an amber banner
+        if (currentUser != null) {
+            final Long currentUserId = currentUser.getId();
+            List<Post> myPending = postRepository.findAll().stream()
+                    .filter(p -> p.getAuthor() != null && p.getAuthor().getId().equals(currentUserId) && "PENDING_REVIEW".equals(p.getStatus()))
+                    .collect(Collectors.toList());
+            if (!myPending.isEmpty()) {
+                posts = new ArrayList<>(posts);
+                posts.addAll(0, myPending);
+            }
         }
 
         if (category != null && !category.isBlank() && !category.equalsIgnoreCase("ALL") && !category.equalsIgnoreCase("Tất cả")) {
@@ -104,29 +118,106 @@ public class PostService {
             }
         }
 
+        // 1. Run WanderAI Content Moderation & Safety Inspection
+        AiContentModerationService.ModerationResult aiResult =
+                aiContentModerationService.moderate(title, request.getContent(), request.getLocationTag(), request.getCategory());
+
+        String initialStatus = aiResult.isApproved() ? "ACTIVE" : "PENDING_REVIEW";
+        String postCategory = aiResult.isApproved()
+                ? (request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : "Chia sẻ hành trình")
+                : aiResult.getCategory();
+
         Post newPost = Post.builder()
                 .author(author)
                 .title(title)
                 .content(request.getContent())
                 .locationTag(request.getLocationTag() != null && !request.getLocationTag().isBlank() ? request.getLocationTag() : (attachedItinerary != null ? attachedItinerary.getDestination() : "Việt Nam"))
                 .imageUrl(primaryImage)
-                .category(request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : "Chia sẻ hành trình")
-                .badgeText(attachedItinerary != null ? "Có tour đính kèm" : "Cộng đồng")
+                .category(postCategory)
+                .badgeText(aiResult.getBadgeText())
                 .itinerary(attachedItinerary)
                 .likeCount(0)
                 .commentCount(0)
-                .reportsCount(0)
-                .status("ACTIVE")
-                .aiSafetyScore(99)
+                .reportsCount(aiResult.isApproved() ? 0 : 1)
+                .reportReason(aiResult.getFlagReason())
+                .status(initialStatus)
+                .aiSafetyScore(aiResult.getSafetyScore())
+                .aiFlagReason(aiResult.getFlagReason())
                 .build();
 
         Post saved = postRepository.save(newPost);
-        log.info("Community post saved successfully with ID: {}", saved.getId());
+        log.info("Community post saved successfully with ID: {}, Status: {}, AI Score: {}", saved.getId(), saved.getStatus(), saved.getAiSafetyScore());
 
-        // Audit log
+        // Audit log & Notifications
         String ip = activityLogService.extractClientIp(httpRequest);
         String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : "Web Client";
-        activityLogService.recordLog(author, "CREATE_POST", "Đăng bài viết mới lên Cộng đồng: '" + saved.getTitle() + "'", ip, ua);
+
+        if (aiResult.isApproved()) {
+            activityLogService.recordLog(author, "CREATE_POST", "Đăng bài viết mới lên Cộng đồng (AI duyệt tự động): '" + saved.getTitle() + "'", ip, ua);
+
+            // Send success notification to author
+            try {
+                notificationService.sendNotification(
+                        author,
+                        null,
+                        "AI_READY",
+                        "Chúc mừng! Bài viết '" + saved.getTitle() + "' của bạn đã vượt qua thẩm định AI an toàn (Điểm an toàn: " + aiResult.getSafetyScore() + "/100) và đã được đăng công khai!",
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send post success notification: {}", e.getMessage());
+            }
+        } else {
+            activityLogService.recordLog(author, "AI_FLAG_POST", "AI gắn cờ bài viết vi phạm, chuyển hàng đợi Admin duyệt: '" + saved.getTitle() + "'", ip, ua);
+
+            // Save PostReport for Admin Escalation
+            try {
+                com.wayfare.entity.PostReport report = com.wayfare.entity.PostReport.builder()
+                        .post(saved)
+                        .reporter(author)
+                        .category(aiResult.getCategory())
+                        .reason(aiResult.getFlagReason())
+                        .aiAnalysisSnippet("WanderAI Shield: Điểm an toàn " + aiResult.getSafetyScore() + "/100. Các vi phạm: " + String.join("; ", aiResult.getFlaggedViolations()))
+                        .status("PENDING")
+                        .build();
+                postReportRepository.save(report);
+            } catch (Exception e) {
+                log.warn("Failed to save automated post report: {}", e.getMessage());
+            }
+
+            // Send Pending Moderation notification to author
+            try {
+                String briefReason = aiResult.getFlagReason() != null && aiResult.getFlagReason().length() > 100
+                        ? aiResult.getFlagReason().substring(0, 97) + "..."
+                        : aiResult.getFlagReason();
+
+                notificationService.sendNotification(
+                        author,
+                        null,
+                        "SYSTEM",
+                        "Bài viết '" + saved.getTitle() + "' đang ở trạng thái CHỜ DUYỆT THỦ CÔNG bởi Quản trị viên (Lý do: " + briefReason + "). Bài viết sẽ được xuất bản sau khi Admin phê duyệt.",
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send pending moderation notification: {}", e.getMessage());
+            }
+
+            // Send notification to Admin
+            try {
+                User admin = userRepository.findByEmail("admin@gmail.com").orElse(null);
+                if (admin != null) {
+                    notificationService.sendNotification(
+                            admin,
+                            author,
+                            "SYSTEM",
+                            "Cần duyệt bài viết mới từ " + author.getFullName() + ": '" + saved.getTitle() + "' (Điểm AI: " + aiResult.getSafetyScore() + "/100).",
+                            "/admin/reports"
+                    );
+                }
+            } catch (Exception e) {
+                log.warn("Failed to send admin alert notification: {}", e.getMessage());
+            }
+        }
 
         return mapToDto(saved, author);
     }
@@ -317,6 +408,9 @@ public class PostService {
                 .commentCount(p.getCommentCount() != null ? p.getCommentCount() : 0)
                 .isLiked(liked)
                 .category(p.getCategory())
+                .status(p.getStatus())
+                .aiSafetyScore(p.getAiSafetyScore())
+                .aiFlagReason(p.getAiFlagReason())
                 .badgeText(p.getBadgeText())
                 .createdAt(p.getCreatedAt())
                 .timeAgo(formatTimeAgo(p.getCreatedAt()))

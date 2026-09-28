@@ -26,6 +26,7 @@ public class AdminReportService {
     private final PostRepository postRepository;
     private final PostReportRepository postReportRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     public AdminReportMetricsDto getMetrics() {
         log.info("Calculating Admin Report and Moderation KPIs");
@@ -35,10 +36,11 @@ public class AdminReportService {
             totalPostsToday = postRepository.count();
         }
 
-        List<Post> reportedPosts = postRepository.findByReportsCountGreaterThanOrderByReportsCountDesc(0);
-        long pendingReportsCount = reportedPosts.stream()
-                .filter(p -> !"DISMISSED".equals(p.getStatus()) && !"REMOVED".equals(p.getStatus()))
-                .count();
+        List<Post> reportedPosts = postRepository.findAll().stream()
+                .filter(p -> ("PENDING_REVIEW".equals(p.getStatus()) || "PENDING_REPORT".equals(p.getStatus()) || (p.getReportsCount() != null && p.getReportsCount() > 0)) &&
+                             !"DISMISSED".equals(p.getStatus()) && !"REMOVED".equals(p.getStatus()))
+                .collect(Collectors.toList());
+        long pendingReportsCount = reportedPosts.size();
 
         long hiddenPostsCount = postRepository.countByStatus("HIDDEN") + postRepository.countByStatus("REMOVED");
         long totalCount = postRepository.count();
@@ -62,8 +64,12 @@ public class AdminReportService {
     }
 
     public List<AdminPostDto> getReportedPosts(String keyword) {
-        log.info("Fetching reported community posts, keyword: '{}'", keyword);
-        List<Post> posts = postRepository.findByReportsCountGreaterThanOrderByReportsCountDesc(0);
+        log.info("Fetching reported and pending community posts, keyword: '{}'", keyword);
+        List<Post> posts = postRepository.findAll().stream()
+                .filter(p -> ("PENDING_REVIEW".equals(p.getStatus()) || "PENDING_REPORT".equals(p.getStatus()) || (p.getReportsCount() != null && p.getReportsCount() > 0)) &&
+                             !"DISMISSED".equals(p.getStatus()) && !"REMOVED".equals(p.getStatus()))
+                .sorted((a, b) -> (b.getId() != null && a.getId() != null) ? b.getId().compareTo(a.getId()) : 0)
+                .collect(Collectors.toList());
 
         if (keyword != null && !keyword.trim().isEmpty()) {
             String q = keyword.trim().toLowerCase();
@@ -84,6 +90,43 @@ public class AdminReportService {
 
         List<Post> posts = postRepository.searchPosts(filterKeyword, filterStatus);
         return posts.stream().map(this::mapToDto).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public AdminPostDto approvePost(Long postId) {
+        log.info("Admin approving Post ID: {}", postId);
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy bài viết với ID: " + postId));
+
+        post.setStatus("ACTIVE");
+        post.setReportsCount(0);
+        post.setBadgeText("Đã duyệt bởi Admin");
+        Post saved = postRepository.save(post);
+
+        // Update post reports
+        List<com.wayfare.entity.PostReport> reports = postReportRepository.findByPostId(postId);
+        for (com.wayfare.entity.PostReport r : reports) {
+            r.setStatus("DISMISSED");
+            r.setModeratorNotes("Quản trị viên đã kiểm duyệt thủ công và phê duyệt xuất bản.");
+            postReportRepository.save(r);
+        }
+
+        // Notify author
+        if (post.getAuthor() != null) {
+            try {
+                notificationService.sendNotification(
+                        post.getAuthor(),
+                        null,
+                        "AI_READY",
+                        "Quản trị viên đã phê duyệt bài viết '" + post.getTitle() + "' của bạn! Bài viết hiện đã được đăng công khai trên Cộng đồng Wayfare.",
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify author on post approval: {}", e.getMessage());
+            }
+        }
+
+        return mapToDto(saved);
     }
 
     @Transactional

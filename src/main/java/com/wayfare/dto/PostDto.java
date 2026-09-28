@@ -23,6 +23,9 @@ public class PostDto {
     private Integer commentCount;
     private Boolean isLiked;
     private String category;
+    private String status;
+    private Integer aiSafetyScore;
+    private String aiFlagReason;
     private String badgeText;
     private LocalDateTime createdAt;
     private String timeAgo;

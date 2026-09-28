@@ -30,7 +30,7 @@ public class Notification {
     @Column(nullable = false, length = 50)
     private String type; // e.g., 'LIKE', 'COMMENT', 'CHAT_INVITE', 'AI_READY'
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String message;
 
     @Column(name = "target_url", length = 500)
