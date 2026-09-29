@@ -110,11 +110,13 @@ CREATE TABLE IF NOT EXISTS posts (
     content TEXT NOT NULL,
     location_tag VARCHAR(150),
     image_url VARCHAR(500),
+    shared_post_id BIGINT NULL,
     like_count INT DEFAULT 0,
     comment_count INT DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_post_shared_post FOREIGN KEY (shared_post_id) REFERENCES posts(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS post_likes (

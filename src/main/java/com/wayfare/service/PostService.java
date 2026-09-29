@@ -115,9 +115,21 @@ public class PostService {
             attachedItinerary = itineraryRepository.findById(request.getItineraryId()).orElse(null);
         }
 
+        Post sharedOriginalPost = null;
+        if (request.getSharedPostId() != null) {
+            sharedOriginalPost = postRepository.findById(request.getSharedPostId()).orElse(null);
+        }
+
         String title = request.getTitle();
         if (title == null || title.isBlank()) {
-            title = request.getContent().length() > 50 ? request.getContent().substring(0, 47) + "..." : request.getContent();
+            if (sharedOriginalPost != null) {
+                String origAuthor = sharedOriginalPost.getAuthor() != null ? sharedOriginalPost.getAuthor().getFullName() : "thành viên";
+                title = "Chia sẻ bài viết của " + origAuthor;
+            } else {
+                title = request.getContent() != null && request.getContent().length() > 50
+                        ? request.getContent().substring(0, 47) + "..."
+                        : (request.getContent() != null && !request.getContent().isBlank() ? request.getContent() : "Bài viết chia sẻ");
+            }
         }
 
         String primaryImage = request.getImageUrl();
@@ -127,18 +139,24 @@ public class PostService {
         if (primaryImage == null || primaryImage.isBlank()) {
             if (attachedItinerary != null && attachedItinerary.getCoverImageUrl() != null) {
                 primaryImage = attachedItinerary.getCoverImageUrl();
+            } else if (sharedOriginalPost != null && sharedOriginalPost.getImageUrl() != null) {
+                primaryImage = sharedOriginalPost.getImageUrl();
             } else {
                 primaryImage = "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80";
             }
         }
 
         // 1. Run WanderAI Content Moderation & Safety Inspection
+        String textToScan = (request.getContent() != null && !request.getContent().isBlank())
+                ? request.getContent()
+                : (sharedOriginalPost != null ? sharedOriginalPost.getContent() : "Bài viết chia sẻ");
+
         AiContentModerationService.ModerationResult aiResult =
-                aiContentModerationService.moderate(title, request.getContent(), request.getLocationTag(), request.getCategory(), attachedItinerary != null);
+                aiContentModerationService.moderate(title, textToScan, request.getLocationTag(), request.getCategory(), attachedItinerary != null);
 
         String initialStatus = aiResult.isApproved() ? "ACTIVE" : "PENDING_REVIEW";
         String postCategory = aiResult.isApproved()
-                ? (request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : "Chia sẻ hành trình")
+                ? (request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : (sharedOriginalPost != null && sharedOriginalPost.getCategory() != null ? sharedOriginalPost.getCategory() : "Chia sẻ hành trình"))
                 : aiResult.getCategory();
 
         String imagesStr = null;
@@ -149,8 +167,8 @@ public class PostService {
         Post newPost = Post.builder()
                 .author(author)
                 .title(title)
-                .content(request.getContent())
-                .locationTag(request.getLocationTag() != null && !request.getLocationTag().isBlank() ? request.getLocationTag() : (attachedItinerary != null ? attachedItinerary.getDestination() : "Việt Nam"))
+                .content(request.getContent() != null ? request.getContent() : "")
+                .locationTag(request.getLocationTag() != null && !request.getLocationTag().isBlank() ? request.getLocationTag() : (attachedItinerary != null ? attachedItinerary.getDestination() : (sharedOriginalPost != null ? sharedOriginalPost.getLocationTag() : "Việt Nam")))
                 .imageUrl(primaryImage)
                 .images(imagesStr)
                 .videoUrl(request.getVideoUrl())
@@ -158,6 +176,7 @@ public class PostService {
                 .category(postCategory)
                 .badgeText(aiResult.getBadgeText())
                 .itinerary(attachedItinerary)
+                .sharedPost(sharedOriginalPost)
                 .likeCount(0)
                 .commentCount(0)
                 .reportsCount(aiResult.isApproved() ? 0 : 1)
@@ -618,6 +637,12 @@ public class PostService {
     }
 
     public PostDto mapToDto(Post p, User currentUser) {
+        return mapToDtoInternal(p, currentUser, true);
+    }
+
+    private PostDto mapToDtoInternal(Post p, User currentUser, boolean includeShared) {
+        if (p == null) return null;
+
         boolean liked = false;
         boolean bookmarked = false;
         if (currentUser != null) {
@@ -640,6 +665,11 @@ public class PostService {
                 : "Vừa xong";
 
         boolean isOwner = currentUser != null && p.getAuthor() != null && currentUser.getId().equals(p.getAuthor().getId());
+
+        PostDto sharedPostDto = null;
+        if (includeShared && p.getSharedPost() != null) {
+            sharedPostDto = mapToDtoInternal(p.getSharedPost(), currentUser, false);
+        }
 
         return PostDto.builder()
                 .id(p.getId())
@@ -677,6 +707,9 @@ public class PostService {
                 .itineraryBudget(itin != null && itin.getBudgetTotal() != null ? itin.getBudgetTotal().longValue() : 3850000L)
                 .itineraryPlacesCount(itin != null ? 8 : null)
                 .itineraryIsAi(itin != null ? itin.getIsAiGenerated() : false)
+                // Shared post
+                .sharedPostId(p.getSharedPost() != null ? p.getSharedPost().getId() : null)
+                .sharedPost(sharedPostDto)
                 .build();
     }
 

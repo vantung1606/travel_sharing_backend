@@ -22,6 +22,7 @@ public class CreatePostRequest {
     private List<String> images;
     private String category;
     private Long itineraryId;
+    private Long sharedPostId;
     private String videoUrl;
     private String visibility; // PUBLIC, PRIVATE
 }

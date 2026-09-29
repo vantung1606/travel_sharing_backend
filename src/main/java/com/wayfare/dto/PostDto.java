@@ -52,6 +52,10 @@ public class PostDto {
     private Integer itineraryPlacesCount;
     private Boolean itineraryIsAi;
 
+    // Shared / Repost Info
+    private Long sharedPostId;
+    private PostDto sharedPost;
+
     public java.util.Map<String, Object> getAuthor() {
         java.util.Map<String, Object> authorMap = new java.util.HashMap<>();
         authorMap.put("id", authorId != null ? authorId : 1L);
