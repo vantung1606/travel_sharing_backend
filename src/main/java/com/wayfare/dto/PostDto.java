@@ -49,4 +49,15 @@ public class PostDto {
     private Long itineraryBudget;
     private Integer itineraryPlacesCount;
     private Boolean itineraryIsAi;
+
+    public java.util.Map<String, Object> getAuthor() {
+        java.util.Map<String, Object> authorMap = new java.util.HashMap<>();
+        authorMap.put("id", authorId != null ? authorId : 1L);
+        authorMap.put("fullName", authorName != null ? authorName : "Thành viên Wayfare");
+        authorMap.put("name", authorName != null ? authorName : "Thành viên Wayfare");
+        authorMap.put("handle", authorHandle != null ? authorHandle : "@wayfarer");
+        authorMap.put("avatar", authorAvatar != null ? authorAvatar : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80");
+        authorMap.put("role", authorRole != null ? authorRole : "Phượt thủ tự do");
+        return authorMap;
+    }
 }
