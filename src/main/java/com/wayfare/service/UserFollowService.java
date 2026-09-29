@@ -85,6 +85,15 @@ public class UserFollowService {
     }
 
     @Transactional(readOnly = true)
+    public List<Long> getFollowingUserIds(String currentUserEmail) {
+        log.info("Getting following user IDs for {}", currentUserEmail);
+        User currentUser = resolveUser(currentUserEmail);
+        return userFollowRepository.findByFollowerId(currentUser.getId()).stream()
+                .map(uf -> uf.getFollowing().getId())
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public UserProfileDto getUserProfile(Long targetUserId, String currentUserEmail) {
         log.info("Getting user profile for targetUserId={}, viewer={}", targetUserId, currentUserEmail);
 

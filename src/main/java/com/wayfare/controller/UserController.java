@@ -39,4 +39,12 @@ public class UserController {
                 : "Đã hủy theo dõi người dùng!";
         return ResponseEntity.ok(ApiResponse.success(msg, result));
     }
+
+    @GetMapping("/following/ids")
+    public ResponseEntity<ApiResponse<java.util.List<Long>>> getFollowingUserIds(
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to get following user IDs for viewer {}", email);
+        java.util.List<Long> ids = userFollowService.getFollowingUserIds(email);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách ID người đang theo dõi thành công", ids));
+    }
 }
