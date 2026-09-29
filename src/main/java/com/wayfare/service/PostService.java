@@ -209,6 +209,32 @@ public class PostService {
             } catch (Exception e) {
                 log.warn("Failed to send post success notification: {}", e.getMessage());
             }
+
+            // If this is a shared post, notify the original post's author
+            if (sharedOriginalPost != null && sharedOriginalPost.getAuthor() != null) {
+                User originalAuthor = sharedOriginalPost.getAuthor();
+                if (!originalAuthor.getId().equals(author.getId())) {
+                    try {
+                        String origTitle = sharedOriginalPost.getTitle() != null && !sharedOriginalPost.getTitle().isBlank()
+                                ? (sharedOriginalPost.getTitle().length() > 50
+                                    ? sharedOriginalPost.getTitle().substring(0, 47) + "..."
+                                    : sharedOriginalPost.getTitle())
+                                : "bài viết";
+                        String shareMessage = author.getFullName() + " đã chia sẻ bài viết '" + origTitle + "' của bạn lên Bảng tin cộng đồng.";
+                        notificationService.sendNotification(
+                                originalAuthor,
+                                author,
+                                "SHARE",
+                                shareMessage,
+                                "/community?post=" + saved.getId()
+                        );
+                        log.info("Sent SHARE notification to post owner id={}, email={} by actor id={}",
+                                originalAuthor.getId(), originalAuthor.getEmail(), author.getId());
+                    } catch (Exception e) {
+                        log.warn("Failed to send SHARE notification to original post author: {}", e.getMessage());
+                    }
+                }
+            }
         } else {
             activityLogService.recordLog(author, "AI_FLAG_POST", "AI gắn cờ bài viết vi phạm, chuyển hàng đợi Admin duyệt: '" + saved.getTitle() + "'", ip, ua);
 
@@ -510,6 +536,21 @@ public class PostService {
             );
         } catch (Exception e) {
             log.warn("Failed to send notification for itinerary clone: {}", e.getMessage());
+        }
+
+        // Notify author if another user cloned their itinerary
+        if (post.getAuthor() != null && !post.getAuthor().getId().equals(user.getId())) {
+            try {
+                notificationService.sendNotification(
+                        post.getAuthor(),
+                        user,
+                        "ITINERARY_SHARED",
+                        user.getFullName() + " đã lưu bản sao chuyến đi '" + original.getTitle() + "' từ bài viết của bạn vào Lịch trình cá nhân.",
+                        "/itineraries"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send clone notification to original author: {}", e.getMessage());
+            }
         }
 
         return ItineraryDto.builder()
