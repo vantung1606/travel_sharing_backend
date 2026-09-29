@@ -27,6 +27,14 @@ public class PostComment {
     @JoinColumn(name = "user_id", nullable = false)
     private User author;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    private PostComment parent;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reply_to_user_id")
+    private User replyToUser;
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 

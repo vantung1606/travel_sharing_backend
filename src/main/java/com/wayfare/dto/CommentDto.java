@@ -19,6 +19,12 @@ public class CommentDto {
     private String authorHandle;
     private String authorAvatar;
     private String content;
+    private Long parentId;
+    private Long replyToUserId;
+    private String replyToUserName;
+    private String replyToUserHandle;
+    @Builder.Default
+    private java.util.List<CommentDto> replies = new java.util.ArrayList<>();
     private LocalDateTime createdAt;
     private String timeAgo;
 }

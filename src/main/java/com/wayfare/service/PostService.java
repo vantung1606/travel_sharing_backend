@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,7 +42,7 @@ public class PostService {
         log.info("Fetching community posts with category='{}', keyword='{}', user='{}'", category, keyword, currentUserEmail);
 
         final User currentUser = (currentUserEmail != null && !currentUserEmail.isBlank())
-                ? userRepository.findByEmail(currentUserEmail).orElse(null)
+                ? resolveUser(currentUserEmail)
                 : null;
         final Long currentUserId = currentUser != null ? currentUser.getId() : null;
 
@@ -88,7 +89,8 @@ public class PostService {
             Optional<User> found = userRepository.findByEmail(email.trim());
             if (found.isPresent()) return found.get();
         }
-        return userRepository.findByEmail("tung@gmail.com")
+        return userRepository.findByEmail("tung_2251220254@dau.edu.vn")
+                .or(() -> userRepository.findByEmail("tung@gmail.com"))
                 .or(() -> userRepository.findByEmail("admin@gmail.com"))
                 .orElseGet(() -> userRepository.findAll().stream().findFirst()
                         .orElseThrow(() -> new RuntimeException("Chưa có tài khoản người dùng trong hệ thống!")));
@@ -335,33 +337,82 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public List<CommentDto> getPostComments(Long postId) {
-        List<PostComment> comments = postCommentRepository.findByPostIdOrderByCreatedAtAsc(postId);
-        return comments.stream().map(this::mapCommentToDto).collect(Collectors.toList());
+        List<PostComment> allComments = postCommentRepository.findByPostIdOrderByCreatedAtAsc(postId);
+        Map<Long, CommentDto> dtoMap = new LinkedHashMap<>();
+        List<CommentDto> rootComments = new ArrayList<>();
+
+        for (PostComment c : allComments) {
+            CommentDto dto = mapCommentToDto(c);
+            dtoMap.put(c.getId(), dto);
+        }
+
+        for (PostComment c : allComments) {
+            CommentDto dto = dtoMap.get(c.getId());
+            if (c.getParent() != null && dtoMap.containsKey(c.getParent().getId())) {
+                CommentDto parentDto = dtoMap.get(c.getParent().getId());
+                if (parentDto.getReplies() == null) {
+                    parentDto.setReplies(new ArrayList<>());
+                }
+                parentDto.getReplies().add(dto);
+            } else {
+                rootComments.add(dto);
+            }
+        }
+
+        return rootComments;
     }
 
     @Transactional
     public CommentDto addComment(Long postId, CreateCommentRequest request, String currentUserEmail) {
-        log.info("Adding comment to post {} by user {}: {}", postId, currentUserEmail, request.getContent());
+        log.info("Adding comment to post {} by user {}: parentId={}, replyToUserId={}, content={}",
+                postId, currentUserEmail, request.getParentId(), request.getReplyToUserId(), request.getContent());
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Bài viết không tồn tại: " + postId));
 
         User user = resolveUser(currentUserEmail);
 
+        PostComment parent = null;
+        if (request.getParentId() != null) {
+            parent = postCommentRepository.findById(request.getParentId()).orElse(null);
+            // If replying to a reply, flatten to root parent to maintain clean 1-level thread hierarchy
+            if (parent != null && parent.getParent() != null) {
+                parent = parent.getParent();
+            }
+        }
+
+        User replyToUser = null;
+        if (request.getReplyToUserId() != null) {
+            replyToUser = userRepository.findById(request.getReplyToUserId()).orElse(null);
+        } else if (parent != null) {
+            replyToUser = parent.getAuthor();
+        }
+
         PostComment comment = PostComment.builder()
                 .post(post)
                 .author(user)
+                .parent(parent)
+                .replyToUser(replyToUser)
                 .content(request.getContent())
                 .build();
 
         PostComment saved = postCommentRepository.save(comment);
 
-        post.setCommentCount(post.getCommentCount() + 1);
+        long totalComments = postCommentRepository.countByPostId(postId);
+        post.setCommentCount((int) totalComments);
         postRepository.save(post);
 
-        // Send notification to author if not commenting on own post
-        if (!post.getAuthor().getId().equals(user.getId())) {
-            try {
+        // Send notification to author or parent comment author
+        try {
+            if (replyToUser != null && !replyToUser.getId().equals(user.getId())) {
+                notificationService.sendNotification(
+                        replyToUser,
+                        user,
+                        "COMMENT_REPLY",
+                        user.getFullName() + " đã trả lời bình luận của bạn trong bài viết '" + post.getTitle() + "'.",
+                        "/community"
+                );
+            } else if (!post.getAuthor().getId().equals(user.getId())) {
                 notificationService.sendNotification(
                         post.getAuthor(),
                         user,
@@ -369,9 +420,9 @@ public class PostService {
                         user.getFullName() + " đã bình luận về bài viết của bạn: '" + (request.getContent().length() > 40 ? request.getContent().substring(0, 37) + "..." : request.getContent()) + "'",
                         "/community"
                 );
-            } catch (Exception e) {
-                log.warn("Failed to send COMMENT notification: {}", e.getMessage());
             }
+        } catch (Exception e) {
+            log.warn("Failed to send notification for comment: {}", e.getMessage());
         }
 
         return mapCommentToDto(saved);
@@ -638,6 +689,11 @@ public class PostService {
                 .authorHandle(c.getAuthor().getHandle())
                 .authorAvatar(c.getAuthor().getAvatarUrl())
                 .content(c.getContent())
+                .parentId(c.getParent() != null ? c.getParent().getId() : null)
+                .replyToUserId(c.getReplyToUser() != null ? c.getReplyToUser().getId() : null)
+                .replyToUserName(c.getReplyToUser() != null ? c.getReplyToUser().getFullName() : null)
+                .replyToUserHandle(c.getReplyToUser() != null ? c.getReplyToUser().getHandle() : null)
+                .replies(new ArrayList<>())
                 .createdAt(c.getCreatedAt())
                 .timeAgo(formatTimeAgo(c.getCreatedAt()))
                 .build();
