@@ -88,10 +88,11 @@ public class PostService {
         if (email != null && !email.trim().isEmpty()) {
             Optional<User> found = userRepository.findByEmail(email.trim());
             if (found.isPresent()) return found.get();
+            log.warn("User email '{}' not found in database, falling back to active system user...", email);
         }
-        return userRepository.findByEmail("tung_2251220254@dau.edu.vn")
+        return userRepository.findByEmail("admin@gmail.com")
+                .or(() -> userRepository.findByEmail("tung_2251220254@dau.edu.vn"))
                 .or(() -> userRepository.findByEmail("tung@gmail.com"))
-                .or(() -> userRepository.findByEmail("admin@gmail.com"))
                 .orElseGet(() -> userRepository.findAll().stream().findFirst()
                         .orElseThrow(() -> new RuntimeException("Chưa có tài khoản người dùng trong hệ thống!")));
     }
