@@ -1,5 +1,6 @@
 package com.wayfare.service;
 
+import com.wayfare.dto.FollowUserDto;
 import com.wayfare.dto.ItineraryDto;
 import com.wayfare.dto.PostDto;
 import com.wayfare.dto.UserProfileDto;
@@ -91,6 +92,64 @@ public class UserFollowService {
         return userFollowRepository.findByFollowerId(currentUser.getId()).stream()
                 .map(uf -> uf.getFollowing().getId())
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<FollowUserDto> getFollowingList(Long targetUserId, String currentUserEmail) {
+        log.info("Getting following list for userId={}, viewer={}", targetUserId, currentUserEmail);
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại với ID: " + targetUserId));
+        User viewer = (currentUserEmail != null && !currentUserEmail.isBlank())
+                ? userRepository.findByEmail(currentUserEmail).orElse(null)
+                : null;
+
+        List<UserFollow> follows = userFollowRepository.findByFollowerId(target.getId());
+        return follows.stream().map(uf -> {
+            User u = uf.getFollowing();
+            boolean isFollowing = viewer != null && userFollowRepository.existsByFollowerIdAndFollowingId(viewer.getId(), u.getId());
+            long fCount = userFollowRepository.countByFollowingId(u.getId());
+            String role = u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"))
+                    ? "Quản trị viên" : "Phượt thủ tự do";
+            return FollowUserDto.builder()
+                    .id(u.getId())
+                    .fullName(u.getFullName())
+                    .handle(u.getHandle() != null ? u.getHandle() : "@" + u.getEmail().split("@")[0])
+                    .avatarUrl(u.getAvatarUrl() != null ? u.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                    .bio(u.getBio() != null ? u.getBio() : "Đam mê khám phá thiên nhiên và chia sẻ hành trình du lịch.")
+                    .role(role)
+                    .isFollowing(isFollowing)
+                    .followersCount(fCount)
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<FollowUserDto> getFollowersList(Long targetUserId, String currentUserEmail) {
+        log.info("Getting followers list for userId={}, viewer={}", targetUserId, currentUserEmail);
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại với ID: " + targetUserId));
+        User viewer = (currentUserEmail != null && !currentUserEmail.isBlank())
+                ? userRepository.findByEmail(currentUserEmail).orElse(null)
+                : null;
+
+        List<UserFollow> follows = userFollowRepository.findByFollowingId(target.getId());
+        return follows.stream().map(uf -> {
+            User u = uf.getFollower();
+            boolean isFollowing = viewer != null && userFollowRepository.existsByFollowerIdAndFollowingId(viewer.getId(), u.getId());
+            long fCount = userFollowRepository.countByFollowingId(u.getId());
+            String role = u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"))
+                    ? "Quản trị viên" : "Phượt thủ tự do";
+            return FollowUserDto.builder()
+                    .id(u.getId())
+                    .fullName(u.getFullName())
+                    .handle(u.getHandle() != null ? u.getHandle() : "@" + u.getEmail().split("@")[0])
+                    .avatarUrl(u.getAvatarUrl() != null ? u.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                    .bio(u.getBio() != null ? u.getBio() : "Du khách trên nền tảng Wayfare.")
+                    .role(role)
+                    .isFollowing(isFollowing)
+                    .followersCount(fCount)
+                    .build();
+        }).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)

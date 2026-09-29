@@ -47,4 +47,22 @@ public class UserController {
         java.util.List<Long> ids = userFollowService.getFollowingUserIds(email);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách ID người đang theo dõi thành công", ids));
     }
+
+    @GetMapping("/{id}/following")
+    public ResponseEntity<ApiResponse<java.util.List<com.wayfare.dto.FollowUserDto>>> getFollowingList(
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to get following list of user ID {} by viewer {}", id, email);
+        java.util.List<com.wayfare.dto.FollowUserDto> list = userFollowService.getFollowingList(id, email);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách người đang theo dõi thành công", list));
+    }
+
+    @GetMapping("/{id}/followers")
+    public ResponseEntity<ApiResponse<java.util.List<com.wayfare.dto.FollowUserDto>>> getFollowersList(
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to get followers list of user ID {} by viewer {}", id, email);
+        java.util.List<com.wayfare.dto.FollowUserDto> list = userFollowService.getFollowersList(id, email);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách người theo dõi thành công", list));
+    }
 }
