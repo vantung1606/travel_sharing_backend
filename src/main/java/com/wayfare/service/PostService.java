@@ -11,11 +11,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import com.wayfare.exception.ResourceNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -37,10 +39,10 @@ public class PostService {
     public List<PostDto> getCommunityPosts(String category, String keyword, String currentUserEmail) {
         log.info("Fetching community posts with category='{}', keyword='{}', user='{}'", category, keyword, currentUserEmail);
 
-        User currentUser = null;
-        if (currentUserEmail != null && !currentUserEmail.isBlank()) {
-            currentUser = userRepository.findByEmail(currentUserEmail).orElse(null);
-        }
+        final User currentUser = (currentUserEmail != null && !currentUserEmail.isBlank())
+                ? userRepository.findByEmail(currentUserEmail).orElse(null)
+                : null;
+        final Long currentUserId = currentUser != null ? currentUser.getId() : null;
 
         List<Post> posts;
         if (keyword != null && !keyword.isBlank()) {
@@ -49,9 +51,18 @@ public class PostService {
             posts = postRepository.findByStatusOrderByCreatedAtDesc("ACTIVE");
         }
 
+        // Filter out PRIVATE posts unless viewed by the author
+        posts = posts.stream()
+                .filter(p -> {
+                    if ("PRIVATE".equalsIgnoreCase(p.getVisibility())) {
+                        return currentUserId != null && p.getAuthor() != null && currentUserId.equals(p.getAuthor().getId());
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
+
         // If a user is logged in, also show their own PENDING_REVIEW posts with an amber banner
         if (currentUser != null) {
-            final Long currentUserId = currentUser.getId();
             List<Post> myPending = postRepository.findAll().stream()
                     .filter(p -> p.getAuthor() != null && p.getAuthor().getId().equals(currentUserId) && "PENDING_REVIEW".equals(p.getStatus()))
                     .collect(Collectors.toList());
@@ -127,12 +138,20 @@ public class PostService {
                 ? (request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : "Chia sẻ hành trình")
                 : aiResult.getCategory();
 
+        String imagesStr = null;
+        if (request.getImages() != null && !request.getImages().isEmpty()) {
+            imagesStr = String.join(";;;", request.getImages());
+        }
+
         Post newPost = Post.builder()
                 .author(author)
                 .title(title)
                 .content(request.getContent())
                 .locationTag(request.getLocationTag() != null && !request.getLocationTag().isBlank() ? request.getLocationTag() : (attachedItinerary != null ? attachedItinerary.getDestination() : "Việt Nam"))
                 .imageUrl(primaryImage)
+                .images(imagesStr)
+                .videoUrl(request.getVideoUrl())
+                .visibility(request.getVisibility() != null && !request.getVisibility().isBlank() ? request.getVisibility() : "PUBLIC")
                 .category(postCategory)
                 .badgeText(aiResult.getBadgeText())
                 .itinerary(attachedItinerary)
@@ -385,7 +404,122 @@ public class PostService {
                 .build();
     }
 
-    private PostDto mapToDto(Post p, User currentUser) {
+    @Transactional
+    public PostDto updatePost(Long postId, UpdatePostRequest request, String currentUserEmail, HttpServletRequest httpRequest) {
+        log.info("Updating post ID {} by user '{}': {}", postId, currentUserEmail, request.getTitle());
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại với ID: " + postId));
+
+        User currentUser = resolveUser(currentUserEmail);
+        boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"));
+
+        if (!post.getAuthor().getId().equals(currentUser.getId()) && !isAdmin) {
+            throw new RuntimeException("Bạn không có quyền chỉnh sửa bài viết của người khác!");
+        }
+
+        String title = request.getTitle();
+        if (title == null || title.isBlank()) {
+            title = request.getContent().length() > 50 ? request.getContent().substring(0, 47) + "..." : request.getContent();
+        }
+
+        // Re-evaluate with WanderAI Safety Shield
+        AiContentModerationService.ModerationResult aiResult =
+                aiContentModerationService.moderate(title, request.getContent(), request.getLocationTag(), request.getCategory(), post.getItinerary() != null);
+
+        String status = aiResult.isApproved() ? "ACTIVE" : "PENDING_REVIEW";
+        String postCategory = aiResult.isApproved()
+                ? (request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : post.getCategory())
+                : aiResult.getCategory();
+
+        String imagesStr = null;
+        if (request.getImages() != null && !request.getImages().isEmpty()) {
+            imagesStr = String.join(";;;", request.getImages());
+        }
+
+        String primaryImage = request.getImageUrl();
+        if ((primaryImage == null || primaryImage.isBlank()) && request.getImages() != null && !request.getImages().isEmpty()) {
+            primaryImage = request.getImages().get(0);
+        }
+        if (primaryImage == null || primaryImage.isBlank()) {
+            primaryImage = post.getImageUrl();
+        }
+
+        post.setTitle(title);
+        post.setContent(request.getContent());
+        if (request.getLocationTag() != null) post.setLocationTag(request.getLocationTag());
+        post.setImageUrl(primaryImage);
+        post.setImages(imagesStr);
+        if (request.getVideoUrl() != null) post.setVideoUrl(request.getVideoUrl());
+        if (request.getVisibility() != null && !request.getVisibility().isBlank()) post.setVisibility(request.getVisibility());
+        post.setCategory(postCategory);
+        post.setStatus(status);
+        post.setAiSafetyScore(aiResult.getSafetyScore());
+        post.setAiFlagReason(aiResult.getFlagReason());
+        post.setBadgeText(aiResult.getBadgeText());
+
+        Post saved = postRepository.save(post);
+
+        // Audit log
+        String ip = activityLogService.extractClientIp(httpRequest);
+        String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : "Web Client";
+        activityLogService.recordLog(currentUser, "UPDATE_POST", "Chỉnh sửa bài viết ID #" + saved.getId() + ": '" + saved.getTitle() + "' (Trạng thái: " + status + ")", ip, ua);
+
+        // Send notifications if re-flagged
+        if (!aiResult.isApproved()) {
+            try {
+                notificationService.sendNotification(
+                        post.getAuthor(),
+                        null,
+                        "SYSTEM",
+                        "Bài viết '" + saved.getTitle() + "' sau khi chỉnh sửa đã chuyển sang CHỜ DUYỆT THỦ CÔNG do AI phát hiện cảnh báo: " + aiResult.getFlagReason(),
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send re-moderation notice: {}", e.getMessage());
+            }
+        }
+
+        return mapToDto(saved, currentUser);
+    }
+
+    @Transactional
+    public PostDto updateVisibility(Long postId, String visibility, String currentUserEmail) {
+        log.info("Updating visibility for post ID {} to '{}' by {}", postId, visibility, currentUserEmail);
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại: " + postId));
+
+        User currentUser = resolveUser(currentUserEmail);
+        boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"));
+
+        if (!post.getAuthor().getId().equals(currentUser.getId()) && !isAdmin) {
+            throw new RuntimeException("Bạn không có quyền thay đổi chế độ bài viết này!");
+        }
+
+        post.setVisibility(visibility != null && !visibility.isBlank() ? visibility.toUpperCase() : "PUBLIC");
+        Post saved = postRepository.save(post);
+        return mapToDto(saved, currentUser);
+    }
+
+    @Transactional
+    public void deletePost(Long postId, String currentUserEmail) {
+        log.info("Deleting post ID {} by user {}", postId, currentUserEmail);
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại: " + postId));
+
+        User currentUser = resolveUser(currentUserEmail);
+        boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"));
+
+        if (!post.getAuthor().getId().equals(currentUser.getId()) && !isAdmin) {
+            throw new RuntimeException("Bạn không có quyền xóa bài viết này!");
+        }
+
+        postRepository.delete(post);
+    }
+
+    public PostDto mapToDto(Post p, User currentUser) {
         boolean liked = false;
         if (currentUser != null) {
             liked = postLikeRepository.existsByUserIdAndPostId(currentUser.getId(), p.getId());
@@ -393,9 +527,19 @@ public class PostService {
 
         Itinerary itin = p.getItinerary();
         List<String> images = new ArrayList<>();
-        if (p.getImageUrl() != null && !p.getImageUrl().isBlank()) {
+        if (p.getImages() != null && !p.getImages().isBlank()) {
+            for (String img : p.getImages().split(";;;")) {
+                if (!img.isBlank()) images.add(img.trim());
+            }
+        } else if (p.getImageUrl() != null && !p.getImageUrl().isBlank()) {
             images.add(p.getImageUrl());
         }
+
+        String formattedDate = p.getCreatedAt() != null
+                ? p.getCreatedAt().format(DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy"))
+                : "Vừa xong";
+
+        boolean isOwner = currentUser != null && p.getAuthor() != null && currentUser.getId().equals(p.getAuthor().getId());
 
         return PostDto.builder()
                 .id(p.getId())
@@ -404,6 +548,10 @@ public class PostService {
                 .locationTag(p.getLocationTag())
                 .imageUrl(p.getImageUrl())
                 .images(images)
+                .videoUrl(p.getVideoUrl())
+                .visibility(p.getVisibility() != null ? p.getVisibility() : "PUBLIC")
+                .formattedDate(formattedDate)
+                .isOwner(isOwner)
                 .likeCount(p.getLikeCount() != null ? p.getLikeCount() : 0)
                 .commentCount(p.getCommentCount() != null ? p.getCommentCount() : 0)
                 .isLiked(liked)

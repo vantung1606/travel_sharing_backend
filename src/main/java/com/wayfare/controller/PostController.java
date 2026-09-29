@@ -50,6 +50,36 @@ public class PostController {
         return ResponseEntity.ok(ApiResponse.success("Đăng bài viết mới thành công!", created));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<PostDto>> updatePost(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdatePostRequest request,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email,
+            HttpServletRequest httpRequest) {
+        log.info("REST request to update community post #{}: email={}", id, email);
+        PostDto updated = postService.updatePost(id, request, email, httpRequest);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật bài viết thành công!", updated));
+    }
+
+    @PatchMapping("/{id}/visibility")
+    public ResponseEntity<ApiResponse<PostDto>> updateVisibility(
+            @PathVariable Long id,
+            @RequestParam String visibility,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to update visibility for post #{}: visibility={}, email={}", id, visibility, email);
+        PostDto updated = postService.updateVisibility(id, visibility, email);
+        return ResponseEntity.ok(ApiResponse.success("Đã cập nhật chế độ hiển thị bài viết!", updated));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletePost(
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to delete community post #{}: email={}", id, email);
+        postService.deletePost(id, email);
+        return ResponseEntity.ok(ApiResponse.success("Đã xóa bài viết thành công!", null));
+    }
+
     @PostMapping("/{id}/like")
     public ResponseEntity<ApiResponse<Map<String, Object>>> toggleLike(
             @PathVariable Long id,

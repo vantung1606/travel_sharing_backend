@@ -12,7 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreatePostRequest {
+public class UpdatePostRequest {
     @NotBlank(message = "Nội dung bài viết không được để trống")
     private String content;
 
@@ -20,8 +20,8 @@ public class CreatePostRequest {
     private String locationTag;
     private String imageUrl;
     private List<String> images;
+    private String videoUrl;
     private String category;
     private Long itineraryId;
-    private String videoUrl;
     private String visibility; // PUBLIC, PRIVATE
 }

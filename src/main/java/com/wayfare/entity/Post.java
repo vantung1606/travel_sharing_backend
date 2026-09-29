@@ -40,6 +40,16 @@ public class Post {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    @Column(columnDefinition = "TEXT")
+    private String images; // JSON array of multiple image URLs
+
+    @Column(name = "video_url", length = 500)
+    private String videoUrl;
+
+    @Builder.Default
+    @Column(name = "visibility", length = 20, nullable = false)
+    private String visibility = "PUBLIC"; // PUBLIC, PRIVATE
+
     @Builder.Default
     @Column(name = "like_count")
     private Integer likeCount = 0;

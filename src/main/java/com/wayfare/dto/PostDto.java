@@ -28,7 +28,11 @@ public class PostDto {
     private String aiFlagReason;
     private String badgeText;
     private LocalDateTime createdAt;
+    private String videoUrl;
+    private String visibility; // PUBLIC, PRIVATE
     private String timeAgo;
+    private String formattedDate;
+    private Boolean isOwner;
 
     // Author Info
     private Long authorId;
