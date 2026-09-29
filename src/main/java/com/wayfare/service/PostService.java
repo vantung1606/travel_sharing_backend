@@ -564,6 +564,7 @@ public class PostService {
                 .timeAgo(formatTimeAgo(p.getCreatedAt()))
                 .authorId(p.getAuthor() != null ? p.getAuthor().getId() : null)
                 .authorName(p.getAuthor() != null ? p.getAuthor().getFullName() : "Du khách Wayfare")
+                .authorEmail(p.getAuthor() != null ? p.getAuthor().getEmail() : null)
                 .authorHandle(p.getAuthor() != null ? p.getAuthor().getHandle() : "@wayfarer")
                 .authorAvatar(p.getAuthor() != null ? p.getAuthor().getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                 .authorRole(p.getAuthor() != null && p.getAuthor().getRoles() != null && p.getAuthor().getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN")) ? "Quản trị viên" : "Phượt thủ tự do")

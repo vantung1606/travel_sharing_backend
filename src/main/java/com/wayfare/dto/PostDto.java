@@ -37,6 +37,7 @@ public class PostDto {
     // Author Info
     private Long authorId;
     private String authorName;
+    private String authorEmail;
     private String authorHandle;
     private String authorAvatar;
     private String authorRole;
@@ -55,6 +56,7 @@ public class PostDto {
         authorMap.put("id", authorId != null ? authorId : 1L);
         authorMap.put("fullName", authorName != null ? authorName : "Thành viên Wayfare");
         authorMap.put("name", authorName != null ? authorName : "Thành viên Wayfare");
+        authorMap.put("email", authorEmail);
         authorMap.put("handle", authorHandle != null ? authorHandle : "@wayfarer");
         authorMap.put("avatar", authorAvatar != null ? authorAvatar : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80");
         authorMap.put("role", authorRole != null ? authorRole : "Phượt thủ tự do");
