@@ -34,6 +34,7 @@ public class PostService {
     private final ActivityLogService activityLogService;
     private final AiContentModerationService aiContentModerationService;
     private final PostReportRepository postReportRepository;
+    private final PostBookmarkRepository postBookmarkRepository;
 
     @Transactional(readOnly = true)
     public List<PostDto> getCommunityPosts(String category, String keyword, String currentUserEmail) {
@@ -286,6 +287,52 @@ public class PostService {
         return Map.of("isLiked", isLiked, "likeCount", post.getLikeCount());
     }
 
+    @Transactional
+    public Map<String, Object> toggleBookmarkPost(Long postId, String currentUserEmail) {
+        log.info("Toggling bookmark on post {} by user {}", postId, currentUserEmail);
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại với ID: " + postId));
+
+        User user = resolveUser(currentUserEmail);
+
+        Optional<PostBookmark> existingBookmark = postBookmarkRepository.findByUserIdAndPostId(user.getId(), postId);
+        boolean isBookmarked;
+
+        if (existingBookmark.isPresent()) {
+            postBookmarkRepository.delete(existingBookmark.get());
+            isBookmarked = false;
+            log.info("User {} removed bookmark on post {}", user.getEmail(), postId);
+        } else {
+            PostBookmark newBookmark = PostBookmark.builder()
+                    .user(user)
+                    .post(post)
+                    .build();
+            postBookmarkRepository.save(newBookmark);
+            isBookmarked = true;
+            log.info("User {} saved bookmark on post {}", user.getEmail(), postId);
+        }
+
+        return Map.of("isBookmarked", isBookmarked, "postId", postId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> getBookmarkedPostIds(String currentUserEmail) {
+        User user = resolveUser(currentUserEmail);
+        return postBookmarkRepository.findBookmarkedPostIdsByUserId(user.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<PostDto> getBookmarkedPosts(String currentUserEmail) {
+        User user = resolveUser(currentUserEmail);
+        List<PostBookmark> bookmarks = postBookmarkRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        return bookmarks.stream()
+                .map(PostBookmark::getPost)
+                .filter(p -> p != null && !"DELETED".equalsIgnoreCase(p.getStatus()))
+                .map(p -> mapToDto(p, user))
+                .collect(Collectors.toList());
+    }
+
     @Transactional(readOnly = true)
     public List<CommentDto> getPostComments(Long postId) {
         List<PostComment> comments = postCommentRepository.findByPostIdOrderByCreatedAtAsc(postId);
@@ -521,8 +568,10 @@ public class PostService {
 
     public PostDto mapToDto(Post p, User currentUser) {
         boolean liked = false;
+        boolean bookmarked = false;
         if (currentUser != null) {
             liked = postLikeRepository.existsByUserIdAndPostId(currentUser.getId(), p.getId());
+            bookmarked = postBookmarkRepository.existsByUserIdAndPostId(currentUser.getId(), p.getId());
         }
 
         Itinerary itin = p.getItinerary();
@@ -555,6 +604,7 @@ public class PostService {
                 .likeCount(p.getLikeCount() != null ? p.getLikeCount() : 0)
                 .commentCount(p.getCommentCount() != null ? p.getCommentCount() : 0)
                 .isLiked(liked)
+                .isBookmarked(bookmarked)
                 .category(p.getCategory())
                 .status(p.getStatus())
                 .aiSafetyScore(p.getAiSafetyScore())

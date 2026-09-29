@@ -89,6 +89,34 @@ public class PostController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật lượt thích thành công", result));
     }
 
+    @PostMapping("/{id}/bookmark")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> toggleBookmark(
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to toggle bookmark on post {}: email={}", id, email);
+        Map<String, Object> result = postService.toggleBookmarkPost(id, email);
+        return ResponseEntity.ok(ApiResponse.success(
+                (Boolean) result.get("isBookmarked") ? "Đã lưu bài viết vào Bộ sưu tập cá nhân" : "Đã bỏ lưu bài viết khỏi bộ sưu tập",
+                result
+        ));
+    }
+
+    @GetMapping("/bookmarked/ids")
+    public ResponseEntity<ApiResponse<List<Long>>> getBookmarkedPostIds(
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to get bookmarked post IDs for email={}", email);
+        List<Long> ids = postService.getBookmarkedPostIds(email);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách ID bài viết đã lưu thành công", ids));
+    }
+
+    @GetMapping("/bookmarked")
+    public ResponseEntity<ApiResponse<List<PostDto>>> getBookmarkedPosts(
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to get bookmarked posts for email={}", email);
+        List<PostDto> posts = postService.getBookmarkedPosts(email);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách bài viết đã lưu thành công", posts));
+    }
+
     @GetMapping("/{id}/comments")
     public ResponseEntity<ApiResponse<List<CommentDto>>> getComments(@PathVariable Long id) {
         log.info("REST request to get comments for post {}", id);

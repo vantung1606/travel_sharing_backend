@@ -22,6 +22,7 @@ public class PostDto {
     private Integer likeCount;
     private Integer commentCount;
     private Boolean isLiked;
+    private Boolean isBookmarked;
     private String category;
     private String status;
     private Integer aiSafetyScore;
