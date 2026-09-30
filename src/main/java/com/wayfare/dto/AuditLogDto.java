@@ -19,6 +19,7 @@ public class AuditLogDto {
     private String userHandle;
     private String userAvatar;
     private String userRole;
+    private String category; // AUTH, SECURITY, ACTIVITY, SYSTEM
     private String action;
     private String details;
     private String ipAddress;

@@ -273,19 +273,9 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- PHÂN HỆ 5: NHẬT KÝ HỆ THỐNG & THÔNG BÁO (AUDIT & NOTIFICATIONS)
+-- PHÂN HỆ 5: THÔNG BÁO HỆ THỐNG (NOTIFICATIONS)
+-- (Nhật ký hệ thống được phân loại lưu trữ theo File Rolling tại thư mục logs/)
 -- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS user_activity_logs (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT,
-    action VARCHAR(100) NOT NULL,
-    details TEXT,
-    ip_address VARCHAR(45),
-    user_agent VARCHAR(255),
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_ual_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS notifications (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
