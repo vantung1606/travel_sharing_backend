@@ -550,13 +550,13 @@ public class PostService {
 
         postRepository.save(post);
 
-        // Notify Admins
+        // Notify ONLY Admins (Never broadcast to regular users)
         try {
-            notificationService.sendBroadcastNotification(
-                    "SYSTEM",
+            notificationService.cleanupNonAdminReportAlerts();
+            notificationService.notifyAdmins(
+                    "REPORT_ALERT",
                     "Bài viết #" + postId + " ('" + post.getTitle() + "') vừa nhận thêm 1 báo cáo vi phạm: " + request.getReason(),
-                    "/admin/reports",
-                    reporter.getEmail()
+                    "/admin/reports"
             );
         } catch (Exception e) {
             log.warn("Failed to notify admins of report on post {}: {}", postId, e.getMessage());

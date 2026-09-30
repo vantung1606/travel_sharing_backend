@@ -132,8 +132,47 @@ public class NotificationService {
                 .collect(Collectors.toList());
 
         notificationRepository.saveAll(notifications);
-        log.info("Broadcasted notification to {} users successfully.", notifications.size());
-        return notifications.size();
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        try {
+            cleanupNonAdminReportAlerts();
+        } catch (Exception e) {
+            log.warn("Spurious notification cleanup on startup skipped: {}", e.getMessage());
+        }
+    }
+
+    @Transactional
+    public void notifyAdmins(String type, String message, String targetUrl) {
+        log.info("Sending admin-only notification: type={}, message={}", type, message);
+        List<User> admins = userRepository.findAll().stream()
+                .filter(u -> (u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName() != null && r.getName().contains("ADMIN")))
+                        || "admin@gmail.com".equalsIgnoreCase(u.getEmail()))
+                .collect(Collectors.toList());
+
+        for (User admin : admins) {
+            sendNotification(admin, null, type != null ? type : "REPORT_ALERT", message, targetUrl != null ? targetUrl : "/admin/reports");
+        }
+        log.info("Successfully sent admin notification to {} admins.", admins.size());
+    }
+
+    @Transactional
+    public int cleanupNonAdminReportAlerts() {
+        List<Notification> spurious = notificationRepository.findAll().stream()
+                .filter(n -> n.getTargetUrl() != null && n.getTargetUrl().contains("/admin/reports"))
+                .filter(n -> {
+                    User u = n.getRecipient();
+                    if (u == null) return false;
+                    boolean isAdmin = (u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName() != null && r.getName().contains("ADMIN")))
+                            || "admin@gmail.com".equalsIgnoreCase(u.getEmail());
+                    return !isAdmin;
+                })
+                .collect(Collectors.toList());
+
+        if (!spurious.isEmpty()) {
+            notificationRepository.deleteAll(spurious);
+            log.info("Cleaned up {} spurious admin notifications from non-admin accounts.", spurious.size());
+        }
+        return spurious.size();
     }
 
     private User getUserByEmailOrDefault(String email) {
