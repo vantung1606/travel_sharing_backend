@@ -142,4 +142,24 @@ public class PostController {
         ItineraryDto cloned = postService.cloneItineraryFromPost(id, email);
         return ResponseEntity.ok(ApiResponse.success("Đã sao chép chuyến đi thành công vào 'Lịch trình của tôi'!", cloned));
     }
+
+    @DeleteMapping("/{id}/comments/{commentId}")
+    public ResponseEntity<ApiResponse<Void>> deleteComment(
+            @PathVariable Long id,
+            @PathVariable Long commentId,
+            @RequestParam(required = false, defaultValue = "admin@gmail.com") String email) {
+        log.info("REST request to delete comment {} from post {} by {}", commentId, id, email);
+        postService.deleteComment(id, commentId, email);
+        return ResponseEntity.ok(ApiResponse.success("Đã xóa bình luận thành công!", null));
+    }
+
+    @PostMapping("/{id}/report")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> reportPost(
+            @PathVariable Long id,
+            @Valid @RequestBody ReportPostRequest request,
+            @RequestParam(required = false, defaultValue = "admin@gmail.com") String email) {
+        log.info("REST request to report post {} by {}: reason={}", id, email, request.getReason());
+        Map<String, Object> result = postService.reportPost(id, request, email);
+        return ResponseEntity.ok(ApiResponse.success("Báo cáo vi phạm đã được ghi nhận thành công!", result));
+    }
 }

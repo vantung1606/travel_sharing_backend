@@ -478,6 +478,100 @@ public class PostService {
     }
 
     @Transactional
+    public void deleteComment(Long postId, Long commentId, String currentUserEmail) {
+        log.info("Deleting comment {} on post {} by user {}", commentId, postId, currentUserEmail);
+
+        PostComment comment = postCommentRepository.findById(commentId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy bình luận với ID: " + commentId));
+
+        if (!comment.getPost().getId().equals(postId)) {
+            throw new RuntimeException("Bình luận này không thuộc về bài viết #" + postId);
+        }
+
+        User user = resolveUser(currentUserEmail);
+
+        boolean isCommentAuthor = comment.getAuthor() != null && comment.getAuthor().getId().equals(user.getId());
+        boolean isPostAuthor = comment.getPost().getAuthor() != null && comment.getPost().getAuthor().getId().equals(user.getId());
+        boolean isAdmin = user.getEmail() != null && user.getEmail().toLowerCase().contains("admin");
+
+        if (!isCommentAuthor && !isPostAuthor && !isAdmin) {
+            throw new RuntimeException("Bạn không có quyền xóa bình luận này!");
+        }
+
+        // Delete any child replies
+        List<PostComment> replies = postCommentRepository.findByParentIdOrderByCreatedAtAsc(commentId);
+        if (replies != null && !replies.isEmpty()) {
+            postCommentRepository.deleteAll(replies);
+        }
+
+        postCommentRepository.delete(comment);
+
+        Post post = comment.getPost();
+        long totalRemaining = postCommentRepository.countByPostId(postId);
+        post.setCommentCount((int) Math.max(0, totalRemaining));
+        postRepository.save(post);
+
+        log.info("Successfully deleted comment {}. Remaining comments on post {}: {}", commentId, postId, totalRemaining);
+    }
+
+    @Transactional
+    public Map<String, Object> reportPost(Long postId, ReportPostRequest request, String currentUserEmail) {
+        log.info("Reporting post {} by user {}: category={}, reason={}", postId, currentUserEmail, request.getCategory(), request.getReason());
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Bài viết không tồn tại với ID: " + postId));
+
+        User reporter = resolveUser(currentUserEmail);
+
+        String fullReason = request.getReason();
+        if (request.getDetails() != null && !request.getDetails().isBlank()) {
+            fullReason += " (Chi tiết: " + request.getDetails().trim() + ")";
+        }
+
+        com.wayfare.entity.PostReport report = com.wayfare.entity.PostReport.builder()
+                .post(post)
+                .reporter(reporter)
+                .category(request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : "Báo cáo từ thành viên")
+                .reason(fullReason)
+                .status("PENDING")
+                .build();
+
+        postReportRepository.save(report);
+
+        int currentCount = post.getReportsCount() != null ? post.getReportsCount() : 0;
+        post.setReportsCount(currentCount + 1);
+        post.setReportReason(request.getReason());
+        post.setBadgeText((currentCount + 1) + " Lượt báo cáo");
+
+        // If high number of reports, flag as pending review
+        if (post.getReportsCount() >= 3 && "ACTIVE".equals(post.getStatus())) {
+            post.setStatus("PENDING_REPORT");
+        }
+
+        postRepository.save(post);
+
+        // Notify Admins
+        try {
+            notificationService.sendBroadcastNotification(
+                    "SYSTEM",
+                    "Bài viết #" + postId + " ('" + post.getTitle() + "') vừa nhận thêm 1 báo cáo vi phạm: " + request.getReason(),
+                    "/admin/reports",
+                    reporter.getEmail()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to notify admins of report on post {}: {}", postId, e.getMessage());
+        }
+
+        log.info("Successfully recorded report on post {}. Total reports: {}", postId, post.getReportsCount());
+
+        return Map.of(
+                "success", true,
+                "message", "Cảm ơn bạn đã gửi báo cáo. Ban Quản Trị Wayfare sẽ xem xét bài viết này trong thời gian sớm nhất!",
+                "reportsCount", post.getReportsCount()
+        );
+    }
+
+    @Transactional
     public ItineraryDto cloneItineraryFromPost(Long postId, String currentUserEmail) {
         log.info("Cloning itinerary from post {} for user {}", postId, currentUserEmail);
 
