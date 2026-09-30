@@ -132,6 +132,10 @@ public class NotificationService {
                 .collect(Collectors.toList());
 
         notificationRepository.saveAll(notifications);
+        log.info("Broadcasted notification to {} users successfully.", notifications.size());
+        return notifications.size();
+    }
+
     @jakarta.annotation.PostConstruct
     public void init() {
         try {
