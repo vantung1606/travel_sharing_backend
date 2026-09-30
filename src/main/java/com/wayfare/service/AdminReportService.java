@@ -117,7 +117,7 @@ public class AdminReportService {
                 notificationService.sendNotification(
                         post.getAuthor(),
                         null,
-                        "AI_READY",
+                        "POST_APPROVED",
                         "Quản trị viên đã phê duyệt bài viết '" + post.getTitle() + "' của bạn! Bài viết hiện đã được đăng công khai trên Cộng đồng Wayfare.",
                         "/community"
                 );
@@ -138,6 +138,30 @@ public class AdminReportService {
         post.setReportsCount(0);
         post.setStatus("ACTIVE");
         Post saved = postRepository.save(post);
+
+        // Update post reports status
+        List<com.wayfare.entity.PostReport> reports = postReportRepository.findByPostId(postId);
+        for (com.wayfare.entity.PostReport r : reports) {
+            r.setStatus("DISMISSED");
+            r.setModeratorNotes("Báo cáo đã được bác bỏ sau khi kiểm duyệt nội dung hợp lệ.");
+            postReportRepository.save(r);
+        }
+
+        // Notify author
+        if (post.getAuthor() != null) {
+            try {
+                notificationService.sendNotification(
+                        post.getAuthor(),
+                        null,
+                        "REPORT_DISMISSED",
+                        "Báo cáo vi phạm đối với bài viết '" + post.getTitle() + "' đã được Ban Quản Trị xem xét và bác bỏ. Bài viết của bạn hoàn toàn hợp lệ.",
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify author on report dismissal: {}", e.getMessage());
+            }
+        }
+
         return mapToDto(saved);
     }
 
@@ -149,6 +173,22 @@ public class AdminReportService {
 
         post.setStatus("HIDDEN");
         Post saved = postRepository.save(post);
+
+        // Notify author
+        if (post.getAuthor() != null) {
+            try {
+                notificationService.sendNotification(
+                        post.getAuthor(),
+                        null,
+                        "POST_HIDDEN",
+                        "Bài viết '" + post.getTitle() + "' của bạn đã bị Quản trị viên tạm ẩn khỏi cộng đồng do vi phạm tiêu chuẩn hoặc nhận nhiều phản ánh.",
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify author on post hide: {}", e.getMessage());
+            }
+        }
+
         return mapToDto(saved);
     }
 
@@ -167,6 +207,17 @@ public class AdminReportService {
             userRepository.save(author);
             log.warn("Author {} (ID: {}) has been locked due to critical post violation on Post ID: {}",
                     author.getEmail(), author.getId(), postId);
+            try {
+                notificationService.sendNotification(
+                        author,
+                        null,
+                        "POST_LOCKED",
+                        "Bài viết '" + post.getTitle() + "' vi phạm nghiêm trọng chính sách nội dung. Bài viết đã bị gỡ và tài khoản bị tạm khóa kiểm tra.",
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify author on post lock and ban: {}", e.getMessage());
+            }
         }
 
         Post saved = postRepository.save(post);
@@ -176,9 +227,23 @@ public class AdminReportService {
     @Transactional
     public void deletePost(Long postId) {
         log.info("Permanently deleting Post ID: {}", postId);
-        if (!postRepository.existsById(postId)) {
-            throw new RuntimeException("Không tìm thấy bài viết để xóa");
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy bài viết để xóa: " + postId));
+
+        if (post.getAuthor() != null) {
+            try {
+                notificationService.sendNotification(
+                        post.getAuthor(),
+                        null,
+                        "POST_DELETED",
+                        "Bài viết '" + post.getTitle() + "' của bạn đã bị Quản trị viên xóa vĩnh viễn khỏi hệ thống.",
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify author on post deletion: {}", e.getMessage());
+            }
         }
+
         postReportRepository.deleteByPostId(postId);
         postRepository.deleteById(postId);
     }
