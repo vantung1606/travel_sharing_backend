@@ -103,11 +103,15 @@ public class AiContentModerationService {
     }
 
     public ModerationResult moderate(String title, String content, String locationTag, String category) {
-        return moderate(title, content, locationTag, category, false);
+        return moderate(title, content, locationTag, category, false, false);
     }
 
     public ModerationResult moderate(String title, String content, String locationTag, String category, boolean hasAttachedItinerary) {
-        log.info("Running WanderAI Safety Shield evaluation for title: '{}', category: '{}'", title, category);
+        return moderate(title, content, locationTag, category, hasAttachedItinerary, false);
+    }
+
+    public ModerationResult moderate(String title, String content, String locationTag, String category, boolean hasAttachedItinerary, boolean isSharedPost) {
+        log.info("Running WanderAI Safety Shield evaluation for title: '{}', category: '{}', isSharedPost: {}", title, category, isSharedPost);
 
         String rawCombined = ((title != null ? title : "") + " " + (content != null ? content : "") + " " + (locationTag != null ? locationTag : "")).toLowerCase();
         String unaccented = removeAccents(rawCombined);
@@ -198,19 +202,33 @@ public class AiContentModerationService {
             }
         }
 
-        boolean hasTravelContext = travelKeywordHits > 0 || destinationHits > 0 || hasAttachedItinerary;
+        boolean hasTravelContext = travelKeywordHits > 0 || destinationHits > 0 || hasAttachedItinerary || isSharedPost;
 
-        // Valid categories that show travel intent
-        boolean hasValidCategory = category != null && (
+        // Valid categories that show travel intent (Supports English, slug, and Vietnamese UTF-8 labels)
+        boolean hasValidCategory = isSharedPost || (category != null && (
                 category.equalsIgnoreCase("KhamPha") ||
                 category.equalsIgnoreCase("AmThuc") ||
                 category.equalsIgnoreCase("Phuot") ||
                 category.equalsIgnoreCase("BienDao") ||
                 category.equalsIgnoreCase("NghiDuong") ||
                 category.equalsIgnoreCase("CheckIn") ||
+                category.toLowerCase().contains("khám phá") ||
+                category.toLowerCase().contains("kham pha") ||
+                category.toLowerCase().contains("phượt") ||
+                category.toLowerCase().contains("phuot") ||
+                category.toLowerCase().contains("ẩm thực") ||
+                category.toLowerCase().contains("am thuc") ||
+                category.toLowerCase().contains("check-in") ||
+                category.toLowerCase().contains("checkin") ||
+                category.toLowerCase().contains("biển") ||
+                category.toLowerCase().contains("bien") ||
+                category.toLowerCase().contains("nghỉ dưỡng") ||
+                category.toLowerCase().contains("nghi duong") ||
                 category.toLowerCase().contains("du lịch") ||
-                category.toLowerCase().contains("hành trình")
-        );
+                category.toLowerCase().contains("hành trình") ||
+                category.toLowerCase().contains("lịch trình") ||
+                category.toLowerCase().contains("tour")
+        ));
 
         if (!hasTravelContext && !hasValidCategory) {
             score -= 45; // If zero travel context and non-travel category, fail auto-approval

@@ -152,8 +152,11 @@ public class PostService {
                 ? request.getContent()
                 : (sharedOriginalPost != null ? sharedOriginalPost.getContent() : "Bài viết chia sẻ");
 
+        boolean isSharedPost = sharedOriginalPost != null;
+        boolean hasItinerary = attachedItinerary != null || (sharedOriginalPost != null && sharedOriginalPost.getItinerary() != null);
+
         AiContentModerationService.ModerationResult aiResult =
-                aiContentModerationService.moderate(title, textToScan, request.getLocationTag(), request.getCategory(), attachedItinerary != null);
+                aiContentModerationService.moderate(title, textToScan, request.getLocationTag(), request.getCategory(), hasItinerary, isSharedPost);
 
         String initialStatus = aiResult.isApproved() ? "ACTIVE" : "PENDING_REVIEW";
         String postCategory = aiResult.isApproved()
@@ -270,13 +273,13 @@ public class PostService {
                 log.warn("Failed to send pending moderation notification: {}", e.getMessage());
             }
 
-            // Send notification to Admin
+            // Send notification to Admin (Actor is null for System Alerts)
             try {
                 User admin = userRepository.findByEmail("admin@gmail.com").orElse(null);
                 if (admin != null) {
                     notificationService.sendNotification(
                             admin,
-                            author,
+                            null,
                             "SYSTEM",
                             "Cần duyệt bài viết mới từ " + author.getFullName() + ": '" + saved.getTitle() + "' (Điểm AI: " + aiResult.getSafetyScore() + "/100).",
                             "/admin/reports"
