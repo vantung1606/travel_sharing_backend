@@ -25,7 +25,6 @@ public class HomeService {
     private final PostRepository postRepository;
     private final UserRepository userRepository;
     private final PostService postService;
-    private final ItineraryService itineraryService;
 
     @Transactional(readOnly = true)
     public HomeStatsDto getHomeStats() {
