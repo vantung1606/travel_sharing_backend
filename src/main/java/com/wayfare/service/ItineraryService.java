@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -387,6 +389,220 @@ public class ItineraryService {
                 .receiptImageUrl(e.getReceiptImageUrl())
                 .createdAt(e.getCreatedAt())
                 .build();
+    }
+
+    @Transactional
+    public ItineraryDto cloneItinerary(Long sourceId, String requesterEmail) {
+        log.info("Cloning itinerary id: {} for user: {}", sourceId, requesterEmail);
+        Itinerary source = itineraryRepository.findById(sourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + sourceId));
+
+        User requester = getUserByEmailOrDefault(requesterEmail);
+
+        String clonedTitle = source.getTitle().startsWith("[Sao chép]")
+                ? source.getTitle()
+                : "[Sao chép] " + source.getTitle();
+
+        Itinerary cloned = Itinerary.builder()
+                .creator(requester)
+                .title(clonedTitle)
+                .destination(source.getDestination())
+                .startDate(LocalDate.now().plusDays(7))
+                .endDate(LocalDate.now().plusDays(10))
+                .budgetTotal(source.getBudgetTotal())
+                .coverImageUrl(source.getCoverImageUrl())
+                .isAiGenerated(source.getIsAiGenerated())
+                .status("ACTIVE")
+                .build();
+
+        Itinerary saved = itineraryRepository.save(cloned);
+
+        // Add requester as OWNER
+        ItineraryMember owner = ItineraryMember.builder()
+                .itinerary(saved)
+                .user(requester)
+                .role("OWNER")
+                .build();
+        itineraryMemberRepository.save(owner);
+
+        // Copy all details
+        List<ItineraryDetail> sourceDetails = itineraryDetailRepository.findByItineraryOrderByDayNumberAscVisitOrderAsc(source);
+        List<ItineraryDetail> clonedDetails = new ArrayList<>();
+        for (ItineraryDetail d : sourceDetails) {
+            ItineraryDetail copy = ItineraryDetail.builder()
+                    .itinerary(saved)
+                    .place(d.getPlace())
+                    .locationName(d.getLocationName())
+                    .locationAddress(d.getLocationAddress())
+                    .category(d.getCategory())
+                    .dayNumber(d.getDayNumber())
+                    .visitOrder(d.getVisitOrder())
+                    .startTime(d.getStartTime())
+                    .estimatedCost(d.getEstimatedCost())
+                    .aiTip(d.getAiTip())
+                    .transitInfo(d.getTransitInfo())
+                    .note(d.getNote())
+                    .build();
+            clonedDetails.add(itineraryDetailRepository.save(copy));
+        }
+
+        try {
+            notificationService.sendNotification(
+                    requester,
+                    null,
+                    "SYSTEM",
+                    "Bạn đã sao chép thành công chuyến đi: " + cloned.getTitle(),
+                    "/itineraries"
+            );
+            activityLogService.recordLog(
+                    requester,
+                    "CLONE_ITINERARY",
+                    "Sao chép lịch trình: " + source.getTitle(),
+                    "127.0.0.1",
+                    "Web Client"
+            );
+        } catch (Exception e) {
+            log.warn("Non-critical error logging clone activity: {}", e.getMessage());
+        }
+
+        ItineraryDto dto = mapToSummaryDto(saved);
+        dto.setDetails(clonedDetails.stream().map(this::mapDetailToDto).collect(Collectors.toList()));
+        return dto;
+    }
+
+    @Transactional
+    public ItineraryDto aiQuickGenerate(AiTripGenerateRequest request, String requesterEmail) {
+        log.info("AI Quick generating trip for dest='{}', budget='{}', style='{}', dur='{}' by='{}'",
+                request.getDestination(), request.getBudget(), request.getStyle(), request.getDuration(), requesterEmail);
+
+        User requester = getUserByEmailOrDefault(requesterEmail);
+        String destination = (request.getDestination() != null && !request.getDestination().isBlank())
+                ? request.getDestination().trim()
+                : "Đà Nẵng & Hội An";
+
+        int daysCount = 3;
+        if ("2d1n".equalsIgnoreCase(request.getDuration())) daysCount = 2;
+        else if ("4d3n".equalsIgnoreCase(request.getDuration())) daysCount = 4;
+        else if ("5d4n".equalsIgnoreCase(request.getDuration())) daysCount = 5;
+
+        BigDecimal totalBudget;
+        if (request.getBudgetAmount() != null) {
+            totalBudget = request.getBudgetAmount();
+        } else if ("luxury".equalsIgnoreCase(request.getBudget())) {
+            totalBudget = BigDecimal.valueOf(8500000);
+        } else if ("budget".equalsIgnoreCase(request.getBudget())) {
+            totalBudget = BigDecimal.valueOf(2500000);
+        } else {
+            totalBudget = BigDecimal.valueOf(4500000);
+        }
+
+        String styleLabel = "Nghỉ dưỡng & Ẩm thực";
+        if ("photo".equalsIgnoreCase(request.getStyle())) styleLabel = "Sống ảo & Văn hóa";
+        else if ("nature".equalsIgnoreCase(request.getStyle())) styleLabel = "Trekking & Thiên nhiên";
+        else if ("family".equalsIgnoreCase(request.getStyle())) styleLabel = "Gia đình & Thư giãn";
+
+        String coverImage = "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=85";
+        String lowerDest = destination.toLowerCase();
+        if (lowerDest.contains("đà nẵng") || lowerDest.contains("hội an")) {
+            coverImage = "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1200&q=85";
+        } else if (lowerDest.contains("đà lạt")) {
+            coverImage = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85";
+        } else if (lowerDest.contains("phú quốc")) {
+            coverImage = "https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?auto=format&fit=crop&w=1200&q=85";
+        } else if (lowerDest.contains("sapa") || lowerDest.contains("sa pa") || lowerDest.contains("mù cang")) {
+            coverImage = "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=85";
+        } else if (lowerDest.contains("ninh bình")) {
+            coverImage = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85";
+        }
+
+        LocalDate startDate = LocalDate.now().plusDays(5);
+        LocalDate endDate = startDate.plusDays(daysCount - 1);
+
+        Itinerary itinerary = Itinerary.builder()
+                .creator(requester)
+                .title(destination + ": Lộ Trình AI Thông Minh (" + daysCount + "N" + (daysCount - 1) + "Đ)")
+                .destination(destination)
+                .startDate(startDate)
+                .endDate(endDate)
+                .budgetTotal(totalBudget)
+                .coverImageUrl(coverImage)
+                .isAiGenerated(true)
+                .status("ACTIVE")
+                .build();
+
+        Itinerary saved = itineraryRepository.save(itinerary);
+
+        ItineraryMember owner = ItineraryMember.builder()
+                .itinerary(saved)
+                .user(requester)
+                .role("OWNER")
+                .build();
+        itineraryMemberRepository.save(owner);
+
+        List<ItineraryDetail> generatedDetails = new ArrayList<>();
+        for (int day = 1; day <= daysCount; day++) {
+            generatedDetails.add(itineraryDetailRepository.save(ItineraryDetail.builder()
+                    .itinerary(saved)
+                    .dayNumber(day)
+                    .visitOrder(1)
+                    .startTime(LocalTime.of(8, 30))
+                    .locationName(day == 1 ? "Ăn sáng đặc sản địa phương & Cà phê phin" : (day == 2 ? "Đón bình minh & Thắng cảnh biểu tượng" : "Dạo chợ địa phương & Mua đặc sản làm quà"))
+                    .category(day == 1 ? "Ẩm thực" : (day == 2 ? "Thắng cảnh" : "Mua sắm"))
+                    .estimatedCost(BigDecimal.valueOf(150000))
+                    .aiTip("AI gợi ý khởi hành lúc 8:30 để thời tiết mát mẻ và vắng khách hơn.")
+                    .transitInfo("Taxi / Xe máy ~ 10 phút")
+                    .note("Gu trải nghiệm: " + styleLabel)
+                    .build()));
+
+            generatedDetails.add(itineraryDetailRepository.save(ItineraryDetail.builder()
+                    .itinerary(saved)
+                    .dayNumber(day)
+                    .visitOrder(2)
+                    .startTime(LocalTime.of(14, 0))
+                    .locationName(day == 1 ? "Check-in khách sạn & Khám phá danh lam thắng cảnh" : (day == 2 ? "Trải nghiệm văn hoá & Hoạt động dã ngoại outdoor" : "Check-out & Thưởng thức trà chiều ngắm cảnh"))
+                    .category("Khám phá")
+                    .estimatedCost(BigDecimal.valueOf(350000))
+                    .aiTip("Đặt vé trước qua đối tác Wayfare để tiết kiệm 15% chi phí.")
+                    .transitInfo("Đi bộ hoặc xe ôm công nghệ")
+                    .note("Điểm chụp hình đẹp chuẩn phong cách " + styleLabel)
+                    .build()));
+
+            generatedDetails.add(itineraryDetailRepository.save(ItineraryDetail.builder()
+                    .itinerary(saved)
+                    .dayNumber(day)
+                    .visitOrder(3)
+                    .startTime(LocalTime.of(18, 30))
+                    .locationName(day == 1 ? "Phố ẩm thực đêm & Thưởng thức hải sản/đặc sản" : (day == 2 ? "Chill quán cà phê acoustic / Bar ngắm hoàng hôn" : "Tiệc tối chia tay & Chuẩn bị hành lý"))
+                    .category("Ẩm thực & Giải trí")
+                    .estimatedCost(BigDecimal.valueOf(450000))
+                    .aiTip("Nên đặt bàn trước khung giờ cao điểm để có vị trí ngắm view đẹp nhất.")
+                    .transitInfo("Đi dạo bộ trung tâm")
+                    .note("Trải nghiệm không khí đêm rực rỡ")
+                    .build()));
+        }
+
+        try {
+            notificationService.sendNotification(
+                    requester,
+                    null,
+                    "SYSTEM",
+                    "WanderAI đã khởi tạo thành công lịch trình: " + saved.getTitle() + "!",
+                    "/itineraries"
+            );
+            activityLogService.recordLog(
+                    requester,
+                    "AI_GENERATE_ITINERARY",
+                    "Khởi tạo lộ trình AI: " + saved.getTitle(),
+                    "127.0.0.1",
+                    "Web Client"
+            );
+        } catch (Exception e) {
+            log.warn("Non-critical error logging AI generation: {}", e.getMessage());
+        }
+
+        ItineraryDto dto = mapToSummaryDto(saved);
+        dto.setDetails(generatedDetails.stream().map(this::mapDetailToDto).collect(Collectors.toList()));
+        return dto;
     }
 
     private User getUserByEmailOrDefault(String email) {

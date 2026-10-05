@@ -146,4 +146,22 @@ public class ItineraryController {
         BudgetSummaryDto summary = itineraryService.getBudgetSummary(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy tổng hợp ngân sách thành công", summary));
     }
+
+    @PostMapping("/{id}/clone")
+    public ResponseEntity<ApiResponse<ItineraryDto>> cloneItinerary(
+            @PathVariable Long id,
+            @RequestParam(value = "email", required = false, defaultValue = "admin@gmail.com") String email) {
+        log.info("REST request to clone itinerary id: {} by: {}", id, email);
+        ItineraryDto cloned = itineraryService.cloneItinerary(id, email);
+        return ResponseEntity.ok(ApiResponse.success("Sao chép lịch trình thành công!", cloned));
+    }
+
+    @PostMapping("/ai-quick-generate")
+    public ResponseEntity<ApiResponse<ItineraryDto>> aiQuickGenerate(
+            @RequestBody AiTripGenerateRequest request,
+            @RequestParam(value = "email", required = false, defaultValue = "admin@gmail.com") String email) {
+        log.info("REST request to AI quick generate itinerary for: {}", email);
+        ItineraryDto generated = itineraryService.aiQuickGenerate(request, email);
+        return ResponseEntity.ok(ApiResponse.success("Đã khởi tạo lộ trình AI thông minh!", generated));
+    }
 }
