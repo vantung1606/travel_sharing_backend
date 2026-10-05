@@ -411,6 +411,11 @@ public class PostService {
         return rootComments;
     }
 
+    @Transactional(readOnly = true)
+    public long getCommentCount(Long postId) {
+        return postCommentRepository.countByPostId(postId);
+    }
+
     @Transactional
     public CommentDto addComment(Long postId, CreateCommentRequest request, String currentUserEmail) {
         log.info("Adding comment to post {} by user {}: parentId={}, replyToUserId={}, content={}",

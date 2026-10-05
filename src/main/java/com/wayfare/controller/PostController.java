@@ -1,6 +1,7 @@
 package com.wayfare.controller;
 
 import com.wayfare.dto.*;
+import com.wayfare.service.CommunityRealtimeService;
 import com.wayfare.service.PostService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ import java.util.Map;
 public class PostController {
 
     private final PostService postService;
+    private final CommunityRealtimeService communityRealtimeService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<PostDto>>> getCommunityPosts(
@@ -86,6 +88,11 @@ public class PostController {
             @RequestParam(required = false, defaultValue = "admin@gmail.com") String email) {
         log.info("REST request to toggle like on post {}: email={}", id, email);
         Map<String, Object> result = postService.toggleLikePost(id, email);
+        try {
+            communityRealtimeService.publishLikeChanged(id, email, result.get("likeCount"));
+        } catch (Exception e) {
+            log.error("Failed to broadcast realtime like event for post {}: {}", id, e.getMessage());
+        }
         return ResponseEntity.ok(ApiResponse.success("Cập nhật lượt thích thành công", result));
     }
 
@@ -131,6 +138,12 @@ public class PostController {
             @RequestParam(required = false, defaultValue = "admin@gmail.com") String email) {
         log.info("REST request to add comment on post {} by {}", id, email);
         CommentDto created = postService.addComment(id, request, email);
+        try {
+            communityRealtimeService.publishCommentAdded(
+                    id, created.getId(), request.getParentId(), email, postService.getCommentCount(id));
+        } catch (Exception e) {
+            log.error("Failed to broadcast realtime comment event for post {}: {}", id, e.getMessage());
+        }
         return ResponseEntity.ok(ApiResponse.success("Đăng bình luận thành công!", created));
     }
 
@@ -150,6 +163,11 @@ public class PostController {
             @RequestParam(required = false, defaultValue = "admin@gmail.com") String email) {
         log.info("REST request to delete comment {} from post {} by {}", commentId, id, email);
         postService.deleteComment(id, commentId, email);
+        try {
+            communityRealtimeService.publishCommentDeleted(id, commentId, email, postService.getCommentCount(id));
+        } catch (Exception e) {
+            log.error("Failed to broadcast realtime comment-delete event for post {}: {}", id, e.getMessage());
+        }
         return ResponseEntity.ok(ApiResponse.success("Đã xóa bình luận thành công!", null));
     }
 
