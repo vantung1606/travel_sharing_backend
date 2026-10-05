@@ -21,7 +21,10 @@ public class UserProfileDto {
     private String travelStyle;
     private String budgetPreference;
     private Boolean isVerified;
-    private String role; // "Quản trị viên" | "Phượt thủ tự do" | "Wanderer Diamond"
+    private String coverImageUrl;
+    private String location;
+    private String rank;
+    private String role; // "Quản trị viên" | "Phượt thủ tự do" | "Wanderer Gold"
 
     private Long followersCount;
     private Long followingCount;

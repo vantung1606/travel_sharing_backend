@@ -205,15 +205,21 @@ public class UserFollowService {
 
         String roleStr = targetUser.getRoles() != null && targetUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"))
                 ? "Quản trị viên"
-                : "Phượt thủ tự do";
+                : "Wanderer Gold";
+
+        String defaultCover = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80";
+        String defaultBio = "Đam mê khám phá thiên nhiên & trải nghiệm ẩm thực du lịch độc lạ cùng AI 🌍 ✈️";
 
         return UserProfileDto.builder()
                 .id(targetUser.getId())
                 .fullName(targetUser.getFullName())
                 .handle(targetUser.getHandle() != null ? targetUser.getHandle() : "@" + targetUser.getEmail().split("@")[0])
-                .email(isOwnProfile ? targetUser.getEmail() : null)
+                .email(targetUser.getEmail())
                 .avatarUrl(targetUser.getAvatarUrl() != null ? targetUser.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
-                .bio(targetUser.getBio() != null ? targetUser.getBio() : "Đam mê xê dịch, khám phá thiên nhiên và chia sẻ hành trình du lịch khắp Việt Nam.")
+                .coverImageUrl(defaultCover)
+                .location("Đà Nẵng, Việt Nam")
+                .rank("Wanderer Gold")
+                .bio(targetUser.getBio() != null && !targetUser.getBio().isBlank() ? targetUser.getBio() : defaultBio)
                 .travelStyle(targetUser.getTravelStyle() != null ? targetUser.getTravelStyle() : "Phượt bụi & Khám phá")
                 .budgetPreference(targetUser.getBudgetPreference() != null ? targetUser.getBudgetPreference() : "Tiết kiệm / Hợp lý")
                 .isVerified(targetUser.getIsVerified() != null ? targetUser.getIsVerified() : true)
