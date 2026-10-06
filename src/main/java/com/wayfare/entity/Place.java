@@ -55,6 +55,33 @@ public class Place {
     @Column(name = "cover_image_url", length = 500)
     private String coverImageUrl;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private User owner;
+
+    @Column(name = "phone_number", length = 50)
+    private String phoneNumber;
+
+    @Column(name = "open_hours", length = 100)
+    private String openHours;
+
+    @Column(name = "price_range", length = 100)
+    private String priceRange;
+
+    @Column(name = "category_name", length = 100)
+    private String categoryName;
+
+    @Column(name = "amenities", length = 500)
+    private String amenities;
+
+    @Builder.Default
+    @Column(name = "status", length = 30)
+    private String status = "ACTIVE";
+
+    @Builder.Default
+    @Column(name = "is_verified_host")
+    private Boolean isVerifiedHost = false;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "place_categories",

@@ -72,8 +72,17 @@ CREATE TABLE IF NOT EXISTS places (
     average_rating DECIMAL(3,2) DEFAULT 0.00,
     review_count INT DEFAULT 0,
     cover_image_url VARCHAR(500),
+    owner_id BIGINT NULL,
+    phone_number VARCHAR(50),
+    open_hours VARCHAR(100),
+    price_range VARCHAR(100),
+    category_name VARCHAR(100),
+    amenities VARCHAR(500),
+    status VARCHAR(30) DEFAULT 'ACTIVE',
+    is_verified_host BOOLEAN DEFAULT FALSE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_places_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS place_categories (
