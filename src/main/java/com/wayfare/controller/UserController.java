@@ -48,6 +48,33 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách ID người đang theo dõi thành công", ids));
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserProfileDto>> getMyProfile(
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to get profile of current user by email {}", email);
+        com.wayfare.entity.User current = userFollowService.resolveUser(email);
+        UserProfileDto profile = userFollowService.getUserProfile(current.getId(), email);
+        return ResponseEntity.ok(ApiResponse.success("Lấy thông tin người dùng thành công", profile));
+    }
+
+    @GetMapping("/following")
+    public ResponseEntity<ApiResponse<java.util.List<com.wayfare.dto.FollowUserDto>>> getMyFollowingList(
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to get following list for current user email {}", email);
+        com.wayfare.entity.User current = userFollowService.resolveUser(email);
+        java.util.List<com.wayfare.dto.FollowUserDto> list = userFollowService.getFollowingList(current.getId(), email);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách người đang theo dõi thành công", list));
+    }
+
+    @GetMapping("/followers")
+    public ResponseEntity<ApiResponse<java.util.List<com.wayfare.dto.FollowUserDto>>> getMyFollowersList(
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        log.info("REST request to get followers list for current user email {}", email);
+        com.wayfare.entity.User current = userFollowService.resolveUser(email);
+        java.util.List<com.wayfare.dto.FollowUserDto> list = userFollowService.getFollowersList(current.getId(), email);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách người theo dõi thành công", list));
+    }
+
     @GetMapping("/{id}/following")
     public ResponseEntity<ApiResponse<java.util.List<com.wayfare.dto.FollowUserDto>>> getFollowingList(
             @PathVariable Long id,

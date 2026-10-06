@@ -97,8 +97,9 @@ public class UserFollowService {
     @Transactional(readOnly = true)
     public List<FollowUserDto> getFollowingList(Long targetUserId, String currentUserEmail) {
         log.info("Getting following list for userId={}, viewer={}", targetUserId, currentUserEmail);
-        User target = userRepository.findById(targetUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại với ID: " + targetUserId));
+        User target = targetUserId != null
+                ? userRepository.findById(targetUserId).orElseGet(() -> resolveUser(currentUserEmail))
+                : resolveUser(currentUserEmail);
         User viewer = (currentUserEmail != null && !currentUserEmail.isBlank())
                 ? userRepository.findByEmail(currentUserEmail).orElse(null)
                 : null;
@@ -126,8 +127,9 @@ public class UserFollowService {
     @Transactional(readOnly = true)
     public List<FollowUserDto> getFollowersList(Long targetUserId, String currentUserEmail) {
         log.info("Getting followers list for userId={}, viewer={}", targetUserId, currentUserEmail);
-        User target = userRepository.findById(targetUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại với ID: " + targetUserId));
+        User target = targetUserId != null
+                ? userRepository.findById(targetUserId).orElseGet(() -> resolveUser(currentUserEmail))
+                : resolveUser(currentUserEmail);
         User viewer = (currentUserEmail != null && !currentUserEmail.isBlank())
                 ? userRepository.findByEmail(currentUserEmail).orElse(null)
                 : null;
@@ -241,7 +243,7 @@ public class UserFollowService {
                 .build();
     }
 
-    private User resolveUser(String email) {
+    public User resolveUser(String email) {
         if (email == null || email.isBlank()) {
             return userRepository.findByEmail("tung@gmail.com")
                     .orElseGet(() -> userRepository.findAll().stream().findFirst()
