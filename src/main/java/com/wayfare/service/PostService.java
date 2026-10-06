@@ -36,6 +36,7 @@ public class PostService {
     private final AiContentModerationService aiContentModerationService;
     private final PostReportRepository postReportRepository;
     private final PostBookmarkRepository postBookmarkRepository;
+    private final com.wayfare.repository.UserFollowRepository userFollowRepository;
 
     @Transactional(readOnly = true)
     public List<PostDto> getCommunityPosts(String category, String keyword, String currentUserEmail) {
@@ -238,6 +239,9 @@ public class PostService {
                     }
                 }
             }
+
+            // Send mention notifications to followed users tagged in post content
+            checkAndNotifyTaggedFollowedUsers(saved.getContent(), author, saved, "POST");
         } else {
             activityLogService.recordLog(author, "AI_FLAG_POST", "AI gắn cờ bài viết vi phạm, chuyển hàng đợi Admin duyệt: '" + saved.getTitle() + "'", ip, ua);
 
@@ -478,6 +482,9 @@ public class PostService {
         } catch (Exception e) {
             log.warn("Failed to send notification for comment: {}", e.getMessage());
         }
+
+        // Send mention notifications to followed users tagged in comment
+        checkAndNotifyTaggedFollowedUsers(request.getContent(), user, post, "COMMENT");
 
         return mapCommentToDto(saved);
     }
@@ -885,5 +892,41 @@ public class PostService {
         if (seconds < 86400) return (seconds / 3600) + " giờ trước";
         if (seconds < 86400 * 2) return "Hôm qua";
         return (seconds / 86400) + " ngày trước";
+    }
+
+    /**
+     * Check if post or comment content contains tags (@) of users followed by the author,
+     * and dispatch real-time notifications to those tagged followed users.
+     */
+    public void checkAndNotifyTaggedFollowedUsers(String content, User author, Post post, String type) {
+        if (content == null || !content.contains("@") || author == null || post == null) {
+            return;
+        }
+        try {
+            java.util.List<com.wayfare.entity.UserFollow> follows = userFollowRepository.findByFollowerId(author.getId());
+            for (com.wayfare.entity.UserFollow uf : follows) {
+                User followed = uf.getFollowing();
+                if (followed == null || followed.getId().equals(author.getId())) continue;
+
+                boolean taggedByName = followed.getFullName() != null && content.contains("@" + followed.getFullName());
+                boolean taggedByHandle = followed.getHandle() != null && content.contains(followed.getHandle());
+
+                if (taggedByName || taggedByHandle) {
+                    log.info("Sending mention notification to followed user {} (id={}) tagged by {}", followed.getEmail(), followed.getId(), author.getEmail());
+                    String msg = "POST".equalsIgnoreCase(type)
+                            ? author.getFullName() + " đã gắn thẻ bạn trong một bài viết mới: '" + post.getTitle() + "'"
+                            : author.getFullName() + " đã nhắc đến bạn trong một bình luận bài viết '" + post.getTitle() + "'";
+                    notificationService.sendNotification(
+                            followed,
+                            author,
+                            "TAG",
+                            msg,
+                            "/community"
+                    );
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send mention notification for post {}: {}", post.getId(), e.getMessage());
+        }
     }
 }
