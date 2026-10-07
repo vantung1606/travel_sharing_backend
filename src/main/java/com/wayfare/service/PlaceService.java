@@ -29,11 +29,29 @@ public class PlaceService {
         log.info("Fetching places with filters - city: {}, category: {}, status: {}, keyword: {}", city, category, status, keyword);
         String cleanCity = (city != null && !city.isBlank() && !city.equalsIgnoreCase("Tất cả")) ? city.trim() : null;
         String cleanCategory = (category != null && !category.isBlank() && !category.equalsIgnoreCase("Tất cả")) ? category.trim() : null;
-        String cleanStatus = (status != null && !status.isBlank() && !status.equalsIgnoreCase("Tất cả")) ? status.trim() : null;
+        
+        // Mặc định chỉ hiển thị các địa điểm đã ACTIVE cho người dùng thông thường, trừ khi có filter rõ ràng hoặc ALL
+        String cleanStatus = "ACTIVE";
+        if (status != null && !status.isBlank()) {
+            if (status.equalsIgnoreCase("ALL")) {
+                cleanStatus = null;
+            } else if (!status.equalsIgnoreCase("Tất cả")) {
+                cleanStatus = status.trim();
+            }
+        }
         String cleanKeyword = (keyword != null && !keyword.isBlank()) ? keyword.trim() : null;
 
         List<Place> places = placeRepository.searchPlaces(cleanStatus, cleanCity, cleanCategory, cleanKeyword);
         return places.stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlaceDto> getPendingPlaces() {
+        log.info("Fetching pending places for admin approval");
+        return placeRepository.findByStatus("PENDING_APPROVAL")
+                .stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
@@ -52,11 +70,16 @@ public class PlaceService {
             owner = userRepository.findByEmail(userEmail).orElse(null);
         }
 
-        boolean isVerifiedHost = false;
+        boolean isAdminOrMod = false;
         if (owner != null && owner.getRoles() != null) {
-            isVerifiedHost = owner.getRoles().stream()
+            isAdminOrMod = owner.getRoles().stream()
                     .anyMatch(r -> r.getName().equalsIgnoreCase("ROLE_ADMIN") || r.getName().equalsIgnoreCase("ROLE_MODERATOR"));
         }
+
+        // Nếu là Admin/Moderator tạo: Duyệt ngay ACTIVE + Host uy tín.
+        // Nếu là Người dùng thường / Cơ sở kinh doanh gửi: PENDING_APPROVAL chờ duyệt
+        String initialStatus = isAdminOrMod ? "ACTIVE" : "PENDING_APPROVAL";
+        boolean isVerifiedHost = isAdminOrMod;
 
         Place place = Place.builder()
                 .name(request.getName().trim())
@@ -77,12 +100,12 @@ public class PlaceService {
                 .owner(owner)
                 .averageRating(BigDecimal.valueOf(5.0))
                 .reviewCount(0)
-                .status("ACTIVE")
+                .status(initialStatus)
                 .isVerifiedHost(isVerifiedHost)
                 .build();
 
         Place saved = placeRepository.save(place);
-        log.info("Successfully created place ID: {} by user: {}", saved.getId(), userEmail);
+        log.info("Successfully created place ID: {} with status: {} by user: {}", saved.getId(), initialStatus, userEmail);
         return toDto(saved);
     }
 
@@ -95,6 +118,30 @@ public class PlaceService {
                 .stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public PlaceDto approvePlace(Long id) {
+        log.info("Admin approving place ID: {}", id);
+        Place place = placeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với ID: " + id));
+        place.setStatus("ACTIVE");
+        place.setIsVerifiedHost(true);
+        Place saved = placeRepository.save(place);
+        log.info("Place ID: {} approved successfully and marked as verified host", id);
+        return toDto(saved);
+    }
+
+    @Transactional
+    public PlaceDto rejectPlace(Long id, String reason) {
+        log.info("Admin rejecting place ID: {} for reason: {}", id, reason);
+        Place place = placeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với ID: " + id));
+        place.setStatus("REJECTED");
+        place.setIsVerifiedHost(false);
+        Place saved = placeRepository.save(place);
+        log.info("Place ID: {} rejected successfully", id);
+        return toDto(saved);
     }
 
     @Transactional
@@ -112,16 +159,16 @@ public class PlaceService {
         Place place = placeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với ID: " + id));
 
-        User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
-
-        boolean isAdmin = user.getRoles() != null && user.getRoles().stream()
-                .anyMatch(r -> r.getName().equalsIgnoreCase("ROLE_ADMIN"));
-
-        boolean isOwner = place.getOwner() != null && place.getOwner().getId().equals(user.getId());
-
-        if (!isAdmin && !isOwner) {
-            throw new IllegalArgumentException("Bạn không có quyền xóa địa điểm này");
+        if (userEmail != null && !userEmail.isBlank()) {
+            User user = userRepository.findByEmail(userEmail).orElse(null);
+            if (user != null) {
+                boolean isAdmin = user.getRoles() != null && user.getRoles().stream()
+                        .anyMatch(r -> r.getName().equalsIgnoreCase("ROLE_ADMIN"));
+                boolean isOwner = place.getOwner() != null && place.getOwner().getId().equals(user.getId());
+                if (!isAdmin && !isOwner) {
+                    throw new IllegalArgumentException("Bạn không có quyền xóa địa điểm này");
+                }
+            }
         }
 
         placeRepository.delete(place);

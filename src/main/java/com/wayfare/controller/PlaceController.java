@@ -56,6 +56,29 @@ public class PlaceController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm của bạn thành công", myPlaces));
     }
 
+    @GetMapping("/admin/pending")
+    public ResponseEntity<ApiResponse<List<PlaceDto>>> getPendingPlaces() {
+        log.info("REST request to get all pending places for admin moderation");
+        List<PlaceDto> pending = placeService.getPendingPlaces();
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm chờ duyệt thành công", pending));
+    }
+
+    @PutMapping("/admin/{id}/approve")
+    public ResponseEntity<ApiResponse<PlaceDto>> approvePlace(@PathVariable Long id) {
+        log.info("REST request to approve place ID: {}", id);
+        PlaceDto approved = placeService.approvePlace(id);
+        return ResponseEntity.ok(ApiResponse.success("Phê duyệt địa điểm thành công!", approved));
+    }
+
+    @PutMapping("/admin/{id}/reject")
+    public ResponseEntity<ApiResponse<PlaceDto>> rejectPlace(
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "Thông tin chưa đầy đủ hoặc không hợp lệ") String reason) {
+        log.info("REST request to reject place ID: {} with reason: {}", id, reason);
+        PlaceDto rejected = placeService.rejectPlace(id, reason);
+        return ResponseEntity.ok(ApiResponse.success("Từ chối địa điểm thành công!", rejected));
+    }
+
     @PutMapping("/{id}/status")
     public ResponseEntity<ApiResponse<PlaceDto>> updatePlaceStatus(
             @PathVariable Long id,
