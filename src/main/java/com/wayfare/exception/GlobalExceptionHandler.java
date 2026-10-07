@@ -1,6 +1,6 @@
 package com.wayfare.exception;
 
-import com.wayfare.dto.ApiResponse;
+import com.wayfare.common.dto.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,3 +42,4 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Lỗi: " + ex.getMessage()));
     }
 }
+

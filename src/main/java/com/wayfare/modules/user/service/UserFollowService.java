@@ -1,0 +1,262 @@
+package com.wayfare.modules.user.service;
+
+import com.wayfare.modules.notification.service.NotificationService;
+import com.wayfare.modules.community.service.PostService;
+
+import com.wayfare.modules.user.dto.FollowUserDto;
+import com.wayfare.modules.itinerary.dto.ItineraryDto;
+import com.wayfare.modules.community.dto.PostDto;
+import com.wayfare.modules.user.dto.UserProfileDto;
+import com.wayfare.entity.Itinerary;
+import com.wayfare.entity.Post;
+import com.wayfare.entity.User;
+import com.wayfare.entity.UserFollow;
+import com.wayfare.exception.ResourceNotFoundException;
+import com.wayfare.repository.ItineraryRepository;
+import com.wayfare.repository.PostRepository;
+import com.wayfare.repository.UserFollowRepository;
+import com.wayfare.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class UserFollowService {
+
+    private final UserRepository userRepository;
+    private final UserFollowRepository userFollowRepository;
+    private final PostRepository postRepository;
+    private final ItineraryRepository itineraryRepository;
+    private final NotificationService notificationService;
+    private final PostService postService;
+
+    @Transactional
+    public Map<String, Object> toggleFollow(Long targetUserId, String currentUserEmail) {
+        log.info("Toggle follow targetUserId={} by userEmail={}", targetUserId, currentUserEmail);
+
+        User currentUser = resolveUser(currentUserEmail);
+        User targetUser = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại với ID: " + targetUserId));
+
+        if (currentUser.getId().equals(targetUser.getId())) {
+            throw new RuntimeException("Bạn không thể tự theo dõi chính mình!");
+        }
+
+        Optional<UserFollow> existing = userFollowRepository.findByFollowerIdAndFollowingId(currentUser.getId(), targetUser.getId());
+        boolean isFollowing;
+
+        if (existing.isPresent()) {
+            userFollowRepository.delete(existing.get());
+            isFollowing = false;
+            log.info("User {} unfollowed user {}", currentUser.getEmail(), targetUser.getEmail());
+        } else {
+            UserFollow newFollow = UserFollow.builder()
+                    .follower(currentUser)
+                    .following(targetUser)
+                    .build();
+            userFollowRepository.save(newFollow);
+            isFollowing = true;
+            log.info("User {} followed user {}", currentUser.getEmail(), targetUser.getEmail());
+
+            // Send notification
+            try {
+                notificationService.sendNotification(
+                        targetUser,
+                        currentUser,
+                        "FOLLOW",
+                        currentUser.getFullName() + " đã bắt đầu theo dõi bạn trên Wayfare!",
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send follow notification: {}", e.getMessage());
+            }
+        }
+
+        long followersCount = userFollowRepository.countByFollowingId(targetUser.getId());
+        long followingCount = userFollowRepository.countByFollowerId(targetUser.getId());
+
+        return Map.of(
+                "isFollowing", isFollowing,
+                "followersCount", followersCount,
+                "followingCount", followingCount
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> getFollowingUserIds(String currentUserEmail) {
+        log.info("Getting following user IDs for {}", currentUserEmail);
+        User currentUser = resolveUser(currentUserEmail);
+        return userFollowRepository.findByFollowerId(currentUser.getId()).stream()
+                .map(uf -> uf.getFollowing().getId())
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<FollowUserDto> getFollowingList(Long targetUserId, String currentUserEmail) {
+        log.info("Getting following list for userId={}, viewer={}", targetUserId, currentUserEmail);
+        User target = targetUserId != null
+                ? userRepository.findById(targetUserId).orElseGet(() -> resolveUser(currentUserEmail))
+                : resolveUser(currentUserEmail);
+        User viewer = (currentUserEmail != null && !currentUserEmail.isBlank())
+                ? userRepository.findByEmail(currentUserEmail).orElse(null)
+                : null;
+
+        List<UserFollow> follows = userFollowRepository.findByFollowerId(target.getId());
+        return follows.stream().map(uf -> {
+            User u = uf.getFollowing();
+            boolean isFollowing = viewer != null && userFollowRepository.existsByFollowerIdAndFollowingId(viewer.getId(), u.getId());
+            long fCount = userFollowRepository.countByFollowingId(u.getId());
+            String role = u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"))
+                    ? "Quản trị viên" : "Phượt thủ tự do";
+            return FollowUserDto.builder()
+                    .id(u.getId())
+                    .fullName(u.getFullName())
+                    .handle(u.getHandle() != null ? u.getHandle() : "@" + u.getEmail().split("@")[0])
+                    .avatarUrl(u.getAvatarUrl() != null ? u.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                    .bio(u.getBio() != null ? u.getBio() : "Đam mê khám phá thiên nhiên và chia sẻ hành trình du lịch.")
+                    .role(role)
+                    .isFollowing(isFollowing)
+                    .followersCount(fCount)
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<FollowUserDto> getFollowersList(Long targetUserId, String currentUserEmail) {
+        log.info("Getting followers list for userId={}, viewer={}", targetUserId, currentUserEmail);
+        User target = targetUserId != null
+                ? userRepository.findById(targetUserId).orElseGet(() -> resolveUser(currentUserEmail))
+                : resolveUser(currentUserEmail);
+        User viewer = (currentUserEmail != null && !currentUserEmail.isBlank())
+                ? userRepository.findByEmail(currentUserEmail).orElse(null)
+                : null;
+
+        List<UserFollow> follows = userFollowRepository.findByFollowingId(target.getId());
+        return follows.stream().map(uf -> {
+            User u = uf.getFollower();
+            boolean isFollowing = viewer != null && userFollowRepository.existsByFollowerIdAndFollowingId(viewer.getId(), u.getId());
+            long fCount = userFollowRepository.countByFollowingId(u.getId());
+            String role = u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"))
+                    ? "Quản trị viên" : "Phượt thủ tự do";
+            return FollowUserDto.builder()
+                    .id(u.getId())
+                    .fullName(u.getFullName())
+                    .handle(u.getHandle() != null ? u.getHandle() : "@" + u.getEmail().split("@")[0])
+                    .avatarUrl(u.getAvatarUrl() != null ? u.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                    .bio(u.getBio() != null ? u.getBio() : "Du khách trên nền tảng Wayfare.")
+                    .role(role)
+                    .isFollowing(isFollowing)
+                    .followersCount(fCount)
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public UserProfileDto getUserProfile(Long targetUserId, String currentUserEmail) {
+        log.info("Getting user profile for targetUserId={}, viewer={}", targetUserId, currentUserEmail);
+
+        User targetUser = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại với ID: " + targetUserId));
+
+        User currentUser = null;
+        if (currentUserEmail != null && !currentUserEmail.isBlank()) {
+            currentUser = userRepository.findByEmail(currentUserEmail).orElse(null);
+        }
+
+        boolean isFollowing = false;
+        boolean isOwnProfile = currentUser != null && currentUser.getId().equals(targetUser.getId());
+
+        if (currentUser != null && !isOwnProfile) {
+            isFollowing = userFollowRepository.existsByFollowerIdAndFollowingId(currentUser.getId(), targetUser.getId());
+        }
+
+        long followersCount = userFollowRepository.countByFollowingId(targetUser.getId());
+        long followingCount = userFollowRepository.countByFollowerId(targetUser.getId());
+
+        // Get Posts
+        List<Post> allUserPosts = postRepository.findByAuthorOrderByCreatedAtDesc(targetUser);
+        List<PostDto> postDtos = allUserPosts.stream()
+                .filter(p -> {
+                    if (isOwnProfile) {
+                        return true; // Owner sees all their posts (ACTIVE, PENDING_REVIEW, PRIVATE, PUBLIC)
+                    }
+                    // Others only see ACTIVE and PUBLIC
+                    return "ACTIVE".equals(p.getStatus()) && !"PRIVATE".equalsIgnoreCase(p.getVisibility());
+                })
+                .map(p -> postService.mapToDto(p, isOwnProfile ? targetUser : null))
+                .collect(Collectors.toList());
+
+        // Get Itineraries
+        List<Itinerary> userItineraries = itineraryRepository.findByCreatorOrderByCreatedAtDesc(targetUser);
+        List<ItineraryDto> itinDtos = userItineraries.stream()
+                .filter(i -> isOwnProfile || "ACTIVE".equalsIgnoreCase(i.getStatus()))
+                .map(i -> ItineraryDto.builder()
+                        .id(i.getId())
+                        .creatorId(i.getCreator() != null ? i.getCreator().getId() : null)
+                        .creatorName(i.getCreator() != null ? i.getCreator().getFullName() : "Wanderer")
+                        .creatorEmail(i.getCreator() != null ? i.getCreator().getEmail() : "")
+                        .creatorAvatar(i.getCreator() != null ? i.getCreator().getAvatarUrl() : null)
+                        .title(i.getTitle())
+                        .destination(i.getDestination())
+                        .startDate(i.getStartDate())
+                        .endDate(i.getEndDate())
+                        .budgetTotal(i.getBudgetTotal())
+                        .coverImageUrl(i.getCoverImageUrl())
+                        .isAiGenerated(i.getIsAiGenerated())
+                        .status(i.getStatus())
+                        .createdAt(i.getCreatedAt())
+                        .updatedAt(i.getUpdatedAt())
+                        .build())
+                .collect(Collectors.toList());
+
+        String roleStr = targetUser.getRoles() != null && targetUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"))
+                ? "Quản trị viên"
+                : "Wanderer Gold";
+
+        String defaultCover = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80";
+        String defaultBio = "Đam mê khám phá thiên nhiên & trải nghiệm ẩm thực du lịch độc lạ cùng AI 🌍 ✈️";
+
+        return UserProfileDto.builder()
+                .id(targetUser.getId())
+                .fullName(targetUser.getFullName())
+                .handle(targetUser.getHandle() != null ? targetUser.getHandle() : "@" + targetUser.getEmail().split("@")[0])
+                .email(targetUser.getEmail())
+                .avatarUrl(targetUser.getAvatarUrl() != null ? targetUser.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                .coverImageUrl(defaultCover)
+                .location("Đà Nẵng, Việt Nam")
+                .rank("Wanderer Gold")
+                .bio(targetUser.getBio() != null && !targetUser.getBio().isBlank() ? targetUser.getBio() : defaultBio)
+                .travelStyle(targetUser.getTravelStyle() != null ? targetUser.getTravelStyle() : "Phượt bụi & Khám phá")
+                .budgetPreference(targetUser.getBudgetPreference() != null ? targetUser.getBudgetPreference() : "Tiết kiệm / Hợp lý")
+                .isVerified(targetUser.getIsVerified() != null ? targetUser.getIsVerified() : true)
+                .role(roleStr)
+                .followersCount(followersCount)
+                .followingCount(followingCount)
+                .postsCount(postDtos.size())
+                .itinerariesCount(itinDtos.size())
+                .isFollowing(isFollowing)
+                .posts(postDtos)
+                .itineraries(itinDtos)
+                .build();
+    }
+
+    public User resolveUser(String email) {
+        if (email == null || email.isBlank()) {
+            return userRepository.findByEmail("tung@gmail.com")
+                    .orElseGet(() -> userRepository.findAll().stream().findFirst()
+                            .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng mặc định")));
+        }
+        return userRepository.findByEmail(email)
+                .orElseGet(() -> userRepository.findByEmail("tung@gmail.com")
+                        .orElseGet(() -> userRepository.findAll().stream().findFirst()
+                                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với email: " + email))));
+    }
+}
+
+
