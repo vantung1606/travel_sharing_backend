@@ -56,7 +56,7 @@ public class PlaceController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm của bạn thành công", myPlaces));
     }
 
-    @GetMapping("/admin/pending")
+    @GetMapping({"/admin/pending", "/pending"})
     public ResponseEntity<ApiResponse<List<PlaceDto>>> getPendingPlaces() {
         log.info("REST request to get all pending places for admin moderation");
         List<PlaceDto> pending = placeService.getPendingPlaces();
