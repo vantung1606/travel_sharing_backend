@@ -6,7 +6,10 @@ import com.wayfare.common.dto.HomeStatsDto;
 
 import com.wayfare.entity.Itinerary;
 import com.wayfare.entity.Post;
-import com.wayfare.repository.*;
+import com.wayfare.repository.ItineraryRepository;
+import com.wayfare.repository.PlaceRepository;
+import com.wayfare.repository.PostRepository;
+import com.wayfare.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;

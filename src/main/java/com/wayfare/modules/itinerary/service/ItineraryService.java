@@ -11,9 +11,12 @@ import com.wayfare.modules.itinerary.dto.ItineraryDetailDto;
 
 import com.wayfare.entity.*;
 import com.wayfare.exception.ResourceNotFoundException;
-import com.wayfare.repository.*;
+import com.wayfare.repository.ItineraryRepository;
+import com.wayfare.repository.ItineraryDetailRepository;
 import com.wayfare.repository.ItineraryMemberRepository;
 import com.wayfare.repository.ItineraryExpenseRepository;
+import com.wayfare.repository.UserRepository;
+import com.wayfare.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

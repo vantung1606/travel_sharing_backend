@@ -11,7 +11,15 @@ import com.wayfare.modules.community.dto.CreatePostRequest;
 import com.wayfare.modules.community.dto.CreateCommentRequest;
 
 import com.wayfare.entity.*;
-import com.wayfare.repository.*;
+import com.wayfare.repository.PostRepository;
+import com.wayfare.repository.PostLikeRepository;
+import com.wayfare.repository.PostCommentRepository;
+import com.wayfare.repository.UserRepository;
+import com.wayfare.repository.ItineraryRepository;
+import com.wayfare.repository.ItineraryDetailRepository;
+import com.wayfare.repository.PostReportRepository;
+import com.wayfare.repository.PostBookmarkRepository;
+import com.wayfare.repository.UserFollowRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +53,7 @@ public class PostService {
     private final AiContentModerationService aiContentModerationService;
     private final PostReportRepository postReportRepository;
     private final PostBookmarkRepository postBookmarkRepository;
-    private final com.wayfare.repository.UserFollowRepository userFollowRepository;
+    private final UserFollowRepository userFollowRepository;
 
     @Transactional(readOnly = true)
     public List<PostDto> getCommunityPosts(String category, String keyword, String currentUserEmail) {
