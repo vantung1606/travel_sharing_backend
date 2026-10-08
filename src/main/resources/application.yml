@@ -26,7 +26,7 @@ gemini:
   model: gemini-3.6-flash
 
 cloudinary:
-  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
-  api-key: ${CLOUDINARY_API_KEY:}
-  api-secret: ${CLOUDINARY_API_SECRET:}
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:vantung204}
+  api-key: ${CLOUDINARY_API_KEY:793431789955133}
+  api-secret: ${CLOUDINARY_API_SECRET:Z3OSs9MS_qq53sbe1jbRox7kSNI}
   folder: ${CLOUDINARY_FOLDER:wayfare/media}
