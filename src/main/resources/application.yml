@@ -24,3 +24,9 @@ gemini:
   api-key: ${GEMINI_API_KEY:}
   api-url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta}
   model: gemini-3.6-flash
+
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+  folder: ${CLOUDINARY_FOLDER:wayfare/media}
