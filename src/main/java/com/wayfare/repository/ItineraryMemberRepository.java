@@ -23,4 +23,6 @@ public interface ItineraryMemberRepository extends JpaRepository<ItineraryMember
     boolean existsByItineraryIdAndUserId(Long itineraryId, Long userId);
 
     void deleteByItineraryIdAndUserId(Long itineraryId, Long userId);
+
+    void deleteByItineraryId(Long itineraryId);
 }

@@ -21,6 +21,7 @@ public class ItineraryDetailDto {
     private String category;
     private Integer dayNumber;
     private Integer visitOrder;
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "HH:mm[:ss]")
     private LocalTime startTime;
     private BigDecimal estimatedCost;
     private String aiTip;

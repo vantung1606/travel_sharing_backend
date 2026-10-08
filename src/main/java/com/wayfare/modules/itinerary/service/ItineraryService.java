@@ -48,7 +48,12 @@ public class ItineraryService {
         log.info("Fetching itineraries for user: {}", email);
         User user = getUserByEmailOrDefault(email);
         List<Itinerary> list = itineraryRepository.findByCreatorOrderByCreatedAtDesc(user);
-        return list.stream().map(this::mapToSummaryDto).collect(Collectors.toList());
+        return list.stream().map(i -> {
+            ItineraryDto dto = mapToSummaryDto(i);
+            List<ItineraryDetail> details = itineraryDetailRepository.findByItineraryOrderByDayNumberAscVisitOrderAsc(i);
+            dto.setDetails(details.stream().map(this::mapDetailToDto).collect(Collectors.toList()));
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
@@ -184,6 +189,7 @@ public class ItineraryService {
                 .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + id));
 
         // Cascade delete child entities
+        itineraryMemberRepository.deleteByItineraryId(id);
         itineraryDetailRepository.deleteByItineraryId(id);
         itineraryExpenseRepository.deleteByItineraryId(id);
         itineraryRepository.delete(itinerary);
