@@ -151,17 +151,22 @@ public class PostService {
             }
         }
 
-        String primaryImage = request.getImageUrl();
-        if ((primaryImage == null || primaryImage.isBlank()) && request.getImages() != null && !request.getImages().isEmpty()) {
-            primaryImage = request.getImages().get(0);
+        List<String> imgList = new ArrayList<>();
+        if (request.getImages() != null && !request.getImages().isEmpty()) {
+            for (String img : request.getImages()) {
+                if (img != null && !img.isBlank()) imgList.add(img.trim());
+            }
+        } else if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
+            imgList.add(request.getImageUrl().trim());
         }
-        if (primaryImage == null || primaryImage.isBlank()) {
+
+        if (imgList.isEmpty()) {
             if (attachedItinerary != null && attachedItinerary.getCoverImageUrl() != null) {
-                primaryImage = attachedItinerary.getCoverImageUrl();
-            } else if (sharedOriginalPost != null && sharedOriginalPost.getImageUrl() != null) {
-                primaryImage = sharedOriginalPost.getImageUrl();
+                imgList.add(attachedItinerary.getCoverImageUrl());
+            } else if (sharedOriginalPost != null && sharedOriginalPost.getFirstImage() != null) {
+                imgList.add(sharedOriginalPost.getFirstImage());
             } else {
-                primaryImage = "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80";
+                imgList.add("https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80");
             }
         }
 
@@ -181,17 +186,13 @@ public class PostService {
                 ? (request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : (sharedOriginalPost != null && sharedOriginalPost.getCategory() != null ? sharedOriginalPost.getCategory() : "Chia sẻ hành trình"))
                 : aiResult.getCategory();
 
-        String imagesStr = null;
-        if (request.getImages() != null && !request.getImages().isEmpty()) {
-            imagesStr = String.join(";;;", request.getImages());
-        }
+        String imagesStr = imgList.isEmpty() ? null : String.join(";;;", imgList);
 
         Post newPost = Post.builder()
                 .author(author)
                 .title(title)
                 .content(request.getContent() != null ? request.getContent() : "")
                 .locationTag(request.getLocationTag() != null && !request.getLocationTag().isBlank() ? request.getLocationTag() : (attachedItinerary != null ? attachedItinerary.getDestination() : (sharedOriginalPost != null ? sharedOriginalPost.getLocationTag() : "Việt Nam")))
-                .imageUrl(primaryImage)
                 .images(imagesStr)
                 .videoUrl(request.getVideoUrl())
                 .visibility(request.getVisibility() != null && !request.getVisibility().isBlank() ? request.getVisibility() : "PUBLIC")
@@ -717,23 +718,25 @@ public class PostService {
                 ? (request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : post.getCategory())
                 : aiResult.getCategory();
 
-        String imagesStr = null;
+        List<String> imgList = new ArrayList<>();
         if (request.getImages() != null && !request.getImages().isEmpty()) {
-            imagesStr = String.join(";;;", request.getImages());
+            for (String img : request.getImages()) {
+                if (img != null && !img.isBlank()) imgList.add(img.trim());
+            }
+        } else if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
+            imgList.add(request.getImageUrl().trim());
         }
 
-        String primaryImage = request.getImageUrl();
-        if ((primaryImage == null || primaryImage.isBlank()) && request.getImages() != null && !request.getImages().isEmpty()) {
-            primaryImage = request.getImages().get(0);
-        }
-        if (primaryImage == null || primaryImage.isBlank()) {
-            primaryImage = post.getImageUrl();
+        String imagesStr;
+        if (!imgList.isEmpty()) {
+            imagesStr = String.join(";;;", imgList);
+        } else {
+            imagesStr = post.getImages();
         }
 
         post.setTitle(title);
         post.setContent(request.getContent());
         if (request.getLocationTag() != null) post.setLocationTag(request.getLocationTag());
-        post.setImageUrl(primaryImage);
         post.setImages(imagesStr);
         if (request.getVideoUrl() != null) post.setVideoUrl(request.getVideoUrl());
         if (request.getVisibility() != null && !request.getVisibility().isBlank()) post.setVisibility(request.getVisibility());
@@ -824,9 +827,8 @@ public class PostService {
             for (String img : p.getImages().split(";;;")) {
                 if (!img.isBlank()) images.add(img.trim());
             }
-        } else if (p.getImageUrl() != null && !p.getImageUrl().isBlank()) {
-            images.add(p.getImageUrl());
         }
+        String firstImage = images.isEmpty() ? null : images.get(0);
 
         String formattedDate = p.getCreatedAt() != null
                 ? p.getCreatedAt().format(DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy"))
@@ -844,7 +846,7 @@ public class PostService {
                 .title(p.getTitle())
                 .content(p.getContent())
                 .locationTag(p.getLocationTag())
-                .imageUrl(p.getImageUrl())
+                .imageUrl(firstImage)
                 .images(images)
                 .videoUrl(p.getVideoUrl())
                 .visibility(p.getVisibility() != null ? p.getVisibility() : "PUBLIC")

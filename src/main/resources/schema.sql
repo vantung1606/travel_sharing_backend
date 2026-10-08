@@ -118,7 +118,6 @@ CREATE TABLE IF NOT EXISTS posts (
     title VARCHAR(200) NOT NULL,
     content TEXT NOT NULL,
     location_tag VARCHAR(150),
-    image_url VARCHAR(500),
     images TEXT,
     video_url VARCHAR(500),
     visibility VARCHAR(20) NOT NULL DEFAULT 'PUBLIC',

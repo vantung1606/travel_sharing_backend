@@ -41,11 +41,8 @@ public class Post {
     @Column(name = "location_tag", length = 150)
     private String locationTag;
 
-    @Column(name = "image_url", length = 500)
-    private String imageUrl;
-
     @Column(columnDefinition = "TEXT")
-    private String images; // JSON array of multiple image URLs
+    private String images; // Stores image URLs separated by ';;;'
 
     @Column(name = "video_url", length = 500)
     private String videoUrl;
@@ -93,4 +90,14 @@ public class Post {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    public String getFirstImage() {
+        if (images != null && !images.isBlank()) {
+            String[] parts = images.split(";;;");
+            if (parts.length > 0 && !parts[0].isBlank()) {
+                return parts[0].trim();
+            }
+        }
+        return null;
+    }
 }

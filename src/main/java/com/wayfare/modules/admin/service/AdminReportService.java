@@ -299,7 +299,7 @@ public class AdminReportService {
                 .category(post.getCategory() != null ? post.getCategory() : "Chia sẻ kinh nghiệm")
                 .categoryType(categoryType)
                 .locationTag(post.getLocationTag() != null ? post.getLocationTag() : "Việt Nam")
-                .imageUrl(post.getImageUrl() != null ? post.getImageUrl() : "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80")
+                .imageUrl(post.getFirstImage() != null ? post.getFirstImage() : "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80")
                 .likeCount(post.getLikeCount() != null ? post.getLikeCount() : 0)
                 .commentCount(post.getCommentCount() != null ? post.getCommentCount() : 0)
                 .reportsCount(post.getReportsCount() != null ? post.getReportsCount() : 0)
