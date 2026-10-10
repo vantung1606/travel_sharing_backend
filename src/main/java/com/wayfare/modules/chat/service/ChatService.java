@@ -351,9 +351,49 @@ public class ChatService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public List<ChatMemberDto> getAvailableUsersForGroup(User currentUser, String keyword) {
+        log.info("Fetching available users for group chat by: {}, keyword: {}", currentUser.getEmail(), keyword);
+        List<User> users = userRepository.findAll();
+
+        return users.stream()
+                .filter(u -> !u.getId().equals(currentUser.getId()))
+                .filter(u -> {
+                    if (keyword == null || keyword.isBlank()) return true;
+                    String kw = keyword.toLowerCase().trim();
+                    boolean matchName = u.getFullName() != null && u.getFullName().toLowerCase().contains(kw);
+                    boolean matchEmail = u.getEmail() != null && u.getEmail().toLowerCase().contains(kw);
+                    boolean matchHandle = u.getHandle() != null && u.getHandle().toLowerCase().contains(kw);
+                    return matchName || matchEmail || matchHandle;
+                })
+                .limit(30)
+                .map(u -> ChatMemberDto.builder()
+                        .userId(u.getId())
+                        .fullName(u.getFullName())
+                        .handle(u.getHandle())
+                        .email(u.getEmail())
+                        .avatarUrl(u.getAvatarUrl() != null && !u.getAvatarUrl().isBlank()
+                                ? u.getAvatarUrl()
+                                : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80")
+                        .role("MEMBER")
+                        .build()
+                )
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public ChatRoomDto createGroupRoom(User currentUser, CreateRoomRequest request) {
         log.info("User {} creating new group chat room: {}", currentUser.getEmail(), request.getName());
+
+        // Nghiệp vụ bắt buộc: 1 mình không thể tạo nhóm, phải chọn ít nhất 1 thành viên khác
+        List<Long> otherMemberIds = (request.getMemberIds() != null)
+                ? request.getMemberIds().stream().filter(uid -> !uid.equals(currentUser.getId())).distinct().collect(Collectors.toList())
+                : Collections.emptyList();
+
+        if (otherMemberIds.isEmpty()) {
+            throw new IllegalArgumentException("Nhóm trò chuyện phải có ít nhất 1 thành viên khác cùng tham gia.");
+        }
+
         String roomName = (request.getName() != null && !request.getName().isBlank())
                 ? request.getName().trim()
                 : "Nhóm thảo luận mới";
@@ -373,19 +413,15 @@ public class ChatService {
                 .build();
         chatMemberRepository.save(owner);
 
-        // Các thành viên khác nếu được chọn
-        if (request.getMemberIds() != null && !request.getMemberIds().isEmpty()) {
-            for (Long uid : request.getMemberIds()) {
-                if (!uid.equals(currentUser.getId())) {
-                    userRepository.findById(uid).ifPresent(user -> {
-                        chatMemberRepository.save(ChatMember.builder()
-                                .chatRoom(saved)
-                                .user(user)
-                                .role("MEMBER")
-                                .build());
-                    });
-                }
-            }
+        // Thêm các thành viên khác đã chọn
+        for (Long uid : otherMemberIds) {
+            userRepository.findById(uid).ifPresent(user -> {
+                chatMemberRepository.save(ChatMember.builder()
+                        .chatRoom(saved)
+                        .user(user)
+                        .role("MEMBER")
+                        .build());
+            });
         }
 
         // Tin nhắn khởi tạo nếu có
