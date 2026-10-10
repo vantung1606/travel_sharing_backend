@@ -30,7 +30,7 @@ public class ChatService {
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<ChatRoomDto> getUserRooms(User currentUser) {
         log.info("Fetching chat rooms for user: {} (id={})", currentUser.getEmail(), currentUser.getId());
         List<ChatRoom> rooms = chatRoomRepository.findRoomsByUserId(currentUser.getId());
