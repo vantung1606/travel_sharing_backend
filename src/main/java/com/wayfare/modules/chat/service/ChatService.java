@@ -351,6 +351,16 @@ public class ChatService {
         }
     }
 
+    private String removeAccents(String text) {
+        if (text == null) return "";
+        String normalized = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD);
+        return normalized.replaceAll("\\p{M}", "")
+                .replace("đ", "d")
+                .replace("Đ", "d")
+                .toLowerCase()
+                .trim();
+    }
+
     @Transactional(readOnly = true)
     public List<ChatMemberDto> getAvailableUsersForGroup(User currentUser, String keyword) {
         log.info("Fetching available users for group chat by: {}, keyword: {}", currentUser.getEmail(), keyword);
@@ -360,11 +370,11 @@ public class ChatService {
                 .filter(u -> !u.getId().equals(currentUser.getId()))
                 .filter(u -> {
                     if (keyword == null || keyword.isBlank()) return true;
-                    String kw = keyword.toLowerCase().trim();
-                    boolean matchName = u.getFullName() != null && u.getFullName().toLowerCase().contains(kw);
-                    boolean matchEmail = u.getEmail() != null && u.getEmail().toLowerCase().contains(kw);
-                    boolean matchHandle = u.getHandle() != null && u.getHandle().toLowerCase().contains(kw);
-                    return matchName || matchEmail || matchHandle;
+                    String kw = removeAccents(keyword);
+                    String normName = removeAccents(u.getFullName());
+                    String normEmail = removeAccents(u.getEmail());
+                    String normHandle = removeAccents(u.getHandle());
+                    return normName.contains(kw) || normEmail.contains(kw) || normHandle.contains(kw);
                 })
                 .limit(30)
                 .map(u -> ChatMemberDto.builder()
