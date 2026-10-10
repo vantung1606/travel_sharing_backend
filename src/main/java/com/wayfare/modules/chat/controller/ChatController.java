@@ -40,6 +40,16 @@ public class ChatController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phòng chat thành công", rooms));
     }
 
+    @PostMapping("/rooms")
+    public ResponseEntity<ApiResponse<ChatRoomDto>> createGroupRoom(
+            @Valid @RequestBody CreateRoomRequest request,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        User user = resolveUser(email);
+        log.info("REST request to create group room by {}: {}", user.getEmail(), request.getName());
+        ChatRoomDto room = chatService.createGroupRoom(user, request);
+        return ResponseEntity.ok(ApiResponse.success("Tạo nhóm chat thành công", room));
+    }
+
     @GetMapping("/rooms/{roomId}/messages")
     public ResponseEntity<ApiResponse<List<ChatMessageDto>>> getRoomMessages(
             @PathVariable Long roomId,

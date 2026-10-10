@@ -35,12 +35,6 @@ public class ChatService {
         log.info("Fetching chat rooms for user: {} (id={})", currentUser.getEmail(), currentUser.getId());
         List<ChatRoom> rooms = chatRoomRepository.findRoomsByUserId(currentUser.getId());
 
-        // Nếu người dùng chưa có phòng chat nào, tự động khởi tạo các phòng mẫu để trải nghiệm ngay
-        if (rooms.isEmpty()) {
-            initSampleRoomsForUser(currentUser);
-            rooms = chatRoomRepository.findRoomsByUserId(currentUser.getId());
-        }
-
         return rooms.stream()
                 .map(room -> mapToRoomDto(room, currentUser))
                 .collect(Collectors.toList());
@@ -329,78 +323,56 @@ public class ChatService {
         }
     }
 
-    private void initSampleRoomsForUser(User user) {
-        try {
-            log.info("Initializing sample chat rooms for user: {}", user.getEmail());
-            // 1. Nhóm Phượt Hà Giang 3N2Đ
-            ChatRoom group1 = ChatRoom.builder()
-                    .name("Nhóm Phượt Hà Giang 3N2Đ (Hội phượt thủ)")
-                    .type("GROUP")
-                    .creator(user)
-                    .build();
-            ChatRoom savedG1 = chatRoomRepository.save(group1);
-            chatMemberRepository.save(ChatMember.builder().chatRoom(savedG1).user(user).role("OWNER").build());
+    @Transactional
+    public ChatRoomDto createGroupRoom(User currentUser, CreateRoomRequest request) {
+        log.info("User {} creating new group chat room: {}", currentUser.getEmail(), request.getName());
+        String roomName = (request.getName() != null && !request.getName().isBlank())
+                ? request.getName().trim()
+                : "Nhóm thảo luận mới";
 
-            // Tìm thêm 1 user khác nếu có để add vào nhóm
-            List<User> otherUsers = userRepository.findAll().stream()
-                    .filter(u -> !u.getId().equals(user.getId()))
-                    .limit(3)
-                    .collect(Collectors.toList());
+        ChatRoom newRoom = ChatRoom.builder()
+                .name(roomName)
+                .type("GROUP")
+                .creator(currentUser)
+                .build();
+        ChatRoom saved = chatRoomRepository.save(newRoom);
 
-            for (User u : otherUsers) {
-                chatMemberRepository.save(ChatMember.builder().chatRoom(savedG1).user(u).role("MEMBER").build());
+        // Chủ phòng
+        ChatMember owner = ChatMember.builder()
+                .chatRoom(saved)
+                .user(currentUser)
+                .role("OWNER")
+                .build();
+        chatMemberRepository.save(owner);
+
+        // Các thành viên khác nếu được chọn
+        if (request.getMemberIds() != null && !request.getMemberIds().isEmpty()) {
+            for (Long uid : request.getMemberIds()) {
+                if (!uid.equals(currentUser.getId())) {
+                    userRepository.findById(uid).ifPresent(user -> {
+                        chatMemberRepository.save(ChatMember.builder()
+                                .chatRoom(saved)
+                                .user(user)
+                                .role("MEMBER")
+                                .build());
+                    });
+                }
             }
-
-            User firstOther = !otherUsers.isEmpty() ? otherUsers.get(0) : user;
-
-            chatMessageRepository.save(ChatMessage.builder()
-                    .chatRoom(savedG1)
-                    .sender(firstOther)
-                    .content("Mọi người nhớ chuẩn bị áo khoác dày nhé, đêm trên Đồng Văn khá lạnh!")
-                    .messageType("TEXT")
-                    .build());
-
-            chatMessageRepository.save(ChatMessage.builder()
-                    .chatRoom(savedG1)
-                    .sender(user)
-                    .content("Đã chuẩn bị đầy đủ rồi nha. Đặt vé thuyền sông Nho Quế thành công luôn rồi!")
-                    .messageType("TEXT")
-                    .build());
-
-            // 2. Hội Đi Đà Nẵng
-            ChatRoom group2 = ChatRoom.builder()
-                    .name("Hội Đi Đà Nẵng - Hội An")
-                    .type("GROUP")
-                    .creator(user)
-                    .build();
-            ChatRoom savedG2 = chatRoomRepository.save(group2);
-            chatMemberRepository.save(ChatMember.builder().chatRoom(savedG2).user(user).role("OWNER").build());
-            chatMessageRepository.save(ChatMessage.builder()
-                    .chatRoom(savedG2)
-                    .sender(firstOther)
-                    .content("Chào cả nhóm! Khách sạn gần biển Mỹ Khê đã được chốt xong rồi nhé.")
-                    .messageType("TEXT")
-                    .build());
-
-            // 3. Chat 1-1 nếu có người dùng khác
-            if (!otherUsers.isEmpty()) {
-                ChatRoom direct = ChatRoom.builder()
-                        .name(firstOther.getFullName())
-                        .type("DIRECT")
-                        .creator(user)
-                        .build();
-                ChatRoom savedD = chatRoomRepository.save(direct);
-                chatMemberRepository.save(ChatMember.builder().chatRoom(savedD).user(user).role("OWNER").build());
-                chatMemberRepository.save(ChatMember.builder().chatRoom(savedD).user(firstOther).role("MEMBER").build());
-                chatMessageRepository.save(ChatMessage.builder()
-                        .chatRoom(savedD)
-                        .sender(firstOther)
-                        .content("Chào bạn! Chuyến đi Đà Nẵng lần trước mình có đăng bài chia sẻ chi tiết trên trang cộng đồng đó, bạn xem thử nhé.")
-                        .messageType("TEXT")
-                        .build());
-            }
-        } catch (Exception e) {
-            log.error("Failed to initialize sample rooms: {}", e.getMessage(), e);
         }
+
+        // Tin nhắn khởi tạo nếu có
+        String initText = (request.getInitialMessage() != null && !request.getInitialMessage().isBlank())
+                ? request.getInitialMessage().trim()
+                : "Chào mừng mọi người tham gia nhóm " + roomName + "!";
+
+        ChatMessage initMsg = ChatMessage.builder()
+                .chatRoom(saved)
+                .sender(currentUser)
+                .content(initText)
+                .messageType("TEXT")
+                .build();
+        chatMessageRepository.save(initMsg);
+
+        return mapToRoomDto(saved, currentUser);
     }
 }
