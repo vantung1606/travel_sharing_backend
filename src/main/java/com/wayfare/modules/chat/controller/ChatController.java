@@ -26,9 +26,15 @@ public class ChatController {
 
     private User resolveUser(String email) {
         String effectiveEmail = (email != null && !email.isBlank()) ? email.trim() : "tung@gmail.com";
-        return userRepository.findByEmail(effectiveEmail)
+        User user = userRepository.findByEmail(effectiveEmail)
                 .orElseGet(() -> userRepository.findAll().stream().findFirst()
                         .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng trong hệ thống")));
+
+        if (user.getLastLoginAt() == null || java.time.Duration.between(user.getLastLoginAt(), java.time.LocalDateTime.now()).toMinutes() >= 2) {
+            user.setLastLoginAt(java.time.LocalDateTime.now());
+            user = userRepository.save(user);
+        }
+        return user;
     }
 
     @GetMapping("/rooms")

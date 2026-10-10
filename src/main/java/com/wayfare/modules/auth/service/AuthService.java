@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -66,6 +67,7 @@ public class AuthService {
                 .handle(handle)
                 .avatarUrl("https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                 .isVerified(true)
+                .lastLoginAt(LocalDateTime.now())
                 .roles(Set.of(defaultRole))
                 .build();
 
@@ -109,7 +111,10 @@ public class AuthService {
             throw new RuntimeException("Email hoặc mật khẩu không chính xác!");
         }
 
-        log.info("Login successful for user ID: {}, email: {}", user.getId(), user.getEmail());
+        user.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(user);
+        log.info("Login successful for user ID: {}, email: {}. Updated lastLoginAt.", user.getId(), user.getEmail());
+
         String ip = activityLogService.extractClientIp(httpRequest);
         String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36";
         activityLogService.recordLog(user, "LOGIN", "Đăng nhập thành công vào hệ thống Wayfare Portal", ip, ua);
@@ -125,6 +130,32 @@ public class AuthService {
                 .avatar(user.getAvatarUrl() != null ? user.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                 .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
                 .build();
+    }
+
+    @Transactional
+    public void logout(String email, HttpServletRequest httpRequest) {
+        log.info("Processing logout request for user email: {}", email);
+        User user = null;
+        if (email != null && !email.isBlank()) {
+            user = userRepository.findByEmail(email.trim()).orElse(null);
+        }
+
+        if (user != null) {
+            // Khi đăng xuất, cập nhật trạng thái offline bằng cách lùi mốc hoạt động 15 phút
+            user.setLastLoginAt(LocalDateTime.now().minusMinutes(15));
+            userRepository.save(user);
+            log.info("User {} (ID: {}) logged out successfully. Last active status set to offline.", user.getEmail(), user.getId());
+        } else {
+            log.warn("Logout initiated with unregistered or empty email: {}", email);
+        }
+
+        String ip = activityLogService.extractClientIp(httpRequest);
+        String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null
+                ? httpRequest.getHeader("User-Agent")
+                : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36";
+
+        activityLogService.recordLog(user, "LOGOUT", "Người dùng đã đăng xuất khỏi hệ thống Wayfare Portal", ip, ua);
+        log.info("Audit activity log recorded for LOGOUT: user={}, ip={}", user != null ? user.getEmail() : "anonymous", ip);
     }
 }
 

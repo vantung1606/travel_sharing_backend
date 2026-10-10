@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
     travel_style VARCHAR(100),
     budget_preference VARCHAR(50),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP
+    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+    last_login_at DATETIME
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS user_roles (

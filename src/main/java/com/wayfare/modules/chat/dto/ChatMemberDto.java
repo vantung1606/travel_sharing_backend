@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -17,4 +19,7 @@ public class ChatMemberDto {
     private String avatarUrl;
     private String role;
     private String joinedAt;
+    private Boolean isOnline;
+    private String statusText;
+    private LocalDateTime lastActiveAt;
 }

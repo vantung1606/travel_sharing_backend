@@ -25,4 +25,7 @@ public class ChatRoomDto {
     private Integer unread;
     private LocalDateTime updatedAt;
     private List<ChatMemberDto> members;
+    private Boolean isOnline;
+    private String statusText;
+    private LocalDateTime lastActiveAt;
 }

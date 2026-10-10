@@ -34,6 +34,15 @@ public class AuthController {
         AuthResponse response = authService.login(request, httpRequest);
         return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công!", response));
     }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @RequestParam(required = false) String email,
+            HttpServletRequest httpRequest) {
+        log.info("REST request to logout user with email: {}", email);
+        authService.logout(email, httpRequest);
+        return ResponseEntity.ok(ApiResponse.success("Đăng xuất thành công!", null));
+    }
 }
 
 

@@ -10,6 +10,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -255,23 +256,40 @@ public class ChatService {
         String displayName = room.getName();
         String displayAvatar = "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=150&q=80";
 
+        Boolean roomIsOnline = false;
+        String roomStatusText = "Ngoại tuyến";
+        LocalDateTime roomLastActiveAt = null;
+
         if ("DIRECT".equalsIgnoreCase(room.getType())) {
-            // Hiển thị tên và avatar của người đối diện
+            // Hiển thị tên, avatar và trạng thái hoạt động thực tế của người đối diện
             Optional<User> other = members.stream()
                     .map(ChatMember::getUser)
                     .filter(u -> !u.getId().equals(currentUser.getId()))
                     .findFirst();
 
             if (other.isPresent()) {
-                displayName = other.get().getFullName() != null ? other.get().getFullName() : other.get().getEmail();
-                if (other.get().getAvatarUrl() != null && !other.get().getAvatarUrl().isBlank()) {
-                    displayAvatar = other.get().getAvatarUrl();
+                User otherUser = other.get();
+                displayName = otherUser.getFullName() != null ? otherUser.getFullName() : otherUser.getEmail();
+                if (otherUser.getAvatarUrl() != null && !otherUser.getAvatarUrl().isBlank()) {
+                    displayAvatar = otherUser.getAvatarUrl();
                 } else {
                     displayAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
                 }
+                roomIsOnline = isUserOnline(otherUser);
+                roomStatusText = formatLastActiveStatus(otherUser);
+                roomLastActiveAt = otherUser.getLastLoginAt();
             }
-        } else if (room.getItinerary() != null && room.getItinerary().getCoverImageUrl() != null) {
-            displayAvatar = room.getItinerary().getCoverImageUrl();
+        } else {
+            // Nhóm trò chuyện: roomIsOnline = true nếu có ít nhất 1 thành viên khác đang online
+            boolean hasOtherOnline = members.stream()
+                    .map(ChatMember::getUser)
+                    .filter(u -> !u.getId().equals(currentUser.getId()))
+                    .anyMatch(this::isUserOnline);
+            roomIsOnline = hasOtherOnline;
+            roomStatusText = members.size() + " thành viên";
+            if (room.getItinerary() != null && room.getItinerary().getCoverImageUrl() != null) {
+                displayAvatar = room.getItinerary().getCoverImageUrl();
+            }
         }
 
         String lastMsgText = "Chưa có tin nhắn";
@@ -298,6 +316,9 @@ public class ChatService {
                 .email(m.getUser().getEmail())
                 .avatarUrl(m.getUser().getAvatarUrl())
                 .role(m.getRole())
+                .isOnline(isUserOnline(m.getUser()))
+                .statusText(formatLastActiveStatus(m.getUser()))
+                .lastActiveAt(m.getUser().getLastLoginAt())
                 .build()
         ).collect(Collectors.toList());
 
@@ -314,6 +335,9 @@ public class ChatService {
                 .unread((int) unread)
                 .updatedAt(room.getUpdatedAt() != null ? room.getUpdatedAt() : room.getCreatedAt())
                 .members(memberDtos)
+                .isOnline(roomIsOnline)
+                .statusText(roomStatusText)
+                .lastActiveAt(roomLastActiveAt)
                 .build();
     }
 
@@ -361,6 +385,38 @@ public class ChatService {
                 .trim();
     }
 
+    public boolean isUserOnline(User user) {
+        if (user == null || user.getLastLoginAt() == null) return false;
+        // Người dùng được tính là trực tuyến nếu có hoạt động trong 10 phút gần nhất
+        return Duration.between(user.getLastLoginAt(), LocalDateTime.now()).toMinutes() < 10;
+    }
+
+    public String formatLastActiveStatus(User user) {
+        if (user == null || user.getLastLoginAt() == null) {
+            return "Ngoại tuyến";
+        }
+        LocalDateTime lastLogin = user.getLastLoginAt();
+        LocalDateTime now = LocalDateTime.now();
+        long minutes = Duration.between(lastLogin, now).toMinutes();
+        if (minutes < 10) {
+            return "Đang hoạt động";
+        } else if (minutes < 60) {
+            return "Hoạt động " + minutes + " phút trước";
+        } else {
+            long hours = Duration.between(lastLogin, now).toHours();
+            if (hours < 24) {
+                return "Hoạt động " + hours + " giờ trước";
+            } else {
+                long days = Duration.between(lastLogin, now).toDays();
+                if (days < 7) {
+                    return "Hoạt động " + days + " ngày trước";
+                } else {
+                    return "Hoạt động ngày " + lastLogin.format(DATE_FMT);
+                }
+            }
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<ChatMemberDto> getAvailableUsersForGroup(User currentUser, String keyword) {
         log.info("Fetching available users for group chat by: {}, keyword: {}", currentUser.getEmail(), keyword);
@@ -386,6 +442,9 @@ public class ChatService {
                                 ? u.getAvatarUrl()
                                 : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80")
                         .role("MEMBER")
+                        .isOnline(isUserOnline(u))
+                        .statusText(formatLastActiveStatus(u))
+                        .lastActiveAt(u.getLastLoginAt())
                         .build()
                 )
                 .collect(Collectors.toList());
@@ -484,6 +543,9 @@ public class ChatService {
                                 : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80")
                         .role(m.getRole())
                         .joinedAt(m.getJoinedAt() != null ? formatTime(m.getJoinedAt()) : "")
+                        .isOnline(isUserOnline(m.getUser()))
+                        .statusText(formatLastActiveStatus(m.getUser()))
+                        .lastActiveAt(m.getUser().getLastLoginAt())
                         .build()
                 )
                 .collect(Collectors.toList());
