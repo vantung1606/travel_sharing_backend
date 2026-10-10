@@ -917,7 +917,7 @@ public class PostService {
      * Check if post or comment content contains tags (@) of users followed by the author,
      * and dispatch real-time notifications to those tagged followed users.
      */
-    public void checkAndNotifyTaggedFollowedUsers(String content, User author, Post post, String type) {
+    private void checkAndNotifyTaggedFollowedUsers(String content, User author, Post post, String type) {
         if (content == null || !content.contains("@") || author == null || post == null) {
             return;
         }

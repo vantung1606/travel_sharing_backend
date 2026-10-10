@@ -12,11 +12,9 @@ import com.wayfare.repository.PostRepository;
 import com.wayfare.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.stream.Collectors;
