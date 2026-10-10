@@ -90,4 +90,14 @@ public class ChatController {
         ChatRoomDto room = chatService.getOrCreateItineraryRoom(itineraryId, user);
         return ResponseEntity.ok(ApiResponse.success("Tham gia nhóm chuyến đi thành công", room));
     }
+
+    @DeleteMapping("/rooms/{roomId}")
+    public ResponseEntity<ApiResponse<Void>> deleteRoom(
+            @PathVariable Long roomId,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        User user = resolveUser(email);
+        log.info("REST request to delete room: {} by: {}", roomId, user.getEmail());
+        chatService.deleteRoom(roomId, user);
+        return ResponseEntity.ok(ApiResponse.success("Xóa cuộc trò chuyện thành công", null));
+    }
 }

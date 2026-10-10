@@ -35,7 +35,34 @@ public class ChatService {
         log.info("Fetching chat rooms for user: {} (id={})", currentUser.getEmail(), currentUser.getId());
         List<ChatRoom> rooms = chatRoomRepository.findRoomsByUserId(currentUser.getId());
 
-        return rooms.stream()
+        // Lọc trùng lặp tuyệt đối đối với phòng DIRECT:
+        // Đảm bảo cùng một người chỉ xuất hiện DUY NHẤT 1 LẦN trong danh sách trò chuyện
+        Map<Long, ChatRoom> directRoomsByOtherUserId = new LinkedHashMap<>();
+        List<ChatRoom> resultRooms = new ArrayList<>();
+
+        for (ChatRoom room : rooms) {
+            if ("DIRECT".equalsIgnoreCase(room.getType())) {
+                List<ChatMember> members = chatMemberRepository.findByChatRoomId(room.getId());
+                Optional<User> other = members.stream()
+                        .map(ChatMember::getUser)
+                        .filter(u -> !u.getId().equals(currentUser.getId()))
+                        .findFirst();
+
+                if (other.isPresent()) {
+                    Long otherId = other.get().getId();
+                    if (!directRoomsByOtherUserId.containsKey(otherId)) {
+                        directRoomsByOtherUserId.put(otherId, room);
+                        resultRooms.add(room);
+                    }
+                } else {
+                    resultRooms.add(room);
+                }
+            } else {
+                resultRooms.add(room);
+            }
+        }
+
+        return resultRooms.stream()
                 .map(room -> mapToRoomDto(room, currentUser))
                 .collect(Collectors.toList());
     }
@@ -123,7 +150,7 @@ public class ChatService {
     }
 
     @Transactional
-    public ChatRoomDto getOrCreateDirectRoom(User currentUser, Long targetUserId) {
+    public synchronized ChatRoomDto getOrCreateDirectRoom(User currentUser, Long targetUserId) {
         log.info("Get or create direct room between user {} and user {}", currentUser.getId(), targetUserId);
         if (currentUser.getId().equals(targetUserId)) {
             throw new IllegalArgumentException("Không thể tạo cuộc trò chuyện trực tiếp với chính mình.");
@@ -134,6 +161,7 @@ public class ChatService {
 
         List<ChatRoom> existing = chatRoomRepository.findDirectRoomBetweenUsers(currentUser.getId(), targetUserId);
         if (!existing.isEmpty()) {
+            log.info("Direct room already exists (id={}). Reusing existing room for persistence.", existing.get(0).getId());
             return mapToRoomDto(existing.get(0), currentUser);
         }
 
@@ -374,5 +402,17 @@ public class ChatService {
         chatMessageRepository.save(initMsg);
 
         return mapToRoomDto(saved, currentUser);
+    }
+
+    @Transactional
+    public void deleteRoom(Long roomId, User currentUser) {
+        log.info("User {} deleting room {}", currentUser.getEmail(), roomId);
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Phòng chat không tồn tại: " + roomId));
+
+        chatMessageRepository.deleteAll(chatMessageRepository.findByChatRoomIdOrderByCreatedAtAsc(roomId));
+        chatMemberRepository.deleteAll(chatMemberRepository.findByChatRoomId(roomId));
+        chatRoomRepository.delete(room);
+        log.info("Successfully deleted room {}", roomId);
     }
 }
