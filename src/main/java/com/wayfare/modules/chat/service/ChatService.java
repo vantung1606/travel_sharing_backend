@@ -154,9 +154,10 @@ public class ChatService {
 
         ChatMessageDto dto = mapToMessageDto(saved, currentUser);
 
-        // Phát sóng thời gian thực qua WebSocket STOMP tới tất cả thành viên trong phòng
+        // Phát sóng thời gian thực qua WebSocket STOMP tới tất cả thành viên trong phòng (DTO trung lập không thiên vị người gửi)
         try {
-            messagingTemplate.convertAndSend("/topic/room." + roomId, dto);
+            ChatMessageDto broadcastDto = mapToMessageDto(saved, null);
+            messagingTemplate.convertAndSend("/topic/room." + roomId, broadcastDto);
             log.info("Broadcasted chat message {} to /topic/room.{}", saved.getId(), roomId);
         } catch (Exception e) {
             log.warn("Could not broadcast message via WebSocket broker: {}", e.getMessage());
@@ -358,23 +359,28 @@ public class ChatService {
 
     private ChatMessageDto mapToMessageDto(ChatMessage m, User currentUser) {
         User sender = m.getSender();
-        boolean isMe = sender != null && sender.getId().equals(currentUser.getId());
+        boolean isMe = currentUser != null && sender != null && sender.getId().equals(currentUser.getId());
         String avatar = sender != null && sender.getAvatarUrl() != null && !sender.getAvatarUrl().isBlank()
                 ? sender.getAvatarUrl()
                 : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
+
+        String senderDisplayName = sender != null
+                ? (sender.getFullName() != null && !sender.getFullName().isBlank() ? sender.getFullName() : sender.getEmail())
+                : "Thành viên";
 
         return ChatMessageDto.builder()
                 .id(m.getId())
                 .roomId(m.getChatRoom().getId())
                 .senderId(sender != null ? sender.getId() : null)
-                .senderName(isMe ? "Bạn" : (sender != null ? sender.getFullName() : "Thành viên"))
+                .senderEmail(sender != null ? sender.getEmail() : null)
+                .senderName(senderDisplayName)
                 .senderHandle(sender != null ? sender.getHandle() : null)
                 .senderAvatar(avatar)
                 .content(m.getContent())
                 .messageType(m.getMessageType())
                 .time(formatTime(m.getCreatedAt()))
                 .createdAt(m.getCreatedAt())
-                .isMe(isMe)
+                .isMe(currentUser != null ? isMe : null)
                 .build();
     }
 
@@ -615,7 +621,7 @@ public class ChatService {
             room.setUpdatedAt(LocalDateTime.now());
             chatRoomRepository.save(room);
 
-            ChatMessageDto msgDto = mapToMessageDto(saved, currentUser);
+            ChatMessageDto msgDto = mapToMessageDto(saved, null);
             try {
                 messagingTemplate.convertAndSend("/topic/room." + roomId, msgDto);
             } catch (Exception e) {
@@ -688,7 +694,7 @@ public class ChatService {
         room.setUpdatedAt(LocalDateTime.now());
         chatRoomRepository.save(room);
 
-        ChatMessageDto msgDto = mapToMessageDto(saved, currentUser);
+        ChatMessageDto msgDto = mapToMessageDto(saved, null);
         try {
             messagingTemplate.convertAndSend("/topic/room." + roomId, msgDto);
         } catch (Exception e) {

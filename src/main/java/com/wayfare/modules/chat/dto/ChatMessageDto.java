@@ -15,6 +15,7 @@ public class ChatMessageDto {
     private Long id;
     private Long roomId;
     private Long senderId;
+    private String senderEmail;
     private String senderName;
     private String senderHandle;
     private String senderAvatar;

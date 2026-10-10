@@ -4,7 +4,6 @@ import com.wayfare.entity.User;
 import com.wayfare.modules.chat.dto.ChatMessageDto;
 import com.wayfare.modules.chat.dto.SendMessageRequest;
 import com.wayfare.modules.chat.service.ChatService;
-import com.wayfare.repository.UserRepository;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
