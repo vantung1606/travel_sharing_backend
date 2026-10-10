@@ -179,6 +179,13 @@ public class NotificationService {
         return spurious.size();
     }
 
+    public User getUserByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        return userRepository.findByEmail(email).orElse(null);
+    }
+
     private User getUserByEmailOrDefault(String email) {
         if (email != null && !email.isBlank()) {
             return userRepository.findByEmail(email)

@@ -32,6 +32,21 @@ public class ChatService {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     @Transactional
+    public User resolveUser(String email) {
+        String effectiveEmail = (email != null && !email.isBlank()) ? email.trim() : "tung@gmail.com";
+        User user = userRepository.findByEmail(effectiveEmail)
+                .orElseGet(() -> userRepository.findAll().stream().findFirst()
+                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng trong hệ thống")));
+
+        if (user.getLastLoginAt() == null || Duration.between(user.getLastLoginAt(), LocalDateTime.now()).toMinutes() >= 2) {
+            user.setLastLoginAt(LocalDateTime.now());
+            user = userRepository.save(user);
+            log.info("Refreshed lastLoginAt for active chatter: {}", user.getEmail());
+        }
+        return user;
+    }
+
+    @Transactional
     public List<ChatRoomDto> getUserRooms(User currentUser) {
         log.info("Fetching chat rooms for user: {} (id={})", currentUser.getEmail(), currentUser.getId());
         List<ChatRoom> rooms = chatRoomRepository.findRoomsByUserId(currentUser.getId());

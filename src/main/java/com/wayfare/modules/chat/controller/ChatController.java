@@ -22,19 +22,9 @@ import java.util.List;
 public class ChatController {
 
     private final ChatService chatService;
-    private final UserRepository userRepository;
 
     private User resolveUser(String email) {
-        String effectiveEmail = (email != null && !email.isBlank()) ? email.trim() : "tung@gmail.com";
-        User user = userRepository.findByEmail(effectiveEmail)
-                .orElseGet(() -> userRepository.findAll().stream().findFirst()
-                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng trong hệ thống")));
-
-        if (user.getLastLoginAt() == null || java.time.Duration.between(user.getLastLoginAt(), java.time.LocalDateTime.now()).toMinutes() >= 2) {
-            user.setLastLoginAt(java.time.LocalDateTime.now());
-            user = userRepository.save(user);
-        }
-        return user;
+        return chatService.resolveUser(email);
     }
 
     @GetMapping("/rooms")

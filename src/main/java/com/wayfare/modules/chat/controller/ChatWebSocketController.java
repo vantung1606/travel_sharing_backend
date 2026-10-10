@@ -18,7 +18,6 @@ import org.springframework.stereotype.Controller;
 public class ChatWebSocketController {
 
     private final ChatService chatService;
-    private final UserRepository userRepository;
 
     @Data
     public static class WebSocketMessagePayload {
@@ -39,8 +38,10 @@ public class ChatWebSocketController {
                 ? payload.getEmail().trim()
                 : "tung@gmail.com";
 
-        User user = userRepository.findByEmail(email).orElse(null);
-        if (user == null) {
+        User user = null;
+        try {
+            user = chatService.resolveUser(email);
+        } catch (Exception e) {
             log.warn("WebSocket message sender not found for email: {}", email);
             return;
         }

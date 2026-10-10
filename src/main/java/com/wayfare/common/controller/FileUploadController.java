@@ -23,6 +23,7 @@ public class FileUploadController {
 
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStorageStatus() {
+        log.info("REST request to check file storage service status");
         boolean isCloudinary = fileUploadService.isCloudinaryActive();
         Map<String, Object> status = new HashMap<>();
         status.put("provider", isCloudinary ? "CLOUDINARY" : "LOCAL_DISK");

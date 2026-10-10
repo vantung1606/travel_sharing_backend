@@ -20,7 +20,6 @@ public class NotificationController {
 
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
-    private final com.wayfare.repository.UserRepository userRepository;
 
     @GetMapping
     public ResponseEntity<List<NotificationDto>> getNotifications(
@@ -87,7 +86,7 @@ public class NotificationController {
         );
 
         try {
-            com.wayfare.entity.User sender = userRepository.findByEmail(senderEmail).orElse(null);
+            com.wayfare.entity.User sender = notificationService.getUserByEmail(senderEmail);
             String ip = activityLogService.extractClientIp(httpRequest);
             String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : "Mozilla/5.0";
             activityLogService.recordLog(sender, "BROADCAST_NOTIFICATION", "Phát thông báo toàn hệ thống đến " + count + " người dùng: " + request.getMessage(), ip, ua);
