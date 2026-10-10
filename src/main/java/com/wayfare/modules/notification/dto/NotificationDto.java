@@ -22,6 +22,7 @@ public class NotificationDto {
     private String message;
     private String targetUrl;
     private Boolean isRead;
+    private String time;
     private LocalDateTime createdAt;
 }
 

@@ -27,6 +27,7 @@ public class ChatService {
     private final UserRepository userRepository;
     private final ItineraryRepository itineraryRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final com.wayfare.modules.notification.service.NotificationService notificationService;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -161,6 +162,38 @@ public class ChatService {
             log.info("Broadcasted chat message {} to /topic/room.{}", saved.getId(), roomId);
         } catch (Exception e) {
             log.warn("Could not broadcast message via WebSocket broker: {}", e.getMessage());
+        }
+
+        // Gửi thông báo hệ thống real-time đến các thành viên khác trong phòng
+        try {
+            List<ChatMember> roomMembers = chatMemberRepository.findByChatRoomId(roomId);
+            String preview = "IMAGE".equalsIgnoreCase(request.getMessageType()) ? "[Hình ảnh 📷]" :
+                    "VIDEO".equalsIgnoreCase(request.getMessageType()) ? "[Video 🎬]" :
+                    (request.getContent() != null && request.getContent().length() > 60
+                            ? request.getContent().substring(0, 57) + "..."
+                            : request.getContent());
+
+            String senderDisplayName = currentUser.getFullName() != null && !currentUser.getFullName().isBlank()
+                    ? currentUser.getFullName()
+                    : currentUser.getEmail();
+
+            String notifMessage = "GROUP".equalsIgnoreCase(room.getType())
+                    ? senderDisplayName + " trong nhóm \"" + (room.getName() != null ? room.getName() : "Trò chuyện") + "\": " + preview
+                    : senderDisplayName + ": " + preview;
+
+            for (ChatMember cm : roomMembers) {
+                if (cm.getUser() != null && !cm.getUser().getId().equals(currentUser.getId())) {
+                    notificationService.sendNotification(
+                            cm.getUser(),
+                            currentUser,
+                            "CHAT_MESSAGE",
+                            notifMessage,
+                            "/messages?roomId=" + roomId
+                    );
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to dispatch chat notifications to room members: {}", e.getMessage());
         }
 
         return dto;

@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -21,6 +23,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional(readOnly = true)
     public List<NotificationDto> getNotificationsForUser(String email) {
@@ -90,7 +93,21 @@ public class NotificationService {
 
         Notification saved = notificationRepository.save(notification);
         log.info("Successfully created notification with id: {}", saved.getId());
-        return mapToDto(saved);
+        NotificationDto dto = mapToDto(saved);
+
+        // Phát sóng thời gian thực qua STOMP WebSocket
+        try {
+            if (recipient != null && recipient.getId() != null) {
+                messagingTemplate.convertAndSend("/topic/notifications." + recipient.getId(), dto);
+            }
+            if (recipient != null && recipient.getEmail() != null) {
+                messagingTemplate.convertAndSend("/topic/notifications." + recipient.getEmail().toLowerCase().trim(), dto);
+            }
+        } catch (Exception e) {
+            log.warn("Could not dispatch real-time WebSocket notification from createNotification: {}", e.getMessage());
+        }
+
+        return dto;
     }
 
     @Transactional
@@ -109,7 +126,20 @@ public class NotificationService {
                 .isRead(false)
                 .build();
         Notification saved = notificationRepository.save(notification);
-        return mapToDto(saved);
+        NotificationDto dto = mapToDto(saved);
+
+        // Phát sóng thời gian thực qua STOMP WebSocket đến kênh riêng của người nhận
+        try {
+            messagingTemplate.convertAndSend("/topic/notifications." + recipient.getId(), dto);
+            if (recipient.getEmail() != null) {
+                messagingTemplate.convertAndSend("/topic/notifications." + recipient.getEmail().toLowerCase().trim(), dto);
+            }
+            log.info("Dispatched real-time notification to /topic/notifications.{} for recipient: {}", recipient.getId(), recipient.getEmail());
+        } catch (Exception e) {
+            log.warn("Could not dispatch real-time WebSocket notification: {}", e.getMessage());
+        }
+
+        return dto;
     }
 
     @Transactional
@@ -133,6 +163,25 @@ public class NotificationService {
 
         notificationRepository.saveAll(notifications);
         log.info("Broadcasted notification to {} users successfully.", notifications.size());
+
+        // Phát sóng thời gian thực đến kênh chung /topic/notifications.broadcast
+        try {
+            NotificationDto broadcastDto = NotificationDto.builder()
+                    .type(type != null ? type : "SYSTEM")
+                    .message(message)
+                    .targetUrl(targetUrl != null ? targetUrl : "#")
+                    .time("Vừa xong")
+                    .actorName(actor != null ? (actor.getFullName() != null ? actor.getFullName() : actor.getEmail()) : "Quản trị viên")
+                    .actorAvatar(actor != null ? actor.getAvatarUrl() : null)
+                    .isRead(false)
+                    .createdAt(java.time.LocalDateTime.now())
+                    .build();
+            messagingTemplate.convertAndSend("/topic/notifications.broadcast", broadcastDto);
+            log.info("Dispatched broadcast notification via WebSocket to /topic/notifications.broadcast");
+        } catch (Exception e) {
+            log.warn("Could not dispatch broadcast WebSocket notification: {}", e.getMessage());
+        }
+
         return notifications.size();
     }
 
@@ -215,6 +264,7 @@ public class NotificationService {
                 .message(entity.getMessage())
                 .targetUrl(entity.getTargetUrl())
                 .isRead(entity.getIsRead())
+                .time(entity.getCreatedAt() != null ? entity.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) : "Vừa xong")
                 .createdAt(entity.getCreatedAt())
                 .build();
     }
