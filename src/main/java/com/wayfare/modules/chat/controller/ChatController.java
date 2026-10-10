@@ -110,4 +110,36 @@ public class ChatController {
         chatService.deleteRoom(roomId, user);
         return ResponseEntity.ok(ApiResponse.success("Xóa cuộc trò chuyện thành công", null));
     }
+
+    @GetMapping("/rooms/{roomId}/members")
+    public ResponseEntity<ApiResponse<List<ChatMemberDto>>> getRoomMembers(
+            @PathVariable Long roomId,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        User user = resolveUser(email);
+        log.info("REST request to get members for room: {} by: {}", roomId, user.getEmail());
+        List<ChatMemberDto> members = chatService.getRoomMembers(roomId, user);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách thành viên thành công", members));
+    }
+
+    @PostMapping("/rooms/{roomId}/members")
+    public ResponseEntity<ApiResponse<ChatRoomDto>> addMembersToRoom(
+            @PathVariable Long roomId,
+            @RequestBody AddMembersRequest request,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        User user = resolveUser(email);
+        log.info("REST request to add members to room: {} by: {}", roomId, user.getEmail());
+        ChatRoomDto room = chatService.addMembersToRoom(roomId, user, request);
+        return ResponseEntity.ok(ApiResponse.success("Thêm thành viên vào nhóm thành công", room));
+    }
+
+    @DeleteMapping("/rooms/{roomId}/members/{targetUserId}")
+    public ResponseEntity<ApiResponse<ChatRoomDto>> removeMemberFromRoom(
+            @PathVariable Long roomId,
+            @PathVariable Long targetUserId,
+            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
+        User user = resolveUser(email);
+        log.info("REST request to remove member: {} from room: {} by: {}", targetUserId, roomId, user.getEmail());
+        ChatRoomDto room = chatService.removeMemberFromRoom(roomId, user, targetUserId);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật thành viên nhóm thành công", room));
+    }
 }

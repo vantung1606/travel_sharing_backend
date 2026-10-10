@@ -451,4 +451,163 @@ public class ChatService {
         chatRoomRepository.delete(room);
         log.info("Successfully deleted room {}", roomId);
     }
+
+    @Transactional(readOnly = true)
+    public List<ChatMemberDto> getRoomMembers(Long roomId, User currentUser) {
+        log.info("Fetching members for room {} by user {}", roomId, currentUser.getEmail());
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Phòng chat không tồn tại: " + roomId));
+
+        boolean isMember = chatMemberRepository.existsByChatRoomIdAndUserId(roomId, currentUser.getId());
+        if (!isMember) {
+            throw new IllegalArgumentException("Bạn không có quyền xem danh sách thành viên của phòng này.");
+        }
+
+        return chatMemberRepository.findByChatRoomId(roomId).stream()
+                .map(m -> ChatMemberDto.builder()
+                        .userId(m.getUser().getId())
+                        .fullName(m.getUser().getFullName())
+                        .handle(m.getUser().getHandle())
+                        .email(m.getUser().getEmail())
+                        .avatarUrl(m.getUser().getAvatarUrl() != null && !m.getUser().getAvatarUrl().isBlank()
+                                ? m.getUser().getAvatarUrl()
+                                : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80")
+                        .role(m.getRole())
+                        .joinedAt(m.getJoinedAt() != null ? formatTime(m.getJoinedAt()) : "")
+                        .build()
+                )
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ChatRoomDto addMembersToRoom(Long roomId, User currentUser, AddMembersRequest request) {
+        log.info("User {} adding members to room {}: {}", currentUser.getEmail(), roomId, request != null ? request.getMemberIds() : null);
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Phòng chat không tồn tại: " + roomId));
+
+        if ("DIRECT".equalsIgnoreCase(room.getType())) {
+            throw new IllegalArgumentException("Không thể thêm thành viên vào cuộc trò chuyện cá nhân 1-1.");
+        }
+
+        boolean isMember = chatMemberRepository.existsByChatRoomIdAndUserId(roomId, currentUser.getId());
+        if (!isMember) {
+            throw new IllegalArgumentException("Bạn không phải thành viên của nhóm này.");
+        }
+
+        List<Long> memberIdsToAdd = (request != null && request.getMemberIds() != null)
+                ? request.getMemberIds()
+                : Collections.emptyList();
+
+        if (memberIdsToAdd.isEmpty()) {
+            throw new IllegalArgumentException("Vui lòng chọn ít nhất 1 thành viên để thêm vào nhóm.");
+        }
+
+        List<String> addedNames = new ArrayList<>();
+        for (Long uid : memberIdsToAdd) {
+            if (!chatMemberRepository.existsByChatRoomIdAndUserId(roomId, uid)) {
+                userRepository.findById(uid).ifPresent(user -> {
+                    chatMemberRepository.save(ChatMember.builder()
+                            .chatRoom(room)
+                            .user(user)
+                            .role("MEMBER")
+                            .build());
+                    addedNames.add(user.getFullName() != null ? user.getFullName() : user.getEmail());
+                });
+            }
+        }
+
+        if (!addedNames.isEmpty()) {
+            String sysContent = currentUser.getFullName() + " đã thêm " + String.join(", ", addedNames) + " vào nhóm.";
+            ChatMessage sysMsg = ChatMessage.builder()
+                    .chatRoom(room)
+                    .sender(currentUser)
+                    .content(sysContent)
+                    .messageType("SYSTEM")
+                    .build();
+            ChatMessage saved = chatMessageRepository.save(sysMsg);
+            room.setUpdatedAt(LocalDateTime.now());
+            chatRoomRepository.save(room);
+
+            ChatMessageDto msgDto = mapToMessageDto(saved, currentUser);
+            try {
+                messagingTemplate.convertAndSend("/topic/room." + roomId, msgDto);
+            } catch (Exception e) {
+                log.warn("Failed to broadcast member added message: {}", e.getMessage());
+            }
+        }
+
+        return mapToRoomDto(room, currentUser);
+    }
+
+    @Transactional
+    public ChatRoomDto removeMemberFromRoom(Long roomId, User currentUser, Long targetUserId) {
+        log.info("User {} removing member {} from room {}", currentUser.getEmail(), targetUserId, roomId);
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Phòng chat không tồn tại: " + roomId));
+
+        if ("DIRECT".equalsIgnoreCase(room.getType())) {
+            throw new IllegalArgumentException("Không thể xóa thành viên khỏi cuộc trò chuyện cá nhân 1-1.");
+        }
+
+        ChatMember myMember = chatMemberRepository.findByChatRoomIdAndUserId(roomId, currentUser.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Bạn không thuộc nhóm trò chuyện này."));
+
+        ChatMember targetMember = chatMemberRepository.findByChatRoomIdAndUserId(roomId, targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Thành viên không tồn tại trong nhóm này: " + targetUserId));
+
+        boolean isSelfLeave = currentUser.getId().equals(targetUserId);
+
+        // Nếu kick người khác, người thực hiện phải là OWNER hoặc creator của phòng
+        if (!isSelfLeave) {
+            boolean isOwner = "OWNER".equalsIgnoreCase(myMember.getRole()) ||
+                    (room.getCreator() != null && room.getCreator().getId().equals(currentUser.getId()));
+            if (!isOwner) {
+                throw new IllegalArgumentException("Chỉ trưởng nhóm (Admin) mới có quyền kick thành viên khỏi nhóm.");
+            }
+        }
+
+        String targetName = targetMember.getUser().getFullName() != null ? targetMember.getUser().getFullName() : targetMember.getUser().getEmail();
+        chatMemberRepository.delete(targetMember);
+
+        // Kiểm tra số lượng thành viên còn lại
+        List<ChatMember> remainingMembers = chatMemberRepository.findByChatRoomId(roomId);
+        if (remainingMembers.isEmpty()) {
+            chatMessageRepository.deleteAll(chatMessageRepository.findByChatRoomIdOrderByCreatedAtAsc(roomId));
+            chatRoomRepository.delete(room);
+            log.info("No members left in room {}. Room successfully purged.", roomId);
+            return null;
+        }
+
+        // Nếu người rời nhóm là OWNER, trao quyền OWNER cho thành viên còn lại
+        if (isSelfLeave && "OWNER".equalsIgnoreCase(targetMember.getRole())) {
+            ChatMember nextOwner = remainingMembers.get(0);
+            nextOwner.setRole("OWNER");
+            chatMemberRepository.save(nextOwner);
+            log.info("Transferred OWNER role of room {} to user {}", roomId, nextOwner.getUser().getId());
+        }
+
+        // Tạo tin nhắn hệ thống ghi nhận hành động
+        String sysContent = isSelfLeave
+                ? targetName + " đã rời khỏi nhóm trò chuyện."
+                : (currentUser.getFullName() != null ? currentUser.getFullName() : currentUser.getEmail()) + " đã xóa " + targetName + " khỏi nhóm.";
+
+        ChatMessage sysMsg = ChatMessage.builder()
+                .chatRoom(room)
+                .sender(currentUser)
+                .content(sysContent)
+                .messageType("SYSTEM")
+                .build();
+        ChatMessage saved = chatMessageRepository.save(sysMsg);
+        room.setUpdatedAt(LocalDateTime.now());
+        chatRoomRepository.save(room);
+
+        ChatMessageDto msgDto = mapToMessageDto(saved, currentUser);
+        try {
+            messagingTemplate.convertAndSend("/topic/room." + roomId, msgDto);
+        } catch (Exception e) {
+            log.warn("Failed to broadcast member removal message: {}", e.getMessage());
+        }
+
+        return mapToRoomDto(room, currentUser);
+    }
 }

@@ -16,4 +16,5 @@ public class ChatMemberDto {
     private String email;
     private String avatarUrl;
     private String role;
+    private String joinedAt;
 }
