@@ -17,4 +17,5 @@ public class CreateRoomRequest {
     private Long itineraryId;
     private Long targetUserId;
     private List<Long> memberIds;
+    private String initialMessage;
 }
