@@ -1,4 +1,4 @@
-name: Backend CI Pipeline
+name: Backend CI/CD Pipeline
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-test:
-    name: Build & Test Java Spring Boot
+    name: 1. Build & Test Java (CI)
     runs-on: ubuntu-latest
 
     steps:
@@ -29,7 +29,7 @@ jobs:
         run: ./mvnw clean package -DskipTests -B
 
   docker-validation:
-    name: Docker Build Validation
+    name: 2. Docker Build Validation (CI)
     needs: build-and-test
     runs-on: ubuntu-latest
 
@@ -47,3 +47,21 @@ jobs:
           file: ./Dockerfile
           push: false
           tags: wayfare-backend:latest
+
+  deploy-to-railway:
+    name: 3. Deploy to Railway Production (CD)
+    needs: [build-and-test, docker-validation]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Deploy to Railway Service
+        run: railway up --service travel_sharing_backend --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
