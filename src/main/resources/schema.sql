@@ -1,303 +1,481 @@
--- =============================================================================
--- WAYFARE SMART TRAVEL PLATFORM - MYSQL WORKBENCH DATABASE SCHEMA (21 TABLES)
+﻿-- =============================================================================
+-- WAYFARE SMART TRAVEL PLATFORM - MYSQL DATABASE SCHEMA (28 TABLES)
+-- Generated & Verified directly from Live MySQL 8.0 Database (wayfare_db)
 -- =============================================================================
 
 CREATE DATABASE IF NOT EXISTS wayfare_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE wayfare_db;
 
--- -----------------------------------------------------------------------------
--- PHÂN HỆ 1: XÁC THỰC & QUẢN LÝ NGƯỜI DÙNG (USERS & SECURITY)
--- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS roles (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE,
-    description VARCHAR(255)
+SET FOREIGN_KEY_CHECKS = 0;
+CREATE TABLE IF NOT EXISTS `ai_chat_messages` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `content` text NOT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `metadata` text,
+  `sender_type` enum('USER','ASSISTANT','SYSTEM') NOT NULL,
+  `session_id` varchar(36) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FKncfaarj6gwd37j1fi98bmpmcl` (`session_id`),
+  CONSTRAINT `FKncfaarj6gwd37j1fi98bmpmcl` FOREIGN KEY (`session_id`) REFERENCES `ai_chat_sessions` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS users (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    full_name VARCHAR(100) NOT NULL,
-    handle VARCHAR(50) UNIQUE,
-    avatar_url VARCHAR(500),
-    bio VARCHAR(500),
-    phone_number VARCHAR(20),
-    is_verified BOOLEAN NOT NULL DEFAULT TRUE,
-    travel_style VARCHAR(100),
-    budget_preference VARCHAR(50),
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
-    last_login_at DATETIME
+
+
+CREATE TABLE IF NOT EXISTS `ai_chat_sessions` (
+  `id` varchar(36) NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  `user_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FK6mxk23rx514hrkne46l8bblp4` (`user_id`),
+  CONSTRAINT `FK6mxk23rx514hrkne46l8bblp4` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS user_roles (
-    user_id BIGINT NOT NULL,
-    role_id BIGINT NOT NULL,
-    PRIMARY KEY (user_id, role_id),
-    CONSTRAINT fk_ur_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_ur_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+
+
+CREATE TABLE IF NOT EXISTS `categories` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `description` varchar(255) DEFAULT NULL,
+  `icon` varchar(50) DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `UK_t8o6pivur7nn124jehx7cygw5` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS refresh_tokens (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    token VARCHAR(500) NOT NULL UNIQUE,
-    user_id BIGINT NOT NULL,
-    expiry_date DATETIME NOT NULL,
-    is_revoked BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_rt_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+
+CREATE TABLE IF NOT EXISTS `chat_invitations` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `status` varchar(20) NOT NULL,
+  `room_id` bigint NOT NULL,
+  `recipient_id` bigint NOT NULL,
+  `sender_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FKkb9mlpbsxilnm08itbs80a80q` (`room_id`),
+  KEY `FK1wnn9cw2m7h5gdcgpsi038ds` (`recipient_id`),
+  KEY `FKbuy7u564djht6ekr4n7gwndkh` (`sender_id`),
+  CONSTRAINT `FK1wnn9cw2m7h5gdcgpsi038ds` FOREIGN KEY (`recipient_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKbuy7u564djht6ekr4n7gwndkh` FOREIGN KEY (`sender_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKkb9mlpbsxilnm08itbs80a80q` FOREIGN KEY (`room_id`) REFERENCES `chat_rooms` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- -----------------------------------------------------------------------------
--- PHÂN HỆ 2: ĐỊA ĐIỂM DU LỊCH & CỘNG ĐỒNG (PLACES & COMMUNITY)
--- -----------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS categories (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
-    icon VARCHAR(50),
-    description VARCHAR(255)
+
+CREATE TABLE IF NOT EXISTS `chat_members` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `joined_at` datetime(6) NOT NULL,
+  `last_read_message_id` bigint DEFAULT NULL,
+  `role` varchar(20) DEFAULT NULL,
+  `room_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `UK1t5ptackv8b3jsryha1ykq8m5` (`room_id`,`user_id`),
+  KEY `FKe0a4ocat8hcxc20kt2m95qejk` (`user_id`),
+  CONSTRAINT `FKe0a4ocat8hcxc20kt2m95qejk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKoww5qci3v6n6dxqmbwte0rdbn` FOREIGN KEY (`room_id`) REFERENCES `chat_rooms` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `chat_messages` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `content` text NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `message_type` varchar(30) NOT NULL,
+  `room_id` bigint NOT NULL,
+  `sender_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FKhalwepod3944695ji0suwoqb9` (`room_id`),
+  KEY `FKgiqeap8ays4lf684x7m0r2729` (`sender_id`),
+  CONSTRAINT `FKgiqeap8ays4lf684x7m0r2729` FOREIGN KEY (`sender_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKhalwepod3944695ji0suwoqb9` FOREIGN KEY (`room_id`) REFERENCES `chat_rooms` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `chat_rooms` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  `type` varchar(20) NOT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `creator_id` bigint DEFAULT NULL,
+  `itinerary_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FKkcyi40l5yas17t11xai5i3m1j` (`creator_id`),
+  KEY `FKepldtn3n5f2pbs5mxilurdh26` (`itinerary_id`),
+  CONSTRAINT `FKepldtn3n5f2pbs5mxilurdh26` FOREIGN KEY (`itinerary_id`) REFERENCES `itineraries` (`id`),
+  CONSTRAINT `FKkcyi40l5yas17t11xai5i3m1j` FOREIGN KEY (`creator_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `itineraries` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `budget_total` decimal(12,2) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `destination` varchar(150) NOT NULL,
+  `end_date` date DEFAULT NULL,
+  `is_ai_generated` bit(1) NOT NULL,
+  `start_date` date DEFAULT NULL,
+  `status` varchar(30) DEFAULT NULL,
+  `title` varchar(200) NOT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `creator_id` bigint NOT NULL,
+  `cover_image_url` varchar(500) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FK22u1877eptt9hws2jvsj3poel` (`creator_id`),
+  CONSTRAINT `FK22u1877eptt9hws2jvsj3poel` FOREIGN KEY (`creator_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `itinerary_details` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `day_number` int NOT NULL,
+  `estimated_cost` decimal(12,2) DEFAULT NULL,
+  `location_name` varchar(150) DEFAULT NULL,
+  `note` text,
+  `start_time` time(6) DEFAULT NULL,
+  `visit_order` int NOT NULL,
+  `itinerary_id` bigint NOT NULL,
+  `place_id` bigint DEFAULT NULL,
+  `ai_tip` text,
+  `category` varchar(50) DEFAULT NULL,
+  `location_address` varchar(255) DEFAULT NULL,
+  `transit_info` varchar(150) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FKrosyywx2tyrnd9cwg2j0wlf90` (`itinerary_id`),
+  KEY `FKpyppkl2ns1av6dxn1jj64sp6v` (`place_id`),
+  CONSTRAINT `FKpyppkl2ns1av6dxn1jj64sp6v` FOREIGN KEY (`place_id`) REFERENCES `places` (`id`),
+  CONSTRAINT `FKrosyywx2tyrnd9cwg2j0wlf90` FOREIGN KEY (`itinerary_id`) REFERENCES `itineraries` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `itinerary_expenses` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `amount` decimal(12,2) NOT NULL,
+  `category` varchar(50) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `receipt_image_url` varchar(500) DEFAULT NULL,
+  `itinerary_id` bigint NOT NULL,
+  `payer_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FKqoysqu5u1lb6wxb22k4qdef7y` (`itinerary_id`),
+  KEY `FKch2t8tk6j0ihwtxf7menp68d8` (`payer_id`),
+  CONSTRAINT `FKch2t8tk6j0ihwtxf7menp68d8` FOREIGN KEY (`payer_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKqoysqu5u1lb6wxb22k4qdef7y` FOREIGN KEY (`itinerary_id`) REFERENCES `itineraries` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `itinerary_members` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `joined_at` datetime(6) NOT NULL,
+  `role` varchar(30) NOT NULL,
+  `itinerary_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `UKrdu1xfi4qlhbfah6552b7jlqn` (`itinerary_id`,`user_id`),
+  KEY `FK5q4308hkdcxuxp3x23n7j4ykk` (`user_id`),
+  CONSTRAINT `FK5q4308hkdcxuxp3x23n7j4ykk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKbg9uodvs7ib9anf8tgg7nm9kk` FOREIGN KEY (`itinerary_id`) REFERENCES `itineraries` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `is_read` bit(1) NOT NULL,
+  `message` text NOT NULL,
+  `target_url` varchar(500) DEFAULT NULL,
+  `type` varchar(50) NOT NULL,
+  `actor_id` bigint DEFAULT NULL,
+  `recipient_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FK4sd9fik0uthbk6d9rsxco4uja` (`actor_id`),
+  KEY `FKqqnsjxlwleyjbxlmm213jaj3f` (`recipient_id`),
+  CONSTRAINT `FK4sd9fik0uthbk6d9rsxco4uja` FOREIGN KEY (`actor_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKqqnsjxlwleyjbxlmm213jaj3f` FOREIGN KEY (`recipient_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=119 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `place_categories` (
+  `place_id` bigint NOT NULL,
+  `category_id` bigint NOT NULL,
+  PRIMARY KEY (`place_id`,`category_id`),
+  KEY `FKa2rskjehyus82dvvk4sw8mwqe` (`category_id`),
+  CONSTRAINT `FKa2rskjehyus82dvvk4sw8mwqe` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`),
+  CONSTRAINT `FKihrq0bamh7bjyp408o6hnp19u` FOREIGN KEY (`place_id`) REFERENCES `places` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS places (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(150) NOT NULL,
-    description TEXT,
-    address VARCHAR(255),
-    city VARCHAR(100),
-    latitude DECIMAL(10,7),
-    longitude DECIMAL(10,7),
-    ticket_price DECIMAL(12,2),
-    average_rating DECIMAL(3,2) DEFAULT 0.00,
-    review_count INT DEFAULT 0,
-    cover_image_url VARCHAR(500),
-    owner_id BIGINT NULL,
-    phone_number VARCHAR(50),
-    open_hours VARCHAR(100),
-    price_range VARCHAR(100),
-    category_name VARCHAR(100),
-    amenities VARCHAR(500),
-    status VARCHAR(30) DEFAULT 'ACTIVE',
-    is_verified_host BOOLEAN DEFAULT FALSE,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_places_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL
+
+
+CREATE TABLE IF NOT EXISTS `place_images` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `caption` varchar(255) DEFAULT NULL,
+  `image_url` varchar(500) NOT NULL,
+  `is_primary` bit(1) DEFAULT NULL,
+  `place_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FKfaf8mjrs1svk7fgqxufaajmiq` (`place_id`),
+  CONSTRAINT `FKfaf8mjrs1svk7fgqxufaajmiq` FOREIGN KEY (`place_id`) REFERENCES `places` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS place_categories (
-    place_id BIGINT NOT NULL,
-    category_id BIGINT NOT NULL,
-    PRIMARY KEY (place_id, category_id),
-    CONSTRAINT fk_pc_place FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE,
-    CONSTRAINT fk_pc_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+
+
+CREATE TABLE IF NOT EXISTS `places` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `address` varchar(255) DEFAULT NULL,
+  `average_rating` decimal(3,2) DEFAULT NULL,
+  `city` varchar(100) DEFAULT NULL,
+  `cover_image_url` varchar(500) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `description` text,
+  `latitude` decimal(10,7) DEFAULT NULL,
+  `longitude` decimal(10,7) DEFAULT NULL,
+  `name` varchar(150) NOT NULL,
+  `review_count` int DEFAULT NULL,
+  `ticket_price` decimal(12,2) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `owner_id` bigint DEFAULT NULL,
+  `phone_number` varchar(50) DEFAULT NULL,
+  `open_hours` varchar(100) DEFAULT NULL,
+  `price_range` varchar(100) DEFAULT NULL,
+  `category_name` varchar(100) DEFAULT NULL,
+  `amenities` varchar(500) DEFAULT NULL,
+  `status` varchar(30) DEFAULT 'ACTIVE',
+  `is_verified_host` tinyint(1) DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `fk_places_owner` (`owner_id`),
+  CONSTRAINT `fk_places_owner` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `post_bookmarks` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `post_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_post_bookmark` (`user_id`,`post_id`),
+  KEY `FKclpw1l6wrci96rfj0dtt3bfah` (`post_id`),
+  CONSTRAINT `FK9b5c09u5arho7ei76d78bn7ww` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKclpw1l6wrci96rfj0dtt3bfah` FOREIGN KEY (`post_id`) REFERENCES `posts` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `post_comments` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `content` text NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `user_id` bigint NOT NULL,
+  `post_id` bigint NOT NULL,
+  `parent_id` bigint DEFAULT NULL,
+  `reply_to_user_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FKsnxoecngu89u3fh4wdrgf0f2g` (`user_id`),
+  KEY `FKaawaqxjs3br8dw5v90w7uu514` (`post_id`),
+  KEY `FKc3b7s6wypcsvua2ycn4o1lv2c` (`parent_id`),
+  KEY `FKhndchwuclp9m68p2jo1jvm40w` (`reply_to_user_id`),
+  CONSTRAINT `FKaawaqxjs3br8dw5v90w7uu514` FOREIGN KEY (`post_id`) REFERENCES `posts` (`id`),
+  CONSTRAINT `FKc3b7s6wypcsvua2ycn4o1lv2c` FOREIGN KEY (`parent_id`) REFERENCES `post_comments` (`id`),
+  CONSTRAINT `FKhndchwuclp9m68p2jo1jvm40w` FOREIGN KEY (`reply_to_user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKsnxoecngu89u3fh4wdrgf0f2g` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `post_likes` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `post_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `UK5l2rj28vw5oj6f7ox746grokg` (`user_id`,`post_id`),
+  KEY `FKa5wxsgl4doibhbed9gm7ikie2` (`post_id`),
+  CONSTRAINT `FKa5wxsgl4doibhbed9gm7ikie2` FOREIGN KEY (`post_id`) REFERENCES `posts` (`id`),
+  CONSTRAINT `FKkgau5n0nlewg6o9lr4yibqgxj` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `post_reports` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `ai_analysis_snippet` text,
+  `category` varchar(150) NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `moderator_notes` text,
+  `reason` text NOT NULL,
+  `status` varchar(30) DEFAULT NULL,
+  `post_id` bigint NOT NULL,
+  `reporter_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FK7ccpkj5jys037f9pq98l31ya2` (`post_id`),
+  KEY `FKqi5fmh45u32i63971en0rmrvo` (`reporter_id`),
+  CONSTRAINT `FK7ccpkj5jys037f9pq98l31ya2` FOREIGN KEY (`post_id`) REFERENCES `posts` (`id`),
+  CONSTRAINT `FKqi5fmh45u32i63971en0rmrvo` FOREIGN KEY (`reporter_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `posts` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `comment_count` int DEFAULT NULL,
+  `content` text NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `like_count` int DEFAULT NULL,
+  `location_tag` varchar(150) DEFAULT NULL,
+  `title` varchar(200) NOT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `user_id` bigint NOT NULL,
+  `ai_flag_reason` text,
+  `ai_safety_score` int DEFAULT NULL,
+  `badge_text` varchar(100) DEFAULT NULL,
+  `category` varchar(100) DEFAULT NULL,
+  `report_reason` text,
+  `reports_count` int DEFAULT NULL,
+  `status` varchar(30) DEFAULT NULL,
+  `itinerary_id` bigint DEFAULT NULL,
+  `images` text,
+  `video_url` varchar(500) DEFAULT NULL,
+  `visibility` varchar(20) NOT NULL DEFAULT 'PUBLIC',
+  `shared_post_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FK5lidm6cqbc7u4xhqpxm898qme` (`user_id`),
+  KEY `FKa8uaqytwgfur4636imtq6dref` (`itinerary_id`),
+  KEY `FKmk5q3yvwj8drh5btwuvgbc0p0` (`shared_post_id`),
+  CONSTRAINT `FK5lidm6cqbc7u4xhqpxm898qme` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKa8uaqytwgfur4636imtq6dref` FOREIGN KEY (`itinerary_id`) REFERENCES `itineraries` (`id`),
+  CONSTRAINT `FKmk5q3yvwj8drh5btwuvgbc0p0` FOREIGN KEY (`shared_post_id`) REFERENCES `posts` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=39 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `refresh_tokens` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `expiry_date` datetime(6) NOT NULL,
+  `is_revoked` bit(1) NOT NULL,
+  `token` varchar(500) NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `UK_ghpmfn23vmxfu3spu3lfg4r2d` (`token`),
+  KEY `FK1lih5y2npsf8u5o3vhdb9y0os` (`user_id`),
+  CONSTRAINT `FK1lih5y2npsf8u5o3vhdb9y0os` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS place_images (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    place_id BIGINT NOT NULL,
-    image_url VARCHAR(500) NOT NULL,
-    is_primary BOOLEAN DEFAULT FALSE,
-    caption VARCHAR(255),
-    CONSTRAINT fk_pi_place FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE
+
+
+CREATE TABLE IF NOT EXISTS `reviews` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `comment` text,
+  `created_at` datetime(6) NOT NULL,
+  `rating` int NOT NULL,
+  `user_id` bigint NOT NULL,
+  `place_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FKcgy7qjc1r99dp117y9en6lxye` (`user_id`),
+  KEY `FKcnnkvk0h9vrih5xqxef7sv2r6` (`place_id`),
+  CONSTRAINT `FKcgy7qjc1r99dp117y9en6lxye` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FKcnnkvk0h9vrih5xqxef7sv2r6` FOREIGN KEY (`place_id`) REFERENCES `places` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `roles` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `description` varchar(255) DEFAULT NULL,
+  `name` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `UK_ofx66keruapi6vyqpv6f2or37` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `saved_places` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `place_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `UKf18edjgxairhnwg69kfyqipul` (`user_id`,`place_id`),
+  KEY `FK5u1we43jjspnl9i5plhie618y` (`place_id`),
+  CONSTRAINT `FK5u1we43jjspnl9i5plhie618y` FOREIGN KEY (`place_id`) REFERENCES `places` (`id`),
+  CONSTRAINT `FKa538njw543jshdhxbi05cbqe7` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS saved_places (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    place_id BIGINT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_place (user_id, place_id),
-    CONSTRAINT fk_sp_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_sp_place FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE
+
+
+CREATE TABLE IF NOT EXISTS `system_configs` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `config_key` varchar(100) NOT NULL,
+  `config_value` text NOT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `UK_pk5mof051xp5r3e75s2e23s8s` (`config_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS posts (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    title VARCHAR(200) NOT NULL,
-    content TEXT NOT NULL,
-    location_tag VARCHAR(150),
-    images TEXT,
-    video_url VARCHAR(500),
-    visibility VARCHAR(20) NOT NULL DEFAULT 'PUBLIC',
-    shared_post_id BIGINT NULL,
-    like_count INT DEFAULT 0,
-    comment_count INT DEFAULT 0,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_post_shared_post FOREIGN KEY (shared_post_id) REFERENCES posts(id) ON DELETE SET NULL
+
+
+CREATE TABLE IF NOT EXISTS `user_follows` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `follower_id` bigint NOT NULL,
+  `following_id` bigint NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_follower_following` (`follower_id`,`following_id`),
+  UNIQUE KEY `UKac5tvpn8oynln4njypmqycil3` (`follower_id`,`following_id`),
+  KEY `fk_follow_following` (`following_id`),
+  CONSTRAINT `fk_follow_follower` FOREIGN KEY (`follower_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_follow_following` FOREIGN KEY (`following_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS `user_roles` (
+  `user_id` bigint NOT NULL,
+  `role_id` bigint NOT NULL,
+  PRIMARY KEY (`user_id`,`role_id`),
+  KEY `FKh8ciramu9cc9q3qcqiv4ue8a6` (`role_id`),
+  CONSTRAINT `FKh8ciramu9cc9q3qcqiv4ue8a6` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`),
+  CONSTRAINT `FKhfh9dx7w3ubf1co1vdev94g3f` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS post_likes (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    post_id BIGINT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_post_like (user_id, post_id),
-    CONSTRAINT fk_pl_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_pl_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS post_bookmarks (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    post_id BIGINT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_post_bookmark (user_id, post_id),
-    CONSTRAINT fk_pb_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_pb_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS post_comments (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    post_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
-    parent_id BIGINT NULL,
-    reply_to_user_id BIGINT NULL,
-    content TEXT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_pc_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-    CONSTRAINT fk_pc_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_pc_parent FOREIGN KEY (parent_id) REFERENCES post_comments(id) ON DELETE CASCADE,
-    CONSTRAINT fk_pc_reply_user FOREIGN KEY (reply_to_user_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS reviews (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    place_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
-    rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
-    comment TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_rev_place FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE CASCADE,
-    CONSTRAINT fk_rev_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- -----------------------------------------------------------------------------
--- PHÂN HỆ 3: LẬP & ĐIỀU PHỐI LỊCH TRÌNH CÁ NHÂN (ITINERARIES & EXPENSES)
--- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS itineraries (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    creator_id BIGINT NOT NULL,
-    title VARCHAR(200) NOT NULL,
-    destination VARCHAR(150) NOT NULL,
-    start_date DATE,
-    end_date DATE,
-    budget_total DECIMAL(12,2),
-    is_ai_generated BOOLEAN NOT NULL DEFAULT FALSE,
-    status VARCHAR(30) DEFAULT 'ACTIVE',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_itin_creator FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS itinerary_details (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    itinerary_id BIGINT NOT NULL,
-    place_id BIGINT,
-    location_name VARCHAR(150),
-    day_number INT NOT NULL,
-    visit_order INT NOT NULL,
-    start_time TIME,
-    estimated_cost DECIMAL(12,2),
-    note TEXT,
-    CONSTRAINT fk_idet_itinerary FOREIGN KEY (itinerary_id) REFERENCES itineraries(id) ON DELETE CASCADE,
-    CONSTRAINT fk_idet_place FOREIGN KEY (place_id) REFERENCES places(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS itinerary_members (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    itinerary_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
-    role VARCHAR(30) NOT NULL DEFAULT 'VIEWER',
-    joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_itinerary_user (itinerary_id, user_id),
-    CONSTRAINT fk_im_itinerary FOREIGN KEY (itinerary_id) REFERENCES itineraries(id) ON DELETE CASCADE,
-    CONSTRAINT fk_im_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS itinerary_expenses (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    itinerary_id BIGINT NOT NULL,
-    payer_id BIGINT NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
-    category VARCHAR(50),
-    description VARCHAR(255),
-    receipt_image_url VARCHAR(500),
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_ie_itinerary FOREIGN KEY (itinerary_id) REFERENCES itineraries(id) ON DELETE CASCADE,
-    CONSTRAINT fk_ie_payer FOREIGN KEY (payer_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- -----------------------------------------------------------------------------
--- PHÂN HỆ 4: TRÒ CHUYỆN & CHAT NHÓM THỜI GIAN THỰC (REAL-TIME CHAT)
--- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS chat_rooms (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100),
-    type VARCHAR(20) NOT NULL DEFAULT 'DIRECT',
-    itinerary_id BIGINT,
-    creator_id BIGINT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_cr_itinerary FOREIGN KEY (itinerary_id) REFERENCES itineraries(id) ON DELETE SET NULL,
-    CONSTRAINT fk_cr_creator FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS chat_members (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    room_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
-    role VARCHAR(20) DEFAULT 'MEMBER',
-    last_read_message_id BIGINT,
-    joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_room_user (room_id, user_id),
-    CONSTRAINT fk_cm_room FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
-    CONSTRAINT fk_cm_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS chat_invitations (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    room_id BIGINT NOT NULL,
-    sender_id BIGINT NOT NULL,
-    recipient_id BIGINT NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_ci_room FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
-    CONSTRAINT fk_ci_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_ci_recipient FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS chat_messages (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    room_id BIGINT NOT NULL,
-    sender_id BIGINT NOT NULL,
-    content TEXT NOT NULL,
-    message_type VARCHAR(30) NOT NULL DEFAULT 'TEXT',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_cm_msg_room FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
-    CONSTRAINT fk_cm_msg_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- -----------------------------------------------------------------------------
--- PHÂN HỆ 5: THÔNG BÁO HỆ THỐNG (NOTIFICATIONS)
--- (Nhật ký hệ thống được phân loại lưu trữ theo File Rolling tại thư mục logs/)
--- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS notifications (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    recipient_id BIGINT NOT NULL,
-    actor_id BIGINT,
-    type VARCHAR(50) NOT NULL,
-    message VARCHAR(255) NOT NULL,
-    target_url VARCHAR(500),
-    is_read BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_notif_recipient FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_notif_actor FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `avatar_url` varchar(500) DEFAULT NULL,
+  `bio` varchar(500) DEFAULT NULL,
+  `budget_preference` varchar(50) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `full_name` varchar(100) NOT NULL,
+  `handle` varchar(50) DEFAULT NULL,
+  `is_verified` bit(1) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `phone_number` varchar(20) DEFAULT NULL,
+  `travel_style` varchar(100) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `is_locked` bit(1) NOT NULL,
+  `status` varchar(20) NOT NULL,
+  `last_login_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `UK_6dotkott2kjsp8vw4d0m25fb7` (`email`),
+  UNIQUE KEY `UK_tpu0euqmn8f2vw66lyuv3dfoh` (`handle`)
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SET FOREIGN_KEY_CHECKS = 1;
+-- =============================================================================
+-- END OF SCHEMA
+-- =============================================================================

@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # Database Service (MySQL 8.0)
+  # ==========================================
+  mysql:
+    image: mysql:8.0
+    container_name: wayfare-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: 1234
+      MYSQL_DATABASE: wayfare_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p1234"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - wayfare-network
+
+  # ==========================================
+  # Backend Service (Spring Boot 3.2.4 / Java 21)
+  # ==========================================
+  backend:
+    build:
+      context: ./travel_backend
+      dockerfile: Dockerfile
+    container_name: wayfare-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/wayfare_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 1234
+    ports:
+      - "8081:8081"
+    networks:
+      - wayfare-network
+
+  # ==========================================
+  # Frontend Service (React / Vite / Nginx)
+  # ==========================================
+  frontend:
+    build:
+      context: ./travel_frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8081/api
+    container_name: wayfare-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - wayfare-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  wayfare-network:
+    driver: bridge
