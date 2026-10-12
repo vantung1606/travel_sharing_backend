@@ -163,12 +163,10 @@ public class PostService {
         }
 
         if (imgList.isEmpty()) {
-            if (attachedItinerary != null && attachedItinerary.getCoverImageUrl() != null) {
+            if (attachedItinerary != null && attachedItinerary.getCoverImageUrl() != null && !attachedItinerary.getCoverImageUrl().isBlank()) {
                 imgList.add(attachedItinerary.getCoverImageUrl());
-            } else if (sharedOriginalPost != null && sharedOriginalPost.getFirstImage() != null) {
+            } else if (sharedOriginalPost != null && sharedOriginalPost.getFirstImage() != null && !sharedOriginalPost.getFirstImage().isBlank()) {
                 imgList.add(sharedOriginalPost.getFirstImage());
-            } else {
-                imgList.add("https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80");
             }
         }
 
@@ -838,6 +836,12 @@ public class PostService {
             sharedPostDto = mapToDtoInternal(p.getSharedPost(), currentUser, false);
         }
 
+        String itinDuration = null;
+        if (itin != null && itin.getStartDate() != null && itin.getEndDate() != null) {
+            long days = java.time.temporal.ChronoUnit.DAYS.between(itin.getStartDate(), itin.getEndDate()) + 1;
+            itinDuration = days + "N" + Math.max(1, days - 1) + "Đ";
+        }
+
         return PostDto.builder()
                 .id(p.getId())
                 .title(p.getTitle())
@@ -864,15 +868,15 @@ public class PostService {
                 .authorName(p.getAuthor() != null ? p.getAuthor().getFullName() : "Du khách Wayfare")
                 .authorEmail(p.getAuthor() != null ? p.getAuthor().getEmail() : null)
                 .authorHandle(p.getAuthor() != null ? p.getAuthor().getHandle() : "@wayfarer")
-                .authorAvatar(p.getAuthor() != null ? p.getAuthor().getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                .authorAvatar(p.getAuthor() != null ? p.getAuthor().getAvatarUrl() : null)
                 .authorRole(p.getAuthor() != null && p.getAuthor().getRoles() != null && p.getAuthor().getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN")) ? "Quản trị viên" : "Phượt thủ tự do")
                 // Attached Itinerary
                 .itineraryId(itin != null ? itin.getId() : null)
                 .itineraryTitle(itin != null ? itin.getTitle() : null)
                 .itineraryDestination(itin != null ? itin.getDestination() : null)
-                .itineraryDuration(itin != null ? "3N2Đ" : null)
-                .itineraryBudget(itin != null && itin.getBudgetTotal() != null ? itin.getBudgetTotal().longValue() : 3850000L)
-                .itineraryPlacesCount(itin != null ? 8 : null)
+                .itineraryDuration(itinDuration)
+                .itineraryBudget(itin != null && itin.getBudgetTotal() != null ? itin.getBudgetTotal().longValue() : null)
+                .itineraryPlacesCount(itin != null && itin.getDetails() != null ? itin.getDetails().size() : null)
                 .itineraryIsAi(itin != null ? itin.getIsAiGenerated() : false)
                 // Shared post
                 .sharedPostId(p.getSharedPost() != null ? p.getSharedPost().getId() : null)
