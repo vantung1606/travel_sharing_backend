@@ -48,20 +48,6 @@ jobs:
           push: false
           tags: wayfare-backend:latest
 
-  deploy-to-railway:
-    name: 3. Deploy to Railway Production (CD)
-    needs: [build-and-test, docker-validation]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+  # Note: Railway is natively integrated with GitHub to automatically deploy on push to develop/main.
+  # Running 'railway up' via CLI in GitHub Actions is redundant and causes concurrent build conflicts.
 
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli
-
-      - name: Deploy to Railway Service
-        run: railway up --service travel_sharing_backend --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
