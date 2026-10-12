@@ -3,6 +3,7 @@ package com.wayfare.modules.user.controller;
 import com.wayfare.common.dto.ApiResponse;
 import com.wayfare.exception.ResourceNotFoundException;
 import com.wayfare.modules.user.dto.FollowUserDto;
+import com.wayfare.modules.user.dto.UpdateProfileRequest;
 import com.wayfare.modules.user.dto.UserProfileDto;
 import com.wayfare.modules.user.service.UserFollowService;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +79,20 @@ public class UserController {
         com.wayfare.entity.User current = userFollowService.resolveUser(currentUserEmail);
         UserProfileDto profile = userFollowService.getUserProfile(current.getId(), currentUserEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin người dùng thành công", profile));
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<ApiResponse<UserProfileDto>> updateProfile(
+            @RequestBody UpdateProfileRequest request,
+            @RequestParam(required = false) String email,
+            Authentication authentication) {
+        String currentUserEmail = extractEmail(authentication, email);
+        if (currentUserEmail == null || currentUserEmail.isBlank()) {
+            currentUserEmail = requireAuthEmail(authentication);
+        }
+        log.info("REST request to update profile by {}", currentUserEmail);
+        UserProfileDto updated = userFollowService.updateUserProfile(null, request, currentUserEmail);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật hồ sơ cá nhân thành công!", updated));
     }
 
     @GetMapping("/following")

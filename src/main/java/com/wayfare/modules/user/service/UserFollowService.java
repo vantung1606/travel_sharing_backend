@@ -4,6 +4,7 @@ import com.wayfare.modules.notification.service.NotificationService;
 import com.wayfare.modules.community.service.PostService;
 
 import com.wayfare.modules.user.dto.FollowUserDto;
+import com.wayfare.modules.user.dto.UpdateProfileRequest;
 import com.wayfare.modules.itinerary.dto.ItineraryDto;
 import com.wayfare.modules.community.dto.PostDto;
 import com.wayfare.modules.user.dto.UserProfileDto;
@@ -244,6 +245,49 @@ public class UserFollowService {
                 .posts(postDtos)
                 .itineraries(itinDtos)
                 .build();
+    }
+
+    @Transactional
+    public UserProfileDto updateUserProfile(Long userId, UpdateProfileRequest request, String currentUserEmail) {
+        log.info("Updating user profile for userId={}, userEmail={}", userId, currentUserEmail);
+        User currentUser = resolveUser(currentUserEmail);
+        User targetUser = currentUser;
+        if (userId != null && !currentUser.getId().equals(userId)) {
+            boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"));
+            if (!isAdmin) {
+                throw new RuntimeException("Bạn không có quyền chỉnh sửa hồ sơ của người khác!");
+            }
+            targetUser = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại với ID: " + userId));
+        }
+
+        if (request.getFullName() != null && !request.getFullName().trim().isEmpty()) {
+            targetUser.setFullName(request.getFullName().trim());
+        }
+        if (request.getHandle() != null && !request.getHandle().trim().isEmpty()) {
+            String cleanHandle = request.getHandle().trim();
+            if (!cleanHandle.startsWith("@")) cleanHandle = "@" + cleanHandle;
+            targetUser.setHandle(cleanHandle);
+        }
+        if (request.getBio() != null) {
+            targetUser.setBio(request.getBio().trim());
+        }
+        if (request.getAvatarUrl() != null && !request.getAvatarUrl().trim().isEmpty()) {
+            targetUser.setAvatarUrl(request.getAvatarUrl().trim());
+        }
+        if (request.getPhoneNumber() != null) {
+            targetUser.setPhoneNumber(request.getPhoneNumber().trim());
+        }
+        if (request.getTravelStyle() != null && !request.getTravelStyle().trim().isEmpty()) {
+            targetUser.setTravelStyle(request.getTravelStyle().trim());
+        }
+        if (request.getBudgetPreference() != null && !request.getBudgetPreference().trim().isEmpty()) {
+            targetUser.setBudgetPreference(request.getBudgetPreference().trim());
+        }
+
+        userRepository.save(targetUser);
+        log.info("Successfully updated profile for user ID {}", targetUser.getId());
+        return getUserProfile(targetUser.getId(), targetUser.getEmail());
     }
 
     public User resolveUser(String email) {

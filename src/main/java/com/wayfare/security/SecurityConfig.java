@@ -52,6 +52,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/users/*/profile").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/following").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/followers").permitAll()
+                .requestMatchers(HttpMethod.PUT, "/api/users/profile").permitAll()
                 // Admin exclusive operations
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 // All other operations require authenticated token
