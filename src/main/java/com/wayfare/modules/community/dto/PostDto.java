@@ -42,6 +42,7 @@ public class PostDto {
     private String authorHandle;
     private String authorAvatar;
     private String authorRole;
+    private String authorTier;
 
     // Attached Itinerary (Link to My Itineraries)
     private Long itineraryId;

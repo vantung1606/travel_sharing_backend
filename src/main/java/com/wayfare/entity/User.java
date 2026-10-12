@@ -61,6 +61,10 @@ public class User {
     @Column(name = "budget_preference", length = 50)
     private String budgetPreference; // e.g., 'Tiết kiệm', 'Linh hoạt', 'Sang chảnh'
 
+    @Builder.Default
+    @Column(name = "tier", length = 20)
+    private String tier = "bronze"; // bronze, silver, gold, diamond
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "user_roles",

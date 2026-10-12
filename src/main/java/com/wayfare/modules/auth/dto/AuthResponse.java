@@ -19,6 +19,7 @@ public class AuthResponse {
     private String fullName;
     private String handle;
     private String avatar;
+    private String tier;
     private Set<String> roles;
 }
 

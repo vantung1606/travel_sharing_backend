@@ -216,9 +216,21 @@ public class UserFollowService {
                         .build())
                 .collect(Collectors.toList());
 
+        String rawTier = targetUser.getTier() != null ? targetUser.getTier() : "bronze";
+        String rankTitle;
+        if ("diamond".equalsIgnoreCase(rawTier)) {
+            rankTitle = "Huyền Thoại Kim Cương";
+        } else if ("gold".equalsIgnoreCase(rawTier)) {
+            rankTitle = "Nhà Thám Hiểm Vàng";
+        } else if ("silver".equalsIgnoreCase(rawTier)) {
+            rankTitle = "Lữ Hành Bạc";
+        } else {
+            rankTitle = "Tân Thủ Khám Phá";
+        }
+
         String roleStr = targetUser.getRoles() != null && targetUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"))
                 ? "Quản trị viên"
-                : "Wanderer Gold";
+                : "Thành viên";
 
         String defaultCover = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80";
         String defaultBio = "Đam mê khám phá thiên nhiên & trải nghiệm ẩm thực du lịch độc lạ cùng AI 🌍 ✈️";
@@ -231,7 +243,8 @@ public class UserFollowService {
                 .avatarUrl(targetUser.getAvatarUrl() != null ? targetUser.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                 .coverImageUrl(defaultCover)
                 .location("Việt Nam")
-                .rank(roleStr)
+                .rank(rankTitle)
+                .tier(rawTier.toLowerCase())
                 .bio(targetUser.getBio() != null && !targetUser.getBio().isBlank() ? targetUser.getBio() : "")
                 .travelStyle(targetUser.getTravelStyle() != null ? targetUser.getTravelStyle() : "Khám phá tự do")
                 .budgetPreference(targetUser.getBudgetPreference() != null ? targetUser.getBudgetPreference() : "Linh hoạt")

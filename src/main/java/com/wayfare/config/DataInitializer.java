@@ -64,6 +64,7 @@ public class DataInitializer implements CommandLineRunner {
                             .avatarUrl("https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                             .bio("Quản trị viên hệ thống Wayfare Platform 🛡️")
                             .isVerified(true)
+                            .tier("diamond")
                             .roles(Set.of(adminRole, userRole))
                             .build();
                     log.info(">>> SUCCESS: Created Sample Admin Account -> Email: admin@gmail.com | Password: admin123");
@@ -708,32 +709,43 @@ public class DataInitializer implements CommandLineRunner {
                                .handle("@tung1_diamond")
                                .avatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80")
                                .bio("Quản trị viên tối cao hệ thống Wayfare 🛡️ | Huyền Thoại Kim Cương 💎")
+                               .tier("diamond")
                                .roles(Set.of(adminRole, userRole));
                     } else if (userIndex == 2) {
                         builder.fullName("Trần Tùng (Nhà Thám Hiểm Vàng)")
                                .handle("@tung2_gold")
                                .avatarUrl("https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=300&q=80")
                                .bio("Nhà Thám Hiểm Vàng 👑 | Đam mê chinh phục 63 tỉnh thành Việt Nam")
+                               .tier("gold")
                                .roles(Set.of(userRole));
                     } else if (userIndex == 3) {
                         builder.fullName("Lê Tùng (Lữ Hành Bạc)")
                                .handle("@tung3_silver")
                                .avatarUrl("https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80")
                                .bio("Lữ Hành Bạc 🥈 | Yêu thích cắm trại và cà phê săn mây")
+                               .tier("silver")
                                .roles(Set.of(userRole));
                     } else {
                         builder.fullName("Tùng " + userIndex + " (Tân Thủ Khám Phá)")
                                .handle("@tung" + userIndex + "_explorer")
                                .avatarUrl("https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                                .bio("Tân Thủ Khám Phá 🥉 | Thành viên tích cực của cộng đồng Wayfare")
+                               .tier("bronze")
                                .roles(Set.of(userRole));
                     }
                     user = userRepository.save(builder.build());
-                    log.info("Created user account: {} (pass: 123456)", email);
+                    log.info("Created user account: {} (tier: {}, pass: 123456)", email, user.getTier());
                 } else {
                     user.setPassword(defaultPassword);
                     if (userIndex == 1) {
+                        user.setTier("diamond");
                         user.setRoles(Set.of(adminRole, userRole));
+                    } else if (userIndex == 2) {
+                        user.setTier("gold");
+                    } else if (userIndex == 3) {
+                        user.setTier("silver");
+                    } else {
+                        user.setTier("bronze");
                     }
                     user = userRepository.save(user);
                 }

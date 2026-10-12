@@ -28,6 +28,7 @@ public class UserProfileDto {
     private String location;
     private String rank;
     private String role; // "Quản trị viên" | "Phượt thủ tự do" | "Wanderer Gold"
+    private String tier; // "bronze" | "silver" | "gold" | "diamond"
 
     private Long followersCount;
     private Long followingCount;

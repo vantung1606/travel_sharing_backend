@@ -90,6 +90,7 @@ public class AuthService {
                 .fullName(savedUser.getFullName())
                 .handle(savedUser.getHandle())
                 .avatar(savedUser.getAvatarUrl())
+                .tier(savedUser.getTier() != null ? savedUser.getTier() : "bronze")
                 .roles(savedUser.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
                 .build();
     }
@@ -131,6 +132,7 @@ public class AuthService {
                 .fullName(user.getFullName())
                 .handle(user.getHandle())
                 .avatar(user.getAvatarUrl() != null ? user.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                .tier(user.getTier() != null ? user.getTier() : "bronze")
                 .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
                 .build();
     }
@@ -242,6 +244,7 @@ public class AuthService {
                 .fullName(user.getFullName())
                 .handle(user.getHandle())
                 .avatar(user.getAvatarUrl() != null ? user.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                .tier(user.getTier() != null ? user.getTier() : "bronze")
                 .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
                 .build();
     }

@@ -879,6 +879,7 @@ public class PostService {
                 .authorHandle(p.getAuthor() != null ? p.getAuthor().getHandle() : "@wayfarer")
                 .authorAvatar(p.getAuthor() != null ? p.getAuthor().getAvatarUrl() : null)
                 .authorRole(p.getAuthor() != null && p.getAuthor().getRoles() != null && p.getAuthor().getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN")) ? "Quản trị viên" : "Phượt thủ tự do")
+                .authorTier(p.getAuthor() != null && p.getAuthor().getTier() != null ? p.getAuthor().getTier() : "bronze")
                 // Attached Itinerary
                 .itineraryId(itin != null ? itin.getId() : null)
                 .itineraryTitle(itin != null ? itin.getTitle() : null)
