@@ -7,6 +7,8 @@ import com.wayfare.modules.user.dto.UserDto;
 import com.wayfare.entity.Role;
 import com.wayfare.entity.User;
 import com.wayfare.exception.ResourceNotFoundException;
+import com.wayfare.repository.ItineraryRepository;
+import com.wayfare.repository.PostRepository;
 import com.wayfare.repository.RoleRepository;
 import com.wayfare.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,8 @@ public class AdminUserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final PostRepository postRepository;
+    private final ItineraryRepository itineraryRepository;
     private final PasswordEncoder passwordEncoder;
     private final ActivityLogService activityLogService;
     private final NotificationService notificationService;
@@ -218,6 +222,21 @@ public class AdminUserService {
 
         boolean isBanned = "LOCKED".equalsIgnoreCase(u.getStatus()) || Boolean.TRUE.equals(u.getIsLocked());
 
+        int realPostsCount = 0;
+        try {
+            realPostsCount = postRepository.findByAuthorOrderByCreatedAtDesc(u).size();
+        } catch (Exception ignored) {}
+
+        int realTripsCount = 0;
+        try {
+            realTripsCount = itineraryRepository.findByCreatorOrderByCreatedAtDesc(u).size();
+        } catch (Exception ignored) {}
+
+        String resolvedTier = u.getTier() != null && !u.getTier().isBlank() ? u.getTier().toLowerCase() : "bronze";
+        if (roleNames.contains("ROLE_ADMIN") && ("bronze".equalsIgnoreCase(resolvedTier) || resolvedTier.isBlank())) {
+            resolvedTier = "diamond";
+        }
+
         return UserDto.builder()
                 .id(u.getId())
                 .email(u.getEmail())
@@ -232,9 +251,10 @@ public class AdminUserService {
                 .status(isBanned ? "LOCKED" : "ACTIVE")
                 .isLocked(isBanned)
                 .roles(roleNames)
-                .tripsCount(roleNames.contains("ROLE_ADMIN") ? 18 : 6)
-                .postsCount(roleNames.contains("ROLE_ADMIN") ? 32 : 12)
-                .reviewsCount(roleNames.contains("ROLE_ADMIN") ? 45 : 8)
+                .tier(resolvedTier)
+                .tripsCount(realTripsCount)
+                .postsCount(realPostsCount)
+                .reviewsCount(0)
                 .trustScore(isBanned ? 35 : (roleNames.contains("ROLE_ADMIN") ? 100 : 98))
                 .riskScore(isBanned ? 86 : 4)
                 .createdAt(u.getCreatedAt())

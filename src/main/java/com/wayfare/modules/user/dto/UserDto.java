@@ -26,6 +26,7 @@ public class UserDto {
     private String status; // ACTIVE, LOCKED
     private Boolean isLocked;
     private Set<String> roles;
+    private String tier;
     private Integer tripsCount;
     private Integer postsCount;
     private Integer reviewsCount;
