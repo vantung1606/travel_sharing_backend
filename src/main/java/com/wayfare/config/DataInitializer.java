@@ -33,6 +33,7 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.PostLikeRepository postLikeRepository;
     private final com.wayfare.repository.PostCommentRepository postCommentRepository;
     private final com.wayfare.repository.PlaceRepository placeRepository;
+    private final com.wayfare.repository.UserFollowRepository userFollowRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -676,6 +677,262 @@ public class DataInitializer implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("Failed to link itineraries or seed comments: {}", e.getMessage());
+        }
+
+        // 7. Seed 20 test accounts (tung1 - tung20) with tiers & roles
+        seedTwentyTestUsers(adminRole, userRole);
+    }
+
+    private void seedTwentyTestUsers(Role adminRole, Role userRole) {
+        log.info("Checking/seeding 20 test accounts (tung1@gmail.com -> tung20@gmail.com)...");
+        try {
+            String defaultPassword = passwordEncoder.encode("123456");
+            java.util.Map<Integer, User> userMap = new java.util.HashMap<>();
+
+            // 1. Tạo hoặc cập nhật 20 tài khoản
+            for (int i = 1; i <= 20; i++) {
+                String email = "tung" + i + "@gmail.com";
+                final int userIndex = i;
+                User user = userRepository.findByEmail(email).orElse(null);
+
+                if (user == null) {
+                    User.UserBuilder builder = User.builder()
+                            .email(email)
+                            .password(defaultPassword)
+                            .status("ACTIVE")
+                            .isLocked(false)
+                            .isVerified(true);
+
+                    if (userIndex == 1) {
+                        builder.fullName("Nguyễn Thanh Tùng (Admin Kim Cương)")
+                               .handle("@tung1_diamond")
+                               .avatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80")
+                               .bio("Quản trị viên tối cao hệ thống Wayfare 🛡️ | Huyền Thoại Kim Cương 💎")
+                               .roles(Set.of(adminRole, userRole));
+                    } else if (userIndex == 2) {
+                        builder.fullName("Trần Tùng (Nhà Thám Hiểm Vàng)")
+                               .handle("@tung2_gold")
+                               .avatarUrl("https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=300&q=80")
+                               .bio("Nhà Thám Hiểm Vàng 👑 | Đam mê chinh phục 63 tỉnh thành Việt Nam")
+                               .roles(Set.of(userRole));
+                    } else if (userIndex == 3) {
+                        builder.fullName("Lê Tùng (Lữ Hành Bạc)")
+                               .handle("@tung3_silver")
+                               .avatarUrl("https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80")
+                               .bio("Lữ Hành Bạc 🥈 | Yêu thích cắm trại và cà phê săn mây")
+                               .roles(Set.of(userRole));
+                    } else {
+                        builder.fullName("Tùng " + userIndex + " (Tân Thủ Khám Phá)")
+                               .handle("@tung" + userIndex + "_explorer")
+                               .avatarUrl("https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                               .bio("Tân Thủ Khám Phá 🥉 | Thành viên tích cực của cộng đồng Wayfare")
+                               .roles(Set.of(userRole));
+                    }
+                    user = userRepository.save(builder.build());
+                    log.info("Created user account: {} (pass: 123456)", email);
+                } else {
+                    user.setPassword(defaultPassword);
+                    if (userIndex == 1) {
+                        user.setRoles(Set.of(adminRole, userRole));
+                    }
+                    user = userRepository.save(user);
+                }
+                userMap.put(userIndex, user);
+            }
+
+            User tung1 = userMap.get(1);
+            User tung2 = userMap.get(2);
+            User tung3 = userMap.get(3);
+
+            // 2. Tạo quan hệ Follow để tích lũy XP (tung1 có 10 followers, tung2 có 6 followers, tung3 có 2 followers)
+            if (tung1 != null) {
+                for (int i = 2; i <= 11; i++) {
+                    User follower = userMap.get(i);
+                    if (follower != null && userFollowRepository.findByFollowerIdAndFollowingId(follower.getId(), tung1.getId()).isEmpty()) {
+                        userFollowRepository.save(com.wayfare.entity.UserFollow.builder()
+                                .follower(follower)
+                                .following(tung1)
+                                .build());
+                    }
+                }
+            }
+
+            if (tung2 != null) {
+                for (int i = 5; i <= 10; i++) {
+                    User follower = userMap.get(i);
+                    if (follower != null && userFollowRepository.findByFollowerIdAndFollowingId(follower.getId(), tung2.getId()).isEmpty()) {
+                        userFollowRepository.save(com.wayfare.entity.UserFollow.builder()
+                                .follower(follower)
+                                .following(tung2)
+                                .build());
+                    }
+                }
+            }
+
+            if (tung3 != null) {
+                for (int i = 11; i <= 12; i++) {
+                    User follower = userMap.get(i);
+                    if (follower != null && userFollowRepository.findByFollowerIdAndFollowingId(follower.getId(), tung3.getId()).isEmpty()) {
+                        userFollowRepository.save(com.wayfare.entity.UserFollow.builder()
+                                .follower(follower)
+                                .following(tung3)
+                                .build());
+                    }
+                }
+            }
+
+            // 3. Tạo lịch trình và bài viết cho tung1 (Admin Kim Cương >= 800 XP)
+            if (tung1 != null) {
+                long tung1ItinCount = itineraryRepository.findByCreatorOrderByCreatedAtDesc(tung1).size();
+                if (tung1ItinCount < 6) {
+                    String[][] sampleItinsTung1 = {
+                        {"Hành trình Xuyên Việt 15N14Đ: Từ Hà Giang Đến Mũi Cà Mau", "Hà Giang", "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80"},
+                        {"Kỳ nghỉ thiên đường tại Đảo Ngọc Phú Quốc 4N3Đ", "Phú Quốc", "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80"},
+                        {"Khám phá Cố đô Huế & Phố cổ Hội An hoài niệm 3N2Đ", "Huế", "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80"},
+                        {"Chinh phục nóc nhà Đông Dương Fansipan & Bản Cát Cát Sapa", "Lào Cai", "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=800&q=80"},
+                        {"Hành trình lặn ngắm san hô Côn Đảo huyền thoại 3N2Đ", "Bà Rịa - Vũng Tàu", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"},
+                        {"Săn mây Đà Lạt & Khám phá rừng thông Langbiang 3N2Đ", "Lâm Đồng", "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80"}
+                    };
+                    for (String[] it : sampleItinsTung1) {
+                        itineraryRepository.save(com.wayfare.entity.Itinerary.builder()
+                                .creator(tung1)
+                                .title(it[0])
+                                .destination(it[1])
+                                .startDate(java.time.LocalDate.now().plusDays(5))
+                                .endDate(java.time.LocalDate.now().plusDays(9))
+                                .budgetTotal(java.math.BigDecimal.valueOf(8000000))
+                                .coverImageUrl(it[2])
+                                .isAiGenerated(false)
+                                .status("ACTIVE")
+                                .build());
+                    }
+                }
+
+                long tung1PostCount = postRepository.findByAuthorOrderByCreatedAtDesc(tung1).size();
+                if (tung1PostCount < 5) {
+                    String[][] samplePostsTung1 = {
+                        {"Toàn tập kinh nghiệm chinh phục đèo Mã Pí Lèng bằng xe máy", "Cung đèo hiểm trở nhưng đẹp mê hồn. Hãy chuẩn bị áo ấm và kiểm tra phanh kỹ trước khi đổ đèo!", "Hà Giang", "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80"},
+                        {"Top 5 quán cà phê ngắm hoàng hôn đỉnh nhất tại Phú Quốc", "Ngắm ráng chiều đỏ rực bên bờ biển Bãi Trường là trải nghiệm không thể bỏ lỡ khi ghé đảo ngọc.", "Phú Quốc", "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80"},
+                        {"Ẩm thực cung đình Huế: Những món ăn tiến vua đậm đà bản sắc", "Bún bò Huế o Cương, chè hẻm 20 món và bánh bột lọc mụ Đỏ là những địa chỉ nhất định phải ghé.", "Thừa Thiên Huế", "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80"},
+                        {"Check-in đồi chè Ô Long mùa mai anh đào nở rộ tại Sa Pa", "Sắc hồng hoa mai anh đào nổi bật giữa đồi chè xanh mướt tạo nên khung cảnh lãng mạn như tranh vẽ.", "Sa Pa", "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=800&q=80"},
+                        {"Hành trình tâm linh và lặn biển tại quần đảo Côn Đảo", "Viếng nghĩa trang Hàng Dương thiêng liêng và khám phá bãi Đầm Trầu hoang sơ tuyệt đẹp.", "Côn Đảo", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"}
+                    };
+                    for (String[] post : samplePostsTung1) {
+                        postRepository.save(com.wayfare.entity.Post.builder()
+                                .author(tung1)
+                                .title(post[0])
+                                .content(post[1])
+                                .locationTag(post[2])
+                                .images(post[3])
+                                .category("Cẩm nang du lịch")
+                                .likeCount(35)
+                                .commentCount(12)
+                                .status("ACTIVE")
+                                .build());
+                    }
+                }
+            }
+
+            // 4. Tạo lịch trình và bài viết cho tung2 (Cấp Vàng: 400 - 799 XP)
+            if (tung2 != null) {
+                long tung2ItinCount = itineraryRepository.findByCreatorOrderByCreatedAtDesc(tung2).size();
+                if (tung2ItinCount < 4) {
+                    String[][] sampleItinsTung2 = {
+                        {"Tour Tràng An - Tam Cốc - Bái Đính 2N1Đ trọn vẹn cảnh sắc", "Ninh Bình", "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=800&q=80"},
+                        {"Khám phá Kỳ Co - Eo Gió biển xanh cát vàng Quy Nhơn 3N2Đ", "Bình Định", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"},
+                        {"Mộc Châu mùa hoa cải trắng & Thác Dải Yếm 2N1Đ", "Sơn La", "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80"},
+                        {"Du lịch Đảo Lý Sơn - Thiên đường biển đảo miền Trung 3N2Đ", "Quảng Ngãi", "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80"}
+                    };
+                    for (String[] it : sampleItinsTung2) {
+                        itineraryRepository.save(com.wayfare.entity.Itinerary.builder()
+                                .creator(tung2)
+                                .title(it[0])
+                                .destination(it[1])
+                                .startDate(java.time.LocalDate.now().plusDays(10))
+                                .endDate(java.time.LocalDate.now().plusDays(13))
+                                .budgetTotal(java.math.BigDecimal.valueOf(4500000))
+                                .coverImageUrl(it[2])
+                                .isAiGenerated(false)
+                                .status("ACTIVE")
+                                .build());
+                    }
+                }
+
+                long tung2PostCount = postRepository.findByAuthorOrderByCreatedAtDesc(tung2).size();
+                if (tung2PostCount < 3) {
+                    String[][] samplePostsTung2 = {
+                        {"Ghé thăm Tuyệt Tình Cốc Ninh Bình: Điểm check-in ma mị", "Hồ nước xanh ngọc bích lọt thỏm giữa dãy núi đá vôi hùng vĩ là nơi chụp ảnh tuyệt đẹp.", "Ninh Bình", "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=800&q=80"},
+                        {"Eo Gió Quy Nhơn: Con đường đi bộ ven biển đẹp nhất Việt Nam", "Đón bình minh tại Eo Gió với những cơn gió biển lồng lộng sẽ làm bạn xua tan mọi mệt mỏi.", "Quy Nhơn", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"},
+                        {"Mùa mận chín Mộc Châu: Trải nghiệm hái mận tại thung lũng Nà Ka", "Vừa hái vừa ăn tại vườn, không khí mát mẻ trong lành cực kỳ sảng khoái.", "Sơn La", "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80"}
+                    };
+                    for (String[] post : samplePostsTung2) {
+                        postRepository.save(com.wayfare.entity.Post.builder()
+                                .author(tung2)
+                                .title(post[0])
+                                .content(post[1])
+                                .locationTag(post[2])
+                                .images(post[3])
+                                .category("Địa điểm đẹp")
+                                .likeCount(20)
+                                .commentCount(6)
+                                .status("ACTIVE")
+                                .build());
+                    }
+                }
+            }
+
+            // 5. Tạo lịch trình và bài viết cho tung3 (Cấp Bạc: 150 - 399 XP)
+            if (tung3 != null) {
+                long tung3ItinCount = itineraryRepository.findByCreatorOrderByCreatedAtDesc(tung3).size();
+                if (tung3ItinCount < 2) {
+                    String[][] sampleItinsTung3 = {
+                        {"Phượt Vũng Tàu cuối tuần 2N1Đ: Ngắm biển & Ăn hải sản Bãi Sau", "Bà Rịa - Vũng Tàu", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"},
+                        {"Hành trình Mũi Né - Phan Thiết: Đồi Cát Bay & Suối Tiên 2N1Đ", "Bình Thuận", "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80"}
+                    };
+                    for (String[] it : sampleItinsTung3) {
+                        itineraryRepository.save(com.wayfare.entity.Itinerary.builder()
+                                .creator(tung3)
+                                .title(it[0])
+                                .destination(it[1])
+                                .startDate(java.time.LocalDate.now().plusDays(7))
+                                .endDate(java.time.LocalDate.now().plusDays(9))
+                                .budgetTotal(java.math.BigDecimal.valueOf(2500000))
+                                .coverImageUrl(it[2])
+                                .isAiGenerated(false)
+                                .status("ACTIVE")
+                                .build());
+                    }
+                }
+
+                long tung3PostCount = postRepository.findByAuthorOrderByCreatedAtDesc(tung3).size();
+                if (tung3PostCount < 2) {
+                    String[][] samplePostsTung3 = {
+                        {"Ngắm hoàng hôn Bãi Trước Vũng Tàu và thưởng thức bánh khọt Gốc Vú Sữa", "Chuyến đi ngắn đổi gió xả stress cuối tuần rất thích hợp cho dân công sở TP.HCM.", "Vũng Tàu", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"},
+                        {"Trải nghiệm trượt cát và lái xe địa hình tại Đồi Cát Trắng Mũi Né", "Cảm giác lao dốc trên cát lộng gió cực kỳ phấn khích, hãy thử một lần nhé!", "Mũi Né", "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80"}
+                    };
+                    for (String[] post : samplePostsTung3) {
+                        postRepository.save(com.wayfare.entity.Post.builder()
+                                .author(tung3)
+                                .title(post[0])
+                                .content(post[1])
+                                .locationTag(post[2])
+                                .images(post[3])
+                                .category("Kinh nghiệm")
+                                .likeCount(8)
+                                .commentCount(2)
+                                .status("ACTIVE")
+                                .build());
+                    }
+                }
+            }
+
+            log.info(">>> SUCCESS: Seeded/Synchronized 20 test accounts (tung1 - tung20) with pass '123456'!");
+            log.info(">>> - tung1@gmail.com: ROLE_ADMIN + ROLE_USER -> Cấp Kim Cương (Diamond Legend 💎)");
+            log.info(">>> - tung2@gmail.com: ROLE_USER -> Cấp Vàng (Gold Voyager 👑)");
+            log.info(">>> - tung3@gmail.com: ROLE_USER -> Cấp Bạc (Silver Wanderer 🥈)");
+            log.info(">>> - tung4@gmail.com -> tung20@gmail.com: ROLE_USER -> Cấp Đồng (Bronze Explorer 🥉)");
+        } catch (Exception e) {
+            log.error("Failed to seed 20 test users: {}", e.getMessage(), e);
         }
     }
 }
