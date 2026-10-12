@@ -132,8 +132,7 @@ public class NotificationService {
         try {
             if (recipient != null && recipient.getId() != null) {
                 messagingTemplate.convertAndSend("/topic/notifications." + recipient.getId(), dto);
-            }
-            if (recipient != null && recipient.getEmail() != null) {
+            } else if (recipient != null && recipient.getEmail() != null) {
                 messagingTemplate.convertAndSend("/topic/notifications." + recipient.getEmail().toLowerCase().trim(), dto);
             }
         } catch (Exception e) {
@@ -163,8 +162,9 @@ public class NotificationService {
 
         // Phát sóng thời gian thực qua STOMP WebSocket đến kênh riêng của người nhận
         try {
-            messagingTemplate.convertAndSend("/topic/notifications." + recipient.getId(), dto);
-            if (recipient.getEmail() != null) {
+            if (recipient != null && recipient.getId() != null) {
+                messagingTemplate.convertAndSend("/topic/notifications." + recipient.getId(), dto);
+            } else if (recipient != null && recipient.getEmail() != null) {
                 messagingTemplate.convertAndSend("/topic/notifications." + recipient.getEmail().toLowerCase().trim(), dto);
             }
             log.info("Dispatched real-time notification to /topic/notifications.{} for recipient: {}", recipient.getId(), recipient.getEmail());
