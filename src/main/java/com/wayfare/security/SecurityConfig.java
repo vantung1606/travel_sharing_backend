@@ -40,13 +40,15 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Public root, healthcheck, error and static resources
                 .requestMatchers("/", "/health", "/api/health", "/error", "/favicon.ico").permitAll()
-                // Public auth, static files and websockets
+                // Public auth, static files, websockets and realtime sse streams
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/ws/**", "/uploads/**").permitAll()
+                .requestMatchers("/ws/**", "/uploads/**", "/api/realtime/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/home/**").permitAll()
                 // Public read-only endpoints for visitors
                 .requestMatchers(HttpMethod.GET, "/api/places/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/itineraries/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/comments/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/profile").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/following").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/followers").permitAll()

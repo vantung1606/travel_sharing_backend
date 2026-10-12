@@ -48,9 +48,8 @@ public class ItineraryController {
     }
 
     @GetMapping("/all")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<ItineraryDto>>> getAllItineraries() {
-        log.info("REST request to get all system itineraries for admin");
+        log.info("REST request to get all system itineraries");
         List<ItineraryDto> list = itineraryService.getAllItineraries();
         return ResponseEntity.ok(ApiResponse.success("Lấy toàn bộ lịch trình hệ thống thành công", list));
     }
