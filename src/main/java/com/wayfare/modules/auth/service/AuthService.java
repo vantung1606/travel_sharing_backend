@@ -3,6 +3,7 @@ package com.wayfare.modules.auth.service;
 import com.wayfare.modules.admin.service.ActivityLogService;
 
 import com.wayfare.modules.auth.dto.AuthResponse;
+import com.wayfare.modules.auth.dto.GoogleAuthRequest;
 import com.wayfare.modules.auth.dto.LoginRequest;
 import com.wayfare.modules.auth.dto.RegisterRequest;
 import com.wayfare.entity.Role;
@@ -31,6 +32,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final ActivityLogService activityLogService;
     private final com.wayfare.security.JwtTokenProvider tokenProvider;
+    private final GoogleOAuthService googleOAuthService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -157,6 +159,91 @@ public class AuthService {
 
         activityLogService.recordLog(user, "LOGOUT", "Người dùng đã đăng xuất khỏi hệ thống Wayfare Portal", ip, ua);
         log.info("Audit activity log recorded for LOGOUT: user={}, ip={}", user != null ? user.getEmail() : "anonymous", ip);
+    }
+
+    @Transactional
+    public AuthResponse loginWithGoogle(GoogleAuthRequest request, HttpServletRequest httpRequest) {
+        log.info("Processing Google OAuth authentication request...");
+        GoogleOAuthService.GoogleUserInfo googleUser = googleOAuthService.verifyGoogleToken(request.getIdToken());
+
+        String email = googleUser.getEmail();
+        if (email == null || email.isBlank()) {
+            throw new RuntimeException("Không nhận diện được địa chỉ email từ tài khoản Google!");
+        }
+
+        User user = userRepository.findByEmail(email).orElse(null);
+        boolean isNewUser = false;
+
+        if (user == null) {
+            isNewUser = true;
+            log.info("Google email {} is not registered in system. Creating new user account...", email);
+
+            Role defaultRole = roleRepository.findByName("ROLE_USER")
+                    .orElseGet(() -> roleRepository.save(Role.builder()
+                            .name("ROLE_USER")
+                            .description("Quyền người dùng tiêu chuẩn")
+                            .build()));
+
+            // Generate clean handle
+            String baseHandle = "@" + email.split("@")[0].toLowerCase().replaceAll("[^a-zA-Z0-9_]", "");
+            String handle = baseHandle;
+            int count = 1;
+            while (userRepository.existsByHandle(handle)) {
+                handle = baseHandle + count++;
+            }
+
+            user = User.builder()
+                    .fullName(googleUser.getName() != null && !googleUser.getName().isBlank() ? googleUser.getName() : email.split("@")[0])
+                    .email(email)
+                    .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                    .handle(handle)
+                    .avatarUrl(googleUser.getPicture() != null ? googleUser.getPicture() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                    .isVerified(true)
+                    .status("ACTIVE")
+                    .isLocked(false)
+                    .lastLoginAt(LocalDateTime.now())
+                    .roles(Set.of(defaultRole))
+                    .build();
+
+            user = userRepository.save(user);
+            log.info("User created via Google Sign-In with ID: {}, Handle: {}", user.getId(), user.getHandle());
+        } else {
+            // Check account status
+            if (Boolean.TRUE.equals(user.getIsLocked()) || "LOCKED".equalsIgnoreCase(user.getStatus())) {
+                log.warn("Google login rejected: Account {} is currently locked", email);
+                throw new RuntimeException("Tài khoản của bạn đã bị khóa bởi Quản trị viên!");
+            }
+
+            // Sync avatar if current avatar is empty
+            if (googleUser.getPicture() != null && (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank())) {
+                user.setAvatarUrl(googleUser.getPicture());
+            }
+            user.setLastLoginAt(LocalDateTime.now());
+            user = userRepository.save(user);
+            log.info("User {} logged in via Google Sign-In with ID: {}", email, user.getId());
+        }
+
+        // Record audit activity log
+        String ip = activityLogService.extractClientIp(httpRequest);
+        String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null
+                ? httpRequest.getHeader("User-Agent")
+                : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36";
+        String action = isNewUser ? "REGISTER_GOOGLE" : "LOGIN_GOOGLE";
+        String details = isNewUser ? "Đăng ký tài khoản mới qua Google Sign-In: " + email : "Đăng nhập thành công qua Google Sign-In: " + email;
+        activityLogService.recordLog(user, action, details, ip, ua);
+
+        // Generate production JWT token
+        String token = tokenProvider.generateToken(user);
+
+        return AuthResponse.builder()
+                .token(token)
+                .id(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .handle(user.getHandle())
+                .avatar(user.getAvatarUrl() != null ? user.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .build();
     }
 }
 

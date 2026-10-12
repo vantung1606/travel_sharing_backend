@@ -2,6 +2,7 @@ package com.wayfare.modules.auth.controller;
 
 import com.wayfare.common.dto.ApiResponse;
 import com.wayfare.modules.auth.dto.AuthResponse;
+import com.wayfare.modules.auth.dto.GoogleAuthRequest;
 import com.wayfare.modules.auth.dto.LoginRequest;
 import com.wayfare.modules.auth.dto.RegisterRequest;
 import com.wayfare.modules.auth.service.AuthService;
@@ -33,6 +34,13 @@ public class AuthController {
         log.info("REST request to login user with email: {}", request.getEmail());
         AuthResponse response = authService.login(request, httpRequest);
         return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công!", response));
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<ApiResponse<AuthResponse>> googleLogin(@Valid @RequestBody GoogleAuthRequest request, HttpServletRequest httpRequest) {
+        log.info("REST request to authenticate with Google OAuth token");
+        AuthResponse response = authService.loginWithGoogle(request, httpRequest);
+        return ResponseEntity.ok(ApiResponse.success("Đăng nhập bằng tài khoản Google thành công! 🎉", response));
     }
 
     @PostMapping("/logout")
