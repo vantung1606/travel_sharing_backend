@@ -837,9 +837,18 @@ public class PostService {
         }
 
         String itinDuration = null;
-        if (itin != null && itin.getStartDate() != null && itin.getEndDate() != null) {
-            long days = java.time.temporal.ChronoUnit.DAYS.between(itin.getStartDate(), itin.getEndDate()) + 1;
-            itinDuration = days + "N" + Math.max(1, days - 1) + "Đ";
+        Integer itinPlacesCount = null;
+        if (itin != null) {
+            if (itin.getStartDate() != null && itin.getEndDate() != null) {
+                long days = java.time.temporal.ChronoUnit.DAYS.between(itin.getStartDate(), itin.getEndDate()) + 1;
+                itinDuration = days + "N" + Math.max(1, days - 1) + "Đ";
+            }
+            if (itin.getId() != null) {
+                try {
+                    itinPlacesCount = itineraryDetailRepository.findByItineraryIdOrderByDayNumberAscVisitOrderAsc(itin.getId()).size();
+                } catch (Exception ignored) {
+                }
+            }
         }
 
         return PostDto.builder()
@@ -876,7 +885,7 @@ public class PostService {
                 .itineraryDestination(itin != null ? itin.getDestination() : null)
                 .itineraryDuration(itinDuration)
                 .itineraryBudget(itin != null && itin.getBudgetTotal() != null ? itin.getBudgetTotal().longValue() : null)
-                .itineraryPlacesCount(itin != null && itin.getDetails() != null ? itin.getDetails().size() : null)
+                .itineraryPlacesCount(itinPlacesCount)
                 .itineraryIsAi(itin != null ? itin.getIsAiGenerated() : false)
                 // Shared post
                 .sharedPostId(p.getSharedPost() != null ? p.getSharedPost().getId() : null)

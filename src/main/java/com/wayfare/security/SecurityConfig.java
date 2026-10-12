@@ -38,6 +38,8 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // Public root, healthcheck, error and static resources
+                .requestMatchers("/", "/health", "/api/health", "/error", "/favicon.ico").permitAll()
                 // Public auth, static files and websockets
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/ws/**", "/uploads/**").permitAll()
