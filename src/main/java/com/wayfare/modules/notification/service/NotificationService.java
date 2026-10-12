@@ -28,14 +28,26 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public List<NotificationDto> getNotificationsForUser(String email) {
         log.info("Fetching notifications for user with email: {}", email);
-        User user = getUserByEmailOrDefault(email);
+        if (email == null || email.isBlank()) {
+            return java.util.Collections.emptyList();
+        }
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return java.util.Collections.emptyList();
+        }
         List<Notification> list = notificationRepository.findByRecipientOrderByCreatedAtDesc(user);
         return list.stream().map(this::mapToDto).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public long getUnreadCount(String email) {
-        User user = getUserByEmailOrDefault(email);
+        if (email == null || email.isBlank()) {
+            return 0L;
+        }
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return 0L;
+        }
         long count = notificationRepository.countByRecipientAndIsReadFalse(user);
         log.info("Unread notifications count for user {}: {}", email, count);
         return count;
@@ -47,6 +59,14 @@ public class NotificationService {
         Notification notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + id));
 
+        if (email != null && !email.isBlank()) {
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user != null && notification.getRecipient() != null && !notification.getRecipient().getId().equals(user.getId())) {
+                log.warn("User {} attempted to mark notification of another user", email);
+                return mapToDto(notification);
+            }
+        }
+
         notification.setIsRead(true);
         Notification saved = notificationRepository.save(notification);
         return mapToDto(saved);
@@ -55,8 +75,11 @@ public class NotificationService {
     @Transactional
     public void markAllAsRead(String email) {
         log.info("Marking all notifications as read for user {}", email);
-        User user = getUserByEmailOrDefault(email);
-        notificationRepository.markAllAsReadByRecipient(user);
+        if (email == null || email.isBlank()) return;
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user != null) {
+            notificationRepository.markAllAsReadByRecipient(user);
+        }
     }
 
     @Transactional
@@ -64,6 +87,12 @@ public class NotificationService {
         log.info("Deleting notification id {} for user {}", id, email);
         Notification notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + id));
+        if (email != null && !email.isBlank()) {
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user != null && notification.getRecipient() != null && !notification.getRecipient().getId().equals(user.getId())) {
+                throw new ResourceNotFoundException("Bạn không có quyền xóa thông báo này");
+            }
+        }
         notificationRepository.delete(notification);
     }
 
@@ -72,8 +101,12 @@ public class NotificationService {
         log.info("Creating notification: type={}, targetUrl={}", request.getType(), request.getTargetUrl());
 
         User recipient = request.getRecipientId() != null
-                ? userRepository.findById(request.getRecipientId()).orElse(getUserByEmailOrDefault(creatorEmail))
-                : getUserByEmailOrDefault(creatorEmail);
+                ? userRepository.findById(request.getRecipientId()).orElse(null)
+                : (creatorEmail != null ? userRepository.findByEmail(creatorEmail).orElse(null) : null);
+
+        if (recipient == null) {
+            throw new ResourceNotFoundException("Không tìm thấy người nhận thông báo");
+        }
 
         User actor = null;
         if (request.getActorId() != null) {
@@ -235,19 +268,6 @@ public class NotificationService {
         return userRepository.findByEmail(email).orElse(null);
     }
 
-    private User getUserByEmailOrDefault(String email) {
-        if (email != null && !email.isBlank()) {
-            return userRepository.findByEmail(email)
-                    .orElseGet(this::getDefaultUser);
-        }
-        return getDefaultUser();
-    }
-
-    private User getDefaultUser() {
-        return userRepository.findByEmail("admin@gmail.com")
-                .or(() -> userRepository.findAll().stream().findFirst())
-                .orElseThrow(() -> new ResourceNotFoundException("No valid recipient user found"));
-    }
 
     private NotificationDto mapToDto(Notification entity) {
         User actor = entity.getActor();

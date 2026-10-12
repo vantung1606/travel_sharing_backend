@@ -229,12 +229,12 @@ public class UserFollowService {
                 .email(targetUser.getEmail())
                 .avatarUrl(targetUser.getAvatarUrl() != null ? targetUser.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                 .coverImageUrl(defaultCover)
-                .location("Đà Nẵng, Việt Nam")
-                .rank("Wanderer Gold")
-                .bio(targetUser.getBio() != null && !targetUser.getBio().isBlank() ? targetUser.getBio() : defaultBio)
-                .travelStyle(targetUser.getTravelStyle() != null ? targetUser.getTravelStyle() : "Phượt bụi & Khám phá")
-                .budgetPreference(targetUser.getBudgetPreference() != null ? targetUser.getBudgetPreference() : "Tiết kiệm / Hợp lý")
-                .isVerified(targetUser.getIsVerified() != null ? targetUser.getIsVerified() : true)
+                .location("Việt Nam")
+                .rank(roleStr)
+                .bio(targetUser.getBio() != null && !targetUser.getBio().isBlank() ? targetUser.getBio() : "")
+                .travelStyle(targetUser.getTravelStyle() != null ? targetUser.getTravelStyle() : "Khám phá tự do")
+                .budgetPreference(targetUser.getBudgetPreference() != null ? targetUser.getBudgetPreference() : "Linh hoạt")
+                .isVerified(Boolean.TRUE.equals(targetUser.getIsVerified()))
                 .role(roleStr)
                 .followersCount(followersCount)
                 .followingCount(followingCount)
@@ -248,14 +248,10 @@ public class UserFollowService {
 
     public User resolveUser(String email) {
         if (email == null || email.isBlank()) {
-            return userRepository.findByEmail("tung@gmail.com")
-                    .orElseGet(() -> userRepository.findAll().stream().findFirst()
-                            .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng mặc định")));
+            throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện thao tác");
         }
         return userRepository.findByEmail(email)
-                .orElseGet(() -> userRepository.findByEmail("tung@gmail.com")
-                        .orElseGet(() -> userRepository.findAll().stream().findFirst()
-                                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với email: " + email))));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với email: " + email));
     }
 }
 

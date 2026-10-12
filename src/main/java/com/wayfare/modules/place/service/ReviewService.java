@@ -44,9 +44,10 @@ public class ReviewService {
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Địa điểm không tồn tại với ID: " + placeId));
 
+        if (userEmail == null || userEmail.isBlank()) {
+            throw new ResourceNotFoundException("Vui lòng đăng nhập để đánh giá địa điểm");
+        }
         User author = userRepository.findByEmail(userEmail)
-                .or(() -> userRepository.findByEmail("admin@gmail.com"))
-                .or(() -> userRepository.findAll().stream().findFirst())
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại với email: " + userEmail));
 
         Review review = Review.builder()

@@ -33,15 +33,17 @@ public class ChatWebSocketController {
             return;
         }
 
-        String email = payload.getEmail() != null && !payload.getEmail().isBlank()
-                ? payload.getEmail().trim()
-                : "tung@gmail.com";
+        if (payload.getEmail() == null || payload.getEmail().isBlank()) {
+            log.warn("Rejecting WebSocket message: Sender email is required");
+            return;
+        }
 
-        User user = null;
+        String email = payload.getEmail().trim();
+        User user;
         try {
             user = chatService.resolveUser(email);
         } catch (Exception e) {
-            log.warn("WebSocket message sender not found for email: {}", email);
+            log.warn("WebSocket message sender not found for email {}: {}", email, e.getMessage());
             return;
         }
 

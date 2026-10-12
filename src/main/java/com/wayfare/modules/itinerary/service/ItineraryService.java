@@ -46,7 +46,13 @@ public class ItineraryService {
     @Transactional(readOnly = true)
     public List<ItineraryDto> getItinerariesForUser(String email) {
         log.info("Fetching itineraries for user: {}", email);
-        User user = getUserByEmailOrDefault(email);
+        if (email == null || email.isBlank()) {
+            return java.util.Collections.emptyList();
+        }
+        User user = userRepository.findByEmail(email.trim()).orElse(null);
+        if (user == null) {
+            return java.util.Collections.emptyList();
+        }
         List<Itinerary> list = itineraryRepository.findByCreatorOrderByCreatedAtDesc(user);
         return list.stream().map(i -> {
             ItineraryDto dto = mapToSummaryDto(i);
@@ -94,7 +100,7 @@ public class ItineraryService {
         log.info("Creating new itinerary: title='{}', destination='{}' by user='{}'",
                 request.getTitle(), request.getDestination(), creatorEmail);
 
-        User creator = getUserByEmailOrDefault(creatorEmail);
+        User creator = getUserByEmail(creatorEmail);
 
         Itinerary itinerary = Itinerary.builder()
                 .creator(creator)
@@ -285,8 +291,8 @@ public class ItineraryService {
                 .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
 
         User payer = dto.getPayerId() != null
-                ? userRepository.findById(dto.getPayerId()).orElse(getUserByEmailOrDefault(payerEmail))
-                : getUserByEmailOrDefault(payerEmail);
+                ? userRepository.findById(dto.getPayerId()).orElseGet(() -> getUserByEmail(payerEmail))
+                : getUserByEmail(payerEmail);
 
         ItineraryExpense expense = ItineraryExpense.builder()
                 .itinerary(itinerary)
@@ -416,7 +422,7 @@ public class ItineraryService {
         Itinerary source = itineraryRepository.findById(sourceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + sourceId));
 
-        User requester = getUserByEmailOrDefault(requesterEmail);
+        User requester = getUserByEmail(requesterEmail);
 
         String clonedTitle = source.getTitle().startsWith("[Sao chép]")
                 ? source.getTitle()
@@ -494,7 +500,7 @@ public class ItineraryService {
         log.info("AI Quick generating trip for dest='{}', budget='{}', style='{}', dur='{}' by='{}'",
                 request.getDestination(), request.getBudget(), request.getStyle(), request.getDuration(), requesterEmail);
 
-        User requester = getUserByEmailOrDefault(requesterEmail);
+        User requester = getUserByEmail(requesterEmail);
         String destination = (request.getDestination() != null && !request.getDestination().isBlank())
                 ? request.getDestination().trim()
                 : "Đà Nẵng & Hội An";
@@ -624,17 +630,12 @@ public class ItineraryService {
         return dto;
     }
 
-    private User getUserByEmailOrDefault(String email) {
-        if (email != null && !email.isBlank()) {
-            return userRepository.findByEmail(email).orElseGet(this::getDefaultAdminUser);
+    public User getUserByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện thao tác này!");
         }
-        return getDefaultAdminUser();
-    }
-
-    private User getDefaultAdminUser() {
-        return userRepository.findByEmail("admin@gmail.com")
-                .orElseGet(() -> userRepository.findAll().stream().findFirst()
-                        .orElseThrow(() -> new ResourceNotFoundException("No default user found in database")));
+        return userRepository.findByEmail(email.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với email: " + email));
     }
 }
 

@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -18,6 +19,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/audit-logs")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 @CrossOrigin(origins = "*")
 @Slf4j
 public class AdminAuditLogController {

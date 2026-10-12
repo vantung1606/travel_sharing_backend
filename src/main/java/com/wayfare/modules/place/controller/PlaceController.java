@@ -1,6 +1,7 @@
 package com.wayfare.modules.place.controller;
 
 import com.wayfare.common.dto.ApiResponse;
+import com.wayfare.exception.ResourceNotFoundException;
 import com.wayfare.modules.place.dto.CreatePlaceRequest;
 import com.wayfare.modules.place.dto.PlaceDto;
 import com.wayfare.modules.place.service.PlaceService;
@@ -8,6 +9,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +23,16 @@ import java.util.List;
 public class PlaceController {
 
     private final PlaceService placeService;
+
+    private String requireAuthEmail(Authentication authentication, String explicitEmail) {
+        if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
+            return authentication.getName();
+        }
+        if (explicitEmail != null && !explicitEmail.isBlank()) {
+            return explicitEmail.trim();
+        }
+        throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện thao tác");
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<PlaceDto>>> getAllPlaces(
@@ -42,20 +55,25 @@ public class PlaceController {
     @PostMapping
     public ResponseEntity<ApiResponse<PlaceDto>> createPlace(
             @Valid @RequestBody CreatePlaceRequest request,
-            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
-        log.info("REST request to create new place '{}' by email: {}", request.getName(), email);
-        PlaceDto created = placeService.createPlace(request, email);
+            @RequestParam(required = false) String email,
+            Authentication authentication) {
+        String userEmail = requireAuthEmail(authentication, email);
+        log.info("REST request to create new place '{}' by email: {}", request.getName(), userEmail);
+        PlaceDto created = placeService.createPlace(request, userEmail);
         return ResponseEntity.ok(ApiResponse.success("Đăng tải địa điểm mới thành công!", created));
     }
 
     @GetMapping("/my-places")
     public ResponseEntity<ApiResponse<List<PlaceDto>>> getMyPlaces(
-            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
-        log.info("REST request to get places created by: {}", email);
-        List<PlaceDto> myPlaces = placeService.getMyPlaces(email);
+            @RequestParam(required = false) String email,
+            Authentication authentication) {
+        String userEmail = requireAuthEmail(authentication, email);
+        log.info("REST request to get places created by: {}", userEmail);
+        List<PlaceDto> myPlaces = placeService.getMyPlaces(userEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm của bạn thành công", myPlaces));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping({"/admin/pending", "/pending"})
     public ResponseEntity<ApiResponse<List<PlaceDto>>> getPendingPlaces() {
         log.info("REST request to get all pending places for admin moderation");
@@ -63,6 +81,7 @@ public class PlaceController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm chờ duyệt thành công", pending));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/admin/{id}/approve")
     public ResponseEntity<ApiResponse<PlaceDto>> approvePlace(@PathVariable Long id) {
         log.info("REST request to approve place ID: {}", id);
@@ -70,6 +89,7 @@ public class PlaceController {
         return ResponseEntity.ok(ApiResponse.success("Phê duyệt địa điểm thành công!", approved));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/admin/{id}/reject")
     public ResponseEntity<ApiResponse<PlaceDto>> rejectPlace(
             @PathVariable Long id,
@@ -79,6 +99,7 @@ public class PlaceController {
         return ResponseEntity.ok(ApiResponse.success("Từ chối địa điểm thành công!", rejected));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}/status")
     public ResponseEntity<ApiResponse<PlaceDto>> updatePlaceStatus(
             @PathVariable Long id,
@@ -91,11 +112,11 @@ public class PlaceController {
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deletePlace(
             @PathVariable Long id,
-            @RequestParam(required = false, defaultValue = "tung@gmail.com") String email) {
-        log.info("REST request to delete place ID {} by {}", id, email);
-        placeService.deletePlace(id, email);
+            @RequestParam(required = false) String email,
+            Authentication authentication) {
+        String userEmail = requireAuthEmail(authentication, email);
+        log.info("REST request to delete place ID {} by {}", id, userEmail);
+        placeService.deletePlace(id, userEmail);
         return ResponseEntity.ok(ApiResponse.success("Xóa địa điểm thành công!", null));
     }
 }
-
-

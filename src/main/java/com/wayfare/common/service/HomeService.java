@@ -112,7 +112,7 @@ public class HomeService {
                             a.getLikeCount() != null ? a.getLikeCount() : 0
                     ))
                     .limit(4)
-                    .map(p -> postService.getPostById(p.getId(), "admin@gmail.com"))
+                    .map(p -> postService.getPostById(p.getId(), null))
                     .collect(Collectors.toList());
         } catch (Exception e) {
             log.warn("Error fetching community highlights: {}", e.getMessage());

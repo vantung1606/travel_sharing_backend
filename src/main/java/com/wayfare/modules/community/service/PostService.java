@@ -102,23 +102,25 @@ public class PostService {
         return posts.stream().map(p -> mapToDto(p, loggedInUser)).collect(Collectors.toList());
     }
 
-    private User resolveUser(String email) {
+    public User resolveUser(String email) {
         if (email != null && !email.trim().isEmpty()) {
-            Optional<User> found = userRepository.findByEmail(email.trim());
-            if (found.isPresent()) return found.get();
-            log.warn("User email '{}' not found in database, falling back to active system user...", email);
+            return userRepository.findByEmail(email.trim()).orElse(null);
         }
-        return userRepository.findByEmail("admin@gmail.com")
-                .or(() -> userRepository.findByEmail("tung_2251220254@dau.edu.vn"))
-                .or(() -> userRepository.findByEmail("tung@gmail.com"))
-                .orElseGet(() -> userRepository.findAll().stream().findFirst()
-                        .orElseThrow(() -> new RuntimeException("Chưa có tài khoản người dùng trong hệ thống!")));
+        return null;
+    }
+
+    public User requireUser(String email) {
+        User user = resolveUser(email);
+        if (user == null) {
+            throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện thao tác này!");
+        }
+        return user;
     }
 
     @Transactional(readOnly = true)
     public PostDto getPostById(Long id, String currentUserEmail) {
         Post post = postRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Bài viết không tồn tại với ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại với ID: " + id));
         User currentUser = resolveUser(currentUserEmail);
         return mapToDto(post, currentUser);
     }
@@ -127,7 +129,7 @@ public class PostService {
     public PostDto createPost(CreatePostRequest request, String currentUserEmail, HttpServletRequest httpRequest) {
         log.info("Creating new community post by user '{}': {}", currentUserEmail, request.getTitle());
 
-        User author = resolveUser(currentUserEmail);
+        User author = requireUser(currentUserEmail);
 
         Itinerary attachedItinerary = null;
         if (request.getItineraryId() != null) {
@@ -297,16 +299,11 @@ public class PostService {
 
             // Send notification to Admin (Actor is null for System Alerts)
             try {
-                User admin = userRepository.findByEmail("admin@gmail.com").orElse(null);
-                if (admin != null) {
-                    notificationService.sendNotification(
-                            admin,
-                            null,
-                            "SYSTEM",
-                            "Cần duyệt bài viết mới từ " + author.getFullName() + ": '" + saved.getTitle() + "' (Điểm AI: " + aiResult.getSafetyScore() + "/100).",
-                            "/admin/reports"
-                    );
-                }
+                notificationService.notifyAdmins(
+                        "SYSTEM",
+                        "Cần duyệt bài viết mới từ " + author.getFullName() + ": '" + saved.getTitle() + "' (Điểm AI: " + aiResult.getSafetyScore() + "/100).",
+                        "/admin/reports"
+                );
             } catch (Exception e) {
                 log.warn("Failed to send admin alert notification: {}", e.getMessage());
             }
@@ -320,9 +317,9 @@ public class PostService {
         log.info("Toggle like for post {} by {}", postId, currentUserEmail);
 
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("Bài viết không tồn tại: " + postId));
+                .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại với ID: " + postId));
 
-        User user = resolveUser(currentUserEmail);
+        User user = requireUser(currentUserEmail);
 
         Optional<PostLike> existingLike = postLikeRepository.findByUserIdAndPostId(user.getId(), postId);
         boolean isLiked;
@@ -367,7 +364,7 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại với ID: " + postId));
 
-        User user = resolveUser(currentUserEmail);
+        User user = requireUser(currentUserEmail);
 
         Optional<PostBookmark> existingBookmark = postBookmarkRepository.findByUserIdAndPostId(user.getId(), postId);
         boolean isBookmarked;
@@ -391,13 +388,13 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public List<Long> getBookmarkedPostIds(String currentUserEmail) {
-        User user = resolveUser(currentUserEmail);
+        User user = requireUser(currentUserEmail);
         return postBookmarkRepository.findBookmarkedPostIdsByUserId(user.getId());
     }
 
     @Transactional(readOnly = true)
     public List<PostDto> getBookmarkedPosts(String currentUserEmail) {
-        User user = resolveUser(currentUserEmail);
+        User user = requireUser(currentUserEmail);
         List<PostBookmark> bookmarks = postBookmarkRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
         return bookmarks.stream()
                 .map(PostBookmark::getPost)
@@ -446,7 +443,7 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Bài viết không tồn tại: " + postId));
 
-        User user = resolveUser(currentUserEmail);
+        User user = requireUser(currentUserEmail);
 
         PostComment parent = null;
         if (request.getParentId() != null) {
@@ -518,7 +515,7 @@ public class PostService {
             throw new RuntimeException("Bình luận này không thuộc về bài viết #" + postId);
         }
 
-        User user = resolveUser(currentUserEmail);
+        User user = requireUser(currentUserEmail);
 
         boolean isCommentAuthor = comment.getAuthor() != null && comment.getAuthor().getId().equals(user.getId());
         boolean isPostAuthor = comment.getPost().getAuthor() != null && comment.getPost().getAuthor().getId().equals(user.getId());
@@ -551,7 +548,7 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Bài viết không tồn tại với ID: " + postId));
 
-        User reporter = resolveUser(currentUserEmail);
+        User reporter = requireUser(currentUserEmail);
 
         String fullReason = request.getReason();
         if (request.getDetails() != null && !request.getDetails().isBlank()) {
@@ -612,7 +609,7 @@ public class PostService {
             throw new RuntimeException("Bài viết này không có lộ trình đính kèm!");
         }
 
-        User user = resolveUser(currentUserEmail);
+        User user = requireUser(currentUserEmail);
 
         Itinerary original = post.getItinerary();
 
@@ -697,7 +694,7 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại với ID: " + postId));
 
-        User currentUser = resolveUser(currentUserEmail);
+        User currentUser = requireUser(currentUserEmail);
         boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"));
 
         if (!post.getAuthor().getId().equals(currentUser.getId()) && !isAdmin) {
@@ -778,7 +775,7 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại: " + postId));
 
-        User currentUser = resolveUser(currentUserEmail);
+        User currentUser = requireUser(currentUserEmail);
         boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"));
 
         if (!post.getAuthor().getId().equals(currentUser.getId()) && !isAdmin) {
@@ -797,7 +794,7 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại: " + postId));
 
-        User currentUser = resolveUser(currentUserEmail);
+        User currentUser = requireUser(currentUserEmail);
         boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"));
 
         if (!post.getAuthor().getId().equals(currentUser.getId()) && !isAdmin) {

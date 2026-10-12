@@ -30,6 +30,7 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final ActivityLogService activityLogService;
+    private final com.wayfare.security.JwtTokenProvider tokenProvider;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -78,7 +79,7 @@ public class AuthService {
         String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36";
         activityLogService.recordLog(savedUser, "REGISTER", "Người dùng tạo tài khoản mới: " + savedUser.getEmail(), ip, ua);
 
-        String token = "jwt-access-token-" + UUID.randomUUID();
+        String token = tokenProvider.generateToken(savedUser);
 
         return AuthResponse.builder()
                 .token(token)
@@ -119,7 +120,7 @@ public class AuthService {
         String ua = httpRequest != null && httpRequest.getHeader("User-Agent") != null ? httpRequest.getHeader("User-Agent") : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36";
         activityLogService.recordLog(user, "LOGIN", "Đăng nhập thành công vào hệ thống Wayfare Portal", ip, ua);
 
-        String token = "jwt-access-token-" + UUID.randomUUID();
+        String token = tokenProvider.generateToken(user);
 
         return AuthResponse.builder()
                 .token(token)

@@ -34,10 +34,11 @@ public class ChatService {
 
     @Transactional
     public User resolveUser(String email) {
-        String effectiveEmail = (email != null && !email.isBlank()) ? email.trim() : "tung@gmail.com";
-        User user = userRepository.findByEmail(effectiveEmail)
-                .orElseGet(() -> userRepository.findAll().stream().findFirst()
-                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng trong hệ thống")));
+        if (email == null || email.isBlank()) {
+            throw new ResourceNotFoundException("Vui lòng đăng nhập để sử dụng tính năng trò chuyện");
+        }
+        User user = userRepository.findByEmail(email.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với email: " + email));
 
         if (user.getLastLoginAt() == null || Duration.between(user.getLastLoginAt(), LocalDateTime.now()).toMinutes() >= 2) {
             user.setLastLoginAt(LocalDateTime.now());
