@@ -70,10 +70,10 @@ public class HomeService {
             map.put("destination", itin.getDestination());
             map.put("location", itin.getDestination());
             map.put("region", tourRegion);
-            map.put("desc", "Hành trình tối ưu thời gian và chi phí với sự đồng hành của trợ lý AI Wayfare.");
+            map.put("desc", "Hành trình tối ưu thời gian và chi phí cùng Wayfare.");
             map.put("image", itin.getCoverImageUrl() != null ? itin.getCoverImageUrl() : "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=85");
             map.put("duration", "3 Ngày 2 Đêm");
-            map.put("tag", itin.getIsAiGenerated() ? "AI Thông Minh ✨" : "Thịnh hành 🔥");
+            map.put("tag", Boolean.TRUE.equals(itin.getIsAiGenerated()) ? "Gợi ý nổi bật ⭐" : "Thịnh hành 🔥");
             map.put("category", "Nghỉ dưỡng & Khám phá");
             map.put("rating", 4.9);
             map.put("saves", "1.250");
@@ -183,7 +183,7 @@ public class HomeService {
         t3.put("title", "Phú Quốc: Thiên Đường Hoàng Hôn Đảo Ngọc");
         t3.put("desc", "Trải nghiệm cáp treo vượt biển dài nhất thế giới, lặn ngắm san hô Hòn Mây Rút và tiệc cocktail bãi biển.");
         t3.put("duration", "3 Ngày 2 Đêm");
-        t3.put("tag", "Độc quyền AI");
+        t3.put("tag", "Được yêu thích ⭐");
         t3.put("category", "Nghỉ dưỡng & Hải sản");
         t3.put("rating", 4.88);
         t3.put("saves", "950");
