@@ -53,7 +53,7 @@ public class HomeService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getFeaturedItineraries(String region) {
         log.info("Fetching featured itineraries for region: {}", region);
-        List<Itinerary> list = itineraryRepository.findAll();
+        List<Itinerary> list = itineraryRepository.findAllWithCreator();
 
         List<Map<String, Object>> result = new ArrayList<>();
         DecimalFormat df = new DecimalFormat("#,###");
@@ -112,7 +112,7 @@ public class HomeService {
                             a.getLikeCount() != null ? a.getLikeCount() : 0
                     ))
                     .limit(4)
-                    .map(p -> postService.getPostById(p.getId(), null))
+                    .map(p -> postService.mapToDto(p, null))
                     .collect(Collectors.toList());
         } catch (Exception e) {
             log.warn("Error fetching community highlights: {}", e.getMessage());
