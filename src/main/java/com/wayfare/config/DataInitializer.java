@@ -35,6 +35,7 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.PlaceRepository placeRepository;
     private final com.wayfare.repository.UserFollowRepository userFollowRepository;
     private final PasswordEncoder passwordEncoder;
+    private final javax.sql.DataSource dataSource;
 
     @Override
     public void run(String... args) throws Exception {
@@ -485,6 +486,22 @@ public class DataInitializer implements CommandLineRunner {
 
             placeRepository.saveAll(samplePlaces);
             log.info(">>> SUCCESS: Seeded 6 verified tourist places into database!");
+        }
+
+        // Auto-seed Official Destinations (558 records) if places count is small (e.g. Railway or empty DB)
+        if (placeRepository.count() < 50) {
+            log.info("Auto-seeding 558 official destinations from seed_official_destinations.sql...");
+            try {
+                org.springframework.jdbc.datasource.init.ResourceDatabasePopulator populator =
+                        new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator();
+                populator.addScript(new org.springframework.core.io.ClassPathResource("seed_official_destinations.sql"));
+                populator.setContinueOnError(true);
+                populator.setSqlScriptEncoding("UTF-8");
+                populator.execute(dataSource);
+                log.info(">>> SUCCESS: Auto-seeded official destinations dataset into database! Current count: {}", placeRepository.count());
+            } catch (Exception e) {
+                log.error("Failed to auto-seed seed_official_destinations.sql: {}", e.getMessage(), e);
+            }
         }
 
         // Seed Sample Community Posts and Reports if empty
