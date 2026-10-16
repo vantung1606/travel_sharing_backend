@@ -13,18 +13,28 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:${MYSQLUSER:root}}
     password: ${SPRING_DATASOURCE_PASSWORD:${MYSQLPASSWORD:1234}}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
 
   jpa:
     database-platform: org.hibernate.dialect.MySQLDialect
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
 
 server:
   port: ${PORT:8081}
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
 
 gemini:
   api-key: ${GEMINI_API_KEY:}
