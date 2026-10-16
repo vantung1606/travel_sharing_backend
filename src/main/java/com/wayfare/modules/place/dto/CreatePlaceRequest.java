@@ -28,5 +28,6 @@ public class CreatePlaceRequest {
     private String categoryName;
     private String amenities;
     private String coverImageUrl;
+    private String status;
 }
 

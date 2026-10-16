@@ -22,15 +22,17 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     @Query("SELECT p.city, COUNT(p) as cnt FROM Place p GROUP BY p.city ORDER BY cnt DESC")
     List<Object[]> countPlacesByCity();
 
-    List<Place> findByStatus(String status);
+    @Query("SELECT p FROM Place p LEFT JOIN FETCH p.owner WHERE p.status = :status ORDER BY p.createdAt DESC")
+    List<Place> findByStatus(@org.springframework.data.repository.query.Param("status") String status);
 
     List<Place> findByOwnerIdOrderByCreatedAtDesc(Long ownerId);
 
-    @Query("SELECT p FROM Place p WHERE " +
+    @Query("SELECT DISTINCT p FROM Place p LEFT JOIN FETCH p.owner WHERE " +
            "(:status IS NULL OR p.status = :status) AND " +
            "(:city IS NULL OR LOWER(p.city) LIKE LOWER(CONCAT('%', :city, '%'))) AND " +
            "(:category IS NULL OR LOWER(p.categoryName) LIKE LOWER(CONCAT('%', :category, '%'))) AND " +
-           "(:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(p.address) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+           "(:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(p.address) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "ORDER BY p.id DESC")
     List<Place> searchPlaces(
             @org.springframework.data.repository.query.Param("status") String status,
             @org.springframework.data.repository.query.Param("city") String city,

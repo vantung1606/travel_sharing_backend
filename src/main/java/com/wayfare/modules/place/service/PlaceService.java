@@ -76,10 +76,15 @@ public class PlaceService {
                     .anyMatch(r -> r.getName().equalsIgnoreCase("ROLE_ADMIN") || r.getName().equalsIgnoreCase("ROLE_MODERATOR"));
         }
 
-        // Nếu là Admin/Moderator tạo: Duyệt ngay ACTIVE + Host uy tín.
-        // Nếu là Người dùng thường / Cơ sở kinh doanh gửi: PENDING_APPROVAL chờ duyệt
-        String initialStatus = isAdminOrMod ? "ACTIVE" : "PENDING_APPROVAL";
-        boolean isVerifiedHost = isAdminOrMod;
+        // Quyết định trạng thái khởi tạo:
+        // MẶC ĐỊNH 100% địa điểm người dùng gửi lên từ form công cộng -> PENDING_APPROVAL để chờ Ban Quản Trị kiểm duyệt!
+        // CHỈ KHI được tạo từ trang Quản trị Admin (gửi status = "ACTIVE" và người tạo có quyền ROLE_ADMIN) -> mới được ACTIVE ngay.
+        String initialStatus = "PENDING_APPROVAL";
+        boolean isVerifiedHost = false;
+        if (isAdminOrMod && "ACTIVE".equalsIgnoreCase(request.getStatus())) {
+            initialStatus = "ACTIVE";
+            isVerifiedHost = true;
+        }
 
         Place place = Place.builder()
                 .name(request.getName().trim())
