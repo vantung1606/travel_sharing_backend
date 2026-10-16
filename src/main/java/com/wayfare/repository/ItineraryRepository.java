@@ -16,10 +16,14 @@ public interface ItineraryRepository extends JpaRepository<Itinerary, Long> {
 
     long countByStatus(String status);
 
-    List<Itinerary> findByCreatorOrderByCreatedAtDesc(com.wayfare.entity.User creator);
+    @Query("SELECT i FROM Itinerary i LEFT JOIN FETCH i.creator WHERE i.creator = :creator ORDER BY i.createdAt DESC")
+    List<Itinerary> findByCreatorOrderByCreatedAtDesc(@Param("creator") com.wayfare.entity.User creator);
 
-    @Query("SELECT i FROM Itinerary i WHERE i.creator.email = :email ORDER BY i.createdAt DESC")
+    @Query("SELECT i FROM Itinerary i LEFT JOIN FETCH i.creator WHERE i.creator.email = :email ORDER BY i.createdAt DESC")
     List<Itinerary> findByCreatorEmailOrderByCreatedAtDesc(@Param("email") String email);
+
+    @Query("SELECT i FROM Itinerary i LEFT JOIN FETCH i.creator ORDER BY i.createdAt DESC")
+    List<Itinerary> findAllWithCreator();
 
     @Query("SELECT MONTH(i.createdAt) as month, YEAR(i.createdAt) as year, COUNT(i) as count " +
            "FROM Itinerary i WHERE i.createdAt >= :startDate " +

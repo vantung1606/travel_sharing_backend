@@ -28,13 +28,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Query("SELECT SUM(p.commentCount) FROM Post p")
     Long sumAllComments();
 
-    List<Post> findByStatusOrderByCreatedAtDesc(String status);
+    @Query("SELECT DISTINCT p FROM Post p LEFT JOIN FETCH p.author LEFT JOIN FETCH p.itinerary WHERE p.status = :status ORDER BY p.createdAt DESC")
+    List<Post> findByStatusOrderByCreatedAtDesc(@Param("status") String status);
 
     long countByStatus(String status);
 
     List<Post> findByReportsCountGreaterThanOrderByReportsCountDesc(Integer count);
 
-    @Query("SELECT p FROM Post p WHERE " +
+    @Query("SELECT DISTINCT p FROM Post p LEFT JOIN FETCH p.author LEFT JOIN FETCH p.itinerary WHERE " +
            "(:keyword IS NULL OR LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "LOWER(p.author.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "LOWER(p.locationTag) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND " +

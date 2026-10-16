@@ -65,7 +65,7 @@ public class ItineraryService {
     @Transactional(readOnly = true)
     public List<ItineraryDto> getAllItineraries() {
         log.info("Fetching all itineraries across system for admin dashboard");
-        List<Itinerary> list = itineraryRepository.findAll(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        List<Itinerary> list = itineraryRepository.findAllWithCreator();
         return list.stream().map(this::mapToSummaryDto).collect(Collectors.toList());
     }
 
