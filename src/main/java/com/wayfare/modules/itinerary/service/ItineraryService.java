@@ -112,6 +112,7 @@ public class ItineraryService {
                 .coverImageUrl(request.getCoverImageUrl())
                 .isAiGenerated(Boolean.TRUE.equals(request.getIsAiGenerated()))
                 .status(request.getStatus() != null ? request.getStatus() : "ACTIVE")
+                .groupType(request.getGroupType() != null ? request.getGroupType() : "Cá nhân")
                 .build();
 
         Itinerary saved = itineraryRepository.save(itinerary);
@@ -182,6 +183,7 @@ public class ItineraryService {
         if (request.getBudgetTotal() != null) itinerary.setBudgetTotal(request.getBudgetTotal());
         if (request.getCoverImageUrl() != null) itinerary.setCoverImageUrl(request.getCoverImageUrl());
         if (request.getStatus() != null) itinerary.setStatus(request.getStatus());
+        if (request.getGroupType() != null) itinerary.setGroupType(request.getGroupType());
 
         Itinerary saved = itineraryRepository.save(itinerary);
         log.info("Successfully updated itinerary id: {}", saved.getId());
@@ -366,6 +368,7 @@ public class ItineraryService {
                 .coverImageUrl(i.getCoverImageUrl())
                 .isAiGenerated(i.getIsAiGenerated())
                 .status(i.getStatus())
+                .groupType(i.getGroupType() != null ? i.getGroupType() : "Cá nhân")
                 .createdAt(i.getCreatedAt())
                 .updatedAt(i.getUpdatedAt())
                 .build();

@@ -52,6 +52,9 @@ public class Itinerary {
     @Column(length = 30)
     private String status = "ACTIVE"; // DRAFT, ACTIVE, COMPLETED, CANCELLED
 
+    @Column(name = "group_type", length = 50)
+    private String groupType; // Cá nhân, Cặp đôi, Bạn bè, Gia đình
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

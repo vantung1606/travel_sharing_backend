@@ -29,6 +29,7 @@ public class ItineraryDto {
     private String coverImageUrl;
     private Boolean isAiGenerated;
     private String status;
+    private String groupType;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
