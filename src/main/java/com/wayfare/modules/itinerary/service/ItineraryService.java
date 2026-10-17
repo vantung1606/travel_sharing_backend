@@ -427,7 +427,15 @@ public class ItineraryService {
 
         User requester = getUserByEmail(requesterEmail);
 
-        String clonedTitle = source.getTitle();
+        // Chặn chính chủ tự sao chép lịch trình của chính mình
+        if (source.getCreator() != null && source.getCreator().getId().equals(requester.getId())) {
+            log.warn("User {} attempted to clone their own itinerary id: {}", requesterEmail, sourceId);
+            throw new RuntimeException("Bạn là tác giả của lịch trình này nên không thể tự sao chép!");
+        }
+
+        String clonedTitle = source.getTitle().startsWith("[Sao chép]")
+                ? source.getTitle()
+                : "[Sao chép] " + source.getTitle();
 
         Itinerary cloned = Itinerary.builder()
                 .creator(requester)

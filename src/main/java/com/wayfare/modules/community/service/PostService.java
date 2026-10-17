@@ -611,9 +611,19 @@ public class PostService {
 
         Itinerary original = post.getItinerary();
 
+        // Chặn chính chủ tự sao chép lịch trình của chính mình
+        if (original.getCreator() != null && original.getCreator().getId().equals(user.getId())) {
+            log.warn("User {} attempted to clone their own itinerary from post {}", currentUserEmail, postId);
+            throw new RuntimeException("Bạn là tác giả của lịch trình này nên không thể tự sao chép!");
+        }
+
+        String clonedTitle = original.getTitle().startsWith("[Sao chép]")
+                ? original.getTitle()
+                : "[Sao chép] " + original.getTitle();
+
         Itinerary clone = Itinerary.builder()
                 .creator(user)
-                .title("Bản sao: " + original.getTitle())
+                .title(clonedTitle)
                 .destination(original.getDestination())
                 .startDate(java.time.LocalDate.now().plusDays(7))
                 .endDate(java.time.LocalDate.now().plusDays(10))
