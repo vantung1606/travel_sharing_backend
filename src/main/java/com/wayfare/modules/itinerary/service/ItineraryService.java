@@ -427,9 +427,7 @@ public class ItineraryService {
 
         User requester = getUserByEmail(requesterEmail);
 
-        String clonedTitle = source.getTitle().startsWith("[Sao chép]")
-                ? source.getTitle()
-                : "[Sao chép] " + source.getTitle();
+        String clonedTitle = source.getTitle();
 
         Itinerary cloned = Itinerary.builder()
                 .creator(requester)
