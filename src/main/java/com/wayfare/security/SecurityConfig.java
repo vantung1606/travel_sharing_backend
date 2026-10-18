@@ -40,9 +40,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Public root, healthcheck, error and static resources
                 .requestMatchers("/", "/health", "/api/health", "/error", "/favicon.ico").permitAll()
-                // Public auth, static files, websockets and realtime sse streams
+                // Public auth, static files, websockets, realtime sse streams and ai proxy
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/ws/**", "/uploads/**", "/api/realtime/**").permitAll()
+                .requestMatchers("/ws/**", "/uploads/**", "/api/realtime/**", "/api/ai/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/home/**").permitAll()
                 // Public read-only endpoints for visitors
                 .requestMatchers(HttpMethod.GET, "/api/places/**").permitAll()
