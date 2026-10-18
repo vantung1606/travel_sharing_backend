@@ -29,6 +29,10 @@ public class AiService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    public boolean isApiKeyConfigured() {
+        return geminiApiKey != null && !geminiApiKey.trim().isBlank();
+    }
+
     public AiGenerateResponse generateContent(AiGenerateRequest request) {
         if (geminiApiKey == null || geminiApiKey.isBlank()) {
             log.error("AI Generation failed: GEMINI_API_KEY is not configured on server.");

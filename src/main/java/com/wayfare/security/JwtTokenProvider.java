@@ -23,6 +23,7 @@ public class JwtTokenProvider {
 
     private final Key signingKey;
     private final long jwtExpirationMs;
+    private final boolean secretPersistent;
 
     public JwtTokenProvider(
             @Value("${jwt.secret:}") String secret,
@@ -33,6 +34,7 @@ public class JwtTokenProvider {
                 || "production".equalsIgnoreCase(System.getenv("SPRING_PROFILES_ACTIVE"));
 
         if (secret == null || secret.trim().isBlank()) {
+            this.secretPersistent = false;
             if (isProduction) {
                 log.error("SECURITY ALERT: 'JWT_SECRET' is not configured in production environment variables! Generated an ephemeral HS256 key to maintain uptime without 502 crash. Please configure JWT_SECRET (>= 32 chars) in Railway variables.");
             } else {
@@ -40,6 +42,7 @@ public class JwtTokenProvider {
             }
             this.signingKey = Keys.secretKeyFor(SignatureAlgorithm.HS256);
         } else {
+            this.secretPersistent = true;
             String cleanSecret = secret.trim();
             byte[] keyBytes = cleanSecret.getBytes(StandardCharsets.UTF_8);
             if (keyBytes.length < 32) {
@@ -53,6 +56,10 @@ public class JwtTokenProvider {
             }
             this.signingKey = Keys.hmacShaKeyFor(keyBytes);
         }
+    }
+
+    public boolean isSecretPersistent() {
+        return secretPersistent;
     }
 
     public String generateToken(User user) {

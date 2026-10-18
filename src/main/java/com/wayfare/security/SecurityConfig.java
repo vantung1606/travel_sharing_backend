@@ -62,17 +62,28 @@ public class SecurityConfig {
         return http.build();
     }
 
+    @org.springframework.beans.factory.annotation.Value("${cors.allowed-origins:}")
+    private String allowedOriginsEnv;
+
     @Bean
     public UrlBasedCorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of(
+        java.util.List<String> patterns = new java.util.ArrayList<>(List.of(
             "http://localhost:*",
             "http://127.0.0.1:*",
-            "https://*.railway.app",
-            "https://*.up.railway.app",
-            "https://*.vercel.app",
-            "https://*.netlify.app"
+            "https://*.up.railway.app"
         ));
+
+        if (allowedOriginsEnv != null && !allowedOriginsEnv.isBlank()) {
+            for (String origin : allowedOriginsEnv.split(",")) {
+                String trimmed = origin.trim();
+                if (!trimmed.isEmpty()) {
+                    patterns.add(trimmed);
+                }
+            }
+        }
+
+        config.setAllowedOriginPatterns(patterns);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

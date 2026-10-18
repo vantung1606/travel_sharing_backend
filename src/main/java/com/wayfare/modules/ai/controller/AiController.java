@@ -17,6 +17,7 @@ import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import org.springframework.security.core.Authentication;
 
 @Slf4j
 @RestController
@@ -26,34 +27,46 @@ public class AiController {
 
     private final AiService aiService;
     private final Map<String, Deque<Long>> rateLimitMap = new ConcurrentHashMap<>();
-    private static final int MAX_REQUESTS_PER_MINUTE = 20;
+
+    private static final int MAX_USER_REQUESTS_PER_MINUTE = 30;
+    private static final int MAX_ANONYMOUS_REQUESTS_PER_MINUTE = 10;
 
     @PostMapping("/generate")
     public ResponseEntity<ApiResponse<AiGenerateResponse>> generateContent(
             @Valid @RequestBody AiGenerateRequest request,
-            HttpServletRequest servletRequest) {
-        String clientIp = resolveClientIp(servletRequest);
+            HttpServletRequest servletRequest,
+            Authentication authentication) {
+        String rateKey;
+        int maxAllowed;
 
-        if (isRateLimited(clientIp)) {
-            log.warn("Rate limit exceeded for AI generation from IP: {}", clientIp);
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(ApiResponse.error("Bạn đã vượt quá giới hạn gọi AI (tối đa 20 yêu cầu/phút). Vui lòng thử lại sau giây lát."));
+        if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
+            rateKey = "USER:" + authentication.getName().toLowerCase().trim();
+            maxAllowed = MAX_USER_REQUESTS_PER_MINUTE;
+        } else {
+            rateKey = "IP:" + resolveClientIp(servletRequest);
+            maxAllowed = MAX_ANONYMOUS_REQUESTS_PER_MINUTE;
         }
 
-        log.info("REST request to generate AI content from IP={}, model: {}", clientIp, request.getModel());
+        if (isRateLimited(rateKey, maxAllowed)) {
+            log.warn("Rate limit exceeded for AI generation (key={})", rateKey);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(ApiResponse.error("Bạn đã vượt quá giới hạn gọi AI (" + maxAllowed + " req/phút). Vui lòng thử lại sau giây lát."));
+        }
+
+        log.info("REST request to generate AI content (rateKey={}, model={})", rateKey, request.getModel());
         AiGenerateResponse response = aiService.generateContent(request);
         return ResponseEntity.ok(ApiResponse.success("Tạo nội dung AI thành công", response));
     }
 
-    private boolean isRateLimited(String clientIp) {
+    private boolean isRateLimited(String key, int maxAllowed) {
         long now = System.currentTimeMillis();
         long windowStart = now - 60_000L;
-        Deque<Long> timestamps = rateLimitMap.computeIfAbsent(clientIp, k -> new ConcurrentLinkedDeque<>());
+        Deque<Long> timestamps = rateLimitMap.computeIfAbsent(key, k -> new ConcurrentLinkedDeque<>());
         synchronized (timestamps) {
             while (!timestamps.isEmpty() && timestamps.peekFirst() < windowStart) {
                 timestamps.pollFirst();
             }
-            if (timestamps.size() >= MAX_REQUESTS_PER_MINUTE) {
+            if (timestamps.size() >= maxAllowed) {
                 return true;
             }
             timestamps.addLast(now);
@@ -62,10 +75,19 @@ public class AiController {
     }
 
     private String resolveClientIp(HttpServletRequest request) {
-        String xf = request.getHeader("X-Forwarded-For");
-        if (xf != null && !xf.isBlank()) {
-            return xf.split(",")[0].trim();
+        // CF-Connecting-IP is set by Cloudflare/Railway Edge and cannot be spoofed by client
+        String cfIp = request.getHeader("CF-Connecting-IP");
+        if (cfIp != null && !cfIp.isBlank()) {
+            return cfIp.trim();
         }
+
+        // X-Real-IP is commonly set by upstream reverse proxies
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+
+        // Fallback to socket remote address
         return request.getRemoteAddr() != null ? request.getRemoteAddr() : "unknown";
     }
 }
