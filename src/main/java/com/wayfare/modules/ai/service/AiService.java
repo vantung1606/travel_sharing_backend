@@ -36,7 +36,10 @@ public class AiService {
     public AiGenerateResponse generateContent(AiGenerateRequest request) {
         if (geminiApiKey == null || geminiApiKey.isBlank()) {
             log.error("AI Generation failed: GEMINI_API_KEY is not configured on server.");
-            throw new ResourceNotFoundException("Tính năng AI hiện chưa khả dụng do máy chủ chưa cấu hình GEMINI_API_KEY.");
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "Tính năng AI hiện chưa khả dụng do máy chủ chưa cấu hình GEMINI_API_KEY."
+            );
         }
 
         String targetModel = (request.getModel() != null && !request.getModel().isBlank())

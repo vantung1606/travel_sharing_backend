@@ -75,19 +75,8 @@ public class AiController {
     }
 
     private String resolveClientIp(HttpServletRequest request) {
-        // CF-Connecting-IP is set by Cloudflare/Railway Edge and cannot be spoofed by client
-        String cfIp = request.getHeader("CF-Connecting-IP");
-        if (cfIp != null && !cfIp.isBlank()) {
-            return cfIp.trim();
-        }
-
-        // X-Real-IP is commonly set by upstream reverse proxies
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
-        }
-
-        // Fallback to socket remote address
-        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "unknown";
+        // Socket remote address cannot be forged by HTTP client request headers
+        String remoteAddr = request.getRemoteAddr();
+        return (remoteAddr != null && !remoteAddr.isBlank()) ? remoteAddr.trim() : "unknown";
     }
 }

@@ -24,7 +24,14 @@ public class HealthCheckController {
         status.put("status", "UP");
         status.put("service", "Wayfare Travel Sharing Platform API");
         status.put("version", "1.0.0");
-        status.put("environment", "production");
+        String env = System.getenv("RAILWAY_ENVIRONMENT");
+        if (env == null || env.isBlank()) {
+            env = System.getenv("SPRING_PROFILES_ACTIVE");
+        }
+        if (env == null || env.isBlank()) {
+            env = "development";
+        }
+        status.put("environment", env);
         status.put("jwtConfigured", jwtTokenProvider.isSecretPersistent());
         status.put("jwtMode", jwtTokenProvider.isSecretPersistent() ? "PERSISTENT_ENV" : "EPHEMERAL_RUNTIME");
         status.put("aiConfigured", aiService.isApiKeyConfigured());
