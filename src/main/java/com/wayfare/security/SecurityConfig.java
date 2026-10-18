@@ -52,7 +52,6 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/users/*/profile").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/following").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/followers").permitAll()
-                .requestMatchers(HttpMethod.PUT, "/api/users/profile").permitAll()
                 // Admin exclusive operations
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 // All other operations require authenticated token
@@ -66,7 +65,14 @@ public class SecurityConfig {
     @Bean
     public UrlBasedCorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedOriginPatterns(List.of(
+            "http://localhost:*",
+            "http://127.0.0.1:*",
+            "https://*.railway.app",
+            "https://*.up.railway.app",
+            "https://*.vercel.app",
+            "https://*.netlify.app"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

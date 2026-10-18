@@ -24,11 +24,11 @@ public class UserController {
 
     private final UserFollowService userFollowService;
 
-    private String extractEmail(Authentication authentication, String queryEmail) {
+    private String extractViewerEmail(Authentication authentication) {
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
             return authentication.getName();
         }
-        return queryEmail;
+        return null;
     }
 
     private String requireAuthEmail(Authentication authentication) {
@@ -41,9 +41,8 @@ public class UserController {
     @GetMapping("/{id}/profile")
     public ResponseEntity<ApiResponse<UserProfileDto>> getUserProfile(
             @PathVariable Long id,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String viewerEmail = extractEmail(authentication, email);
+        String viewerEmail = extractViewerEmail(authentication);
         log.info("REST request to get profile of user ID {} by viewer {}", id, viewerEmail);
         UserProfileDto profile = userFollowService.getUserProfile(id, viewerEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin người dùng thành công", profile));
@@ -84,13 +83,9 @@ public class UserController {
     @PutMapping("/profile")
     public ResponseEntity<ApiResponse<UserProfileDto>> updateProfile(
             @RequestBody UpdateProfileRequest request,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String currentUserEmail = extractEmail(authentication, email);
-        if (currentUserEmail == null || currentUserEmail.isBlank()) {
-            currentUserEmail = requireAuthEmail(authentication);
-        }
-        log.info("REST request to update profile by {}", currentUserEmail);
+        String currentUserEmail = requireAuthEmail(authentication);
+        log.info("REST request to update profile by authenticated user {}", currentUserEmail);
         UserProfileDto updated = userFollowService.updateUserProfile(null, request, currentUserEmail);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật hồ sơ cá nhân thành công!", updated));
     }
@@ -118,9 +113,8 @@ public class UserController {
     @GetMapping("/{id}/following")
     public ResponseEntity<ApiResponse<List<FollowUserDto>>> getFollowingList(
             @PathVariable Long id,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String viewerEmail = extractEmail(authentication, email);
+        String viewerEmail = extractViewerEmail(authentication);
         log.info("REST request to get following list of user ID {} by viewer {}", id, viewerEmail);
         List<FollowUserDto> list = userFollowService.getFollowingList(id, viewerEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách người đang theo dõi thành công", list));
@@ -129,9 +123,8 @@ public class UserController {
     @GetMapping("/{id}/followers")
     public ResponseEntity<ApiResponse<List<FollowUserDto>>> getFollowersList(
             @PathVariable Long id,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String viewerEmail = extractEmail(authentication, email);
+        String viewerEmail = extractViewerEmail(authentication);
         log.info("REST request to get followers list of user ID {} by viewer {}", id, viewerEmail);
         List<FollowUserDto> list = userFollowService.getFollowersList(id, viewerEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách người theo dõi thành công", list));

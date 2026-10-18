@@ -27,11 +27,11 @@ public class PostController {
     private final PostService postService;
     private final CommunityRealtimeService communityRealtimeService;
 
-    private String extractEmail(Authentication authentication, String queryEmail) {
+    private String extractViewerEmail(Authentication authentication) {
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
             return authentication.getName();
         }
-        return (queryEmail != null && !queryEmail.isBlank()) ? queryEmail.trim() : null;
+        return null;
     }
 
     private String requireAuthEmail(Authentication authentication) {
@@ -45,9 +45,8 @@ public class PostController {
     public ResponseEntity<ApiResponse<List<PostDto>>> getCommunityPosts(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String effectiveEmail = extractEmail(authentication, email);
+        String effectiveEmail = extractViewerEmail(authentication);
         log.info("REST request to get community posts: category={}, keyword={}, email={}", category, keyword, effectiveEmail);
         List<PostDto> posts = postService.getCommunityPosts(category, keyword, effectiveEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách bài viết thành công", posts));
@@ -56,9 +55,8 @@ public class PostController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<PostDto>> getPostById(
             @PathVariable Long id,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String effectiveEmail = extractEmail(authentication, email);
+        String effectiveEmail = extractViewerEmail(authentication);
         log.info("REST request to get post detail: id={}, viewer={}", id, effectiveEmail);
         PostDto post = postService.getPostById(id, effectiveEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết bài viết thành công", post));

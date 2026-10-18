@@ -36,13 +36,17 @@ server:
     mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
     min-response-size: 1024
 
+jwt:
+  secret: ${JWT_SECRET:}
+  expiration: ${JWT_EXPIRATION:86400000}
+
 gemini:
   api-key: ${GEMINI_API_KEY:}
   api-url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta}
-  model: gemini-3.6-flash
+  model: gemini-1.5-flash
 
 cloudinary:
-  cloud-name: ${CLOUDINARY_CLOUD_NAME:vantung204}
-  api-key: ${CLOUDINARY_API_KEY:793431789955133}
-  api-secret: ${CLOUDINARY_API_SECRET:Z3OSs9MS_qq53sbe1jbRox7kSNI}
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
   folder: ${CLOUDINARY_FOLDER:wayfare/media}

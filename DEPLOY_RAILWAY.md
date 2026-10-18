@@ -44,6 +44,11 @@ Hệ thống Wayfare Travel Sharing System được đóng gói theo chuẩn **C
    * `SPRING_DATASOURCE_URL` = `jdbc:mysql://${{MySQL.MYSQLHOST}}:${{MySQL.MYSQLPORT}}/${{MySQL.MYSQLDATABASE}}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull`
    * `SPRING_DATASOURCE_USERNAME` = `${{MySQL.MYSQLUSER}}`
    * `SPRING_DATASOURCE_PASSWORD` = `${{MySQL.MYSQLPASSWORD}}`
+   * `JWT_SECRET` = `(BẮT BUỘC - Chuỗi ngẫu nhiên tối thiểu 32 ký tự, ví dụ: d98a2f1c84e93041... để ký token bảo mật)`
+   * `CLOUDINARY_CLOUD_NAME` = `(Tên cloud Cloudinary của bạn)`
+   * `CLOUDINARY_API_KEY` = `(API Key Cloudinary)`
+   * `CLOUDINARY_API_SECRET` = `(API Secret Cloudinary)`
+   * `GEMINI_API_KEY` = `(Google Gemini API Key nếu dùng AI)`
    *(Hoặc Railway hỗ trợ tính năng **Reference Variable** trực tiếp từ MySQL)*.
 4. Vào tab **Settings** ➔ Mục **Networking** ➔ Bấm **Generate Domain** để nhận đường link HTTPS công khai (ví dụ: `https://travel-backend-production.up.railway.app`).
 

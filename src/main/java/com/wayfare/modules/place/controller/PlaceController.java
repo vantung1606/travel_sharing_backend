@@ -24,14 +24,11 @@ public class PlaceController {
 
     private final PlaceService placeService;
 
-    private String requireAuthEmail(Authentication authentication, String explicitEmail) {
-        if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
-            return authentication.getName();
+    private String requireAuthEmail(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện thao tác");
         }
-        if (explicitEmail != null && !explicitEmail.isBlank()) {
-            return explicitEmail.trim();
-        }
-        throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện thao tác");
+        return authentication.getName();
     }
 
     @GetMapping
@@ -55,19 +52,16 @@ public class PlaceController {
     @PostMapping
     public ResponseEntity<ApiResponse<PlaceDto>> createPlace(
             @Valid @RequestBody CreatePlaceRequest request,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String userEmail = requireAuthEmail(authentication, email);
+        String userEmail = requireAuthEmail(authentication);
         log.info("REST request to create new place '{}' by email: {}", request.getName(), userEmail);
         PlaceDto created = placeService.createPlace(request, userEmail);
         return ResponseEntity.ok(ApiResponse.success("Đăng tải địa điểm mới thành công!", created));
     }
 
     @GetMapping("/my-places")
-    public ResponseEntity<ApiResponse<List<PlaceDto>>> getMyPlaces(
-            @RequestParam(required = false) String email,
-            Authentication authentication) {
-        String userEmail = requireAuthEmail(authentication, email);
+    public ResponseEntity<ApiResponse<List<PlaceDto>>> getMyPlaces(Authentication authentication) {
+        String userEmail = requireAuthEmail(authentication);
         log.info("REST request to get places created by: {}", userEmail);
         List<PlaceDto> myPlaces = placeService.getMyPlaces(userEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm của bạn thành công", myPlaces));
@@ -112,9 +106,8 @@ public class PlaceController {
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deletePlace(
             @PathVariable Long id,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String userEmail = requireAuthEmail(authentication, email);
+        String userEmail = requireAuthEmail(authentication);
         log.info("REST request to delete place ID {} by {}", id, userEmail);
         placeService.deletePlace(id, userEmail);
         return ResponseEntity.ok(ApiResponse.success("Xóa địa điểm thành công!", null));

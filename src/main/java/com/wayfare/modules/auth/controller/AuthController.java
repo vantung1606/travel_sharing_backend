@@ -46,9 +46,12 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
             @RequestParam(required = false) String email,
+            org.springframework.security.core.Authentication authentication,
             HttpServletRequest httpRequest) {
-        log.info("REST request to logout user with email: {}", email);
-        authService.logout(email, httpRequest);
+        String authEmail = (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName()))
+                ? authentication.getName() : email;
+        log.info("REST request to logout user with email: {}", authEmail);
+        authService.logout(authEmail, httpRequest);
         return ResponseEntity.ok(ApiResponse.success("Đăng xuất thành công!", null));
     }
 }

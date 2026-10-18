@@ -22,10 +22,28 @@ public class JwtTokenProvider {
     private final long jwtExpirationMs;
 
     public JwtTokenProvider(
-            @Value("${jwt.secret:wayfare-ultra-secure-jwt-signing-secret-key-32-bytes-minimum-length-2026}") String secret,
+            @Value("${jwt.secret:}") String secret,
             @Value("${jwt.expiration:86400000}") long jwtExpirationMs) {
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.jwtExpirationMs = jwtExpirationMs;
+        boolean isProduction = System.getenv("RAILWAY_ENVIRONMENT") != null
+                || System.getenv("RAILWAY_STATIC_URL") != null
+                || "production".equalsIgnoreCase(System.getenv("SPRING_PROFILES_ACTIVE"));
+
+        if (secret == null || secret.trim().isBlank()) {
+            if (isProduction) {
+                log.error("CRITICAL SECURITY ERROR: 'JWT_SECRET' environment variable is NOT set in production!");
+                throw new IllegalStateException("CRITICAL: JWT_SECRET environment variable must be set in production! Refusing to start with insecure key.");
+            }
+            log.warn("SECURITY NOTICE: 'JWT_SECRET' is not set. Generating a secure temporary in-memory key for local development.");
+            this.signingKey = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+        } else {
+            String cleanSecret = secret.trim();
+            if (cleanSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+                log.error("CRITICAL SECURITY ERROR: 'JWT_SECRET' must be at least 32 bytes (256 bits) for HMAC-SHA256!");
+                throw new IllegalStateException("CRITICAL: JWT_SECRET must be at least 32 characters long for secure token signing.");
+            }
+            this.signingKey = Keys.hmacShaKeyFor(cleanSecret.getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     public String generateToken(User user) {

@@ -23,11 +23,11 @@ public class ItineraryController {
 
     private final ItineraryService itineraryService;
 
-    private String extractEmail(Authentication authentication, String queryEmail) {
+    private String extractViewerEmail(Authentication authentication) {
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
             return authentication.getName();
         }
-        return (queryEmail != null && !queryEmail.isBlank()) ? queryEmail.trim() : null;
+        return null;
     }
 
     private String requireAuthEmail(Authentication authentication) {
@@ -38,12 +38,10 @@ public class ItineraryController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ItineraryDto>>> getMyItineraries(
-            @RequestParam(value = "email", required = false) String email,
-            Authentication authentication) {
-        String effectiveEmail = extractEmail(authentication, email);
-        log.info("REST request to get itineraries for: {}", effectiveEmail);
-        List<ItineraryDto> list = itineraryService.getItinerariesForUser(effectiveEmail);
+    public ResponseEntity<ApiResponse<List<ItineraryDto>>> getMyItineraries(Authentication authentication) {
+        String email = requireAuthEmail(authentication);
+        log.info("REST request to get itineraries for: {}", email);
+        List<ItineraryDto> list = itineraryService.getItinerariesForUser(email);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách lịch trình thành công", list));
     }
 
@@ -57,11 +55,10 @@ public class ItineraryController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ItineraryDto>> getItineraryById(
             @PathVariable Long id,
-            @RequestParam(value = "email", required = false) String email,
             Authentication authentication) {
-        String effectiveEmail = extractEmail(authentication, email);
-        log.info("REST request to get itinerary id: {} by: {}", id, effectiveEmail);
-        ItineraryDto dto = itineraryService.getItineraryById(id, effectiveEmail);
+        String viewerEmail = extractViewerEmail(authentication);
+        log.info("REST request to get itinerary id: {} by viewer: {}", id, viewerEmail);
+        ItineraryDto dto = itineraryService.getItineraryById(id, viewerEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết lịch trình thành công", dto));
     }
 

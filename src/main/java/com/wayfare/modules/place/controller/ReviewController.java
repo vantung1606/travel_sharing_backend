@@ -23,14 +23,11 @@ public class ReviewController {
 
     private final ReviewService reviewService;
 
-    private String requireAuthEmail(Authentication authentication, String explicitEmail) {
-        if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
-            return authentication.getName();
+    private String requireAuthEmail(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện đánh giá");
         }
-        if (explicitEmail != null && !explicitEmail.isBlank()) {
-            return explicitEmail.trim();
-        }
-        throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện đánh giá");
+        return authentication.getName();
     }
 
     @GetMapping("/{placeId}/reviews")
@@ -44,9 +41,8 @@ public class ReviewController {
     public ResponseEntity<ApiResponse<ReviewDto>> addReview(
             @PathVariable Long placeId,
             @Valid @RequestBody CreateReviewRequest request,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String userEmail = requireAuthEmail(authentication, email);
+        String userEmail = requireAuthEmail(authentication);
         log.info("REST request to add review for place ID: {} by user: {}", placeId, userEmail);
         ReviewDto review = reviewService.addReview(placeId, request, userEmail);
         return ResponseEntity.ok(ApiResponse.success("Gửi đánh giá thành công! Cảm ơn đóng góp của bạn.", review));
@@ -55,9 +51,8 @@ public class ReviewController {
     @DeleteMapping("/reviews/{reviewId}")
     public ResponseEntity<ApiResponse<Void>> deleteReview(
             @PathVariable Long reviewId,
-            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String userEmail = requireAuthEmail(authentication, email);
+        String userEmail = requireAuthEmail(authentication);
         log.info("REST request to delete review ID: {} by user: {}", reviewId, userEmail);
         reviewService.deleteReview(reviewId, userEmail);
         return ResponseEntity.ok(ApiResponse.success("Xóa đánh giá thành công", null));
