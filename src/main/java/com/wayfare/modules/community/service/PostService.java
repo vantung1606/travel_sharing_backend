@@ -856,7 +856,8 @@ public class PostService {
             if (itin.getId() != null) {
                 try {
                     itinPlacesCount = itineraryDetailRepository.findByItineraryIdOrderByDayNumberAscVisitOrderAsc(itin.getId()).size();
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    log.warn("Could not fetch itinerary places count for itinerary {}: {}", itin.getId(), e.getMessage());
                 }
             }
         }

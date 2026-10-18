@@ -225,12 +225,16 @@ public class AdminUserService {
         int realPostsCount = 0;
         try {
             realPostsCount = postRepository.findByAuthorOrderByCreatedAtDesc(u).size();
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn("Could not calculate realPostsCount for user {}: {}", u.getId(), e.getMessage());
+        }
 
         int realTripsCount = 0;
         try {
             realTripsCount = itineraryRepository.findByCreatorOrderByCreatedAtDesc(u).size();
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn("Could not calculate realTripsCount for user {}: {}", u.getId(), e.getMessage());
+        }
 
         String resolvedTier = u.getTier() != null && !u.getTier().isBlank() ? u.getTier().toLowerCase() : "bronze";
         if (roleNames.contains("ROLE_ADMIN") && ("bronze".equalsIgnoreCase(resolvedTier) || resolvedTier.isBlank())) {

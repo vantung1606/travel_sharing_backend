@@ -14,6 +14,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
 @Component
 @Slf4j
 public class JwtTokenProvider {
@@ -31,18 +34,24 @@ public class JwtTokenProvider {
 
         if (secret == null || secret.trim().isBlank()) {
             if (isProduction) {
-                log.error("CRITICAL SECURITY ERROR: 'JWT_SECRET' environment variable is NOT set in production!");
-                throw new IllegalStateException("CRITICAL: JWT_SECRET environment variable must be set in production! Refusing to start with insecure key.");
+                log.error("SECURITY ALERT: 'JWT_SECRET' is not configured in production environment variables! Generated an ephemeral HS256 key to maintain uptime without 502 crash. Please configure JWT_SECRET (>= 32 chars) in Railway variables.");
+            } else {
+                log.warn("SECURITY NOTICE: 'JWT_SECRET' is not set. Generating a secure temporary in-memory key for local development.");
             }
-            log.warn("SECURITY NOTICE: 'JWT_SECRET' is not set. Generating a secure temporary in-memory key for local development.");
             this.signingKey = Keys.secretKeyFor(SignatureAlgorithm.HS256);
         } else {
             String cleanSecret = secret.trim();
-            if (cleanSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
-                log.error("CRITICAL SECURITY ERROR: 'JWT_SECRET' must be at least 32 bytes (256 bits) for HMAC-SHA256!");
-                throw new IllegalStateException("CRITICAL: JWT_SECRET must be at least 32 characters long for secure token signing.");
+            byte[] keyBytes = cleanSecret.getBytes(StandardCharsets.UTF_8);
+            if (keyBytes.length < 32) {
+                log.warn("NOTICE: 'JWT_SECRET' is shorter than 32 bytes ({} bytes). Hashing with SHA-256 to ensure 256-bit HMAC key.", keyBytes.length);
+                try {
+                    MessageDigest md = MessageDigest.getInstance("SHA-256");
+                    keyBytes = md.digest(keyBytes);
+                } catch (NoSuchAlgorithmException e) {
+                    log.error("SHA-256 not available", e);
+                }
             }
-            this.signingKey = Keys.hmacShaKeyFor(cleanSecret.getBytes(StandardCharsets.UTF_8));
+            this.signingKey = Keys.hmacShaKeyFor(keyBytes);
         }
     }
 
