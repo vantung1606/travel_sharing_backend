@@ -32,11 +32,24 @@ public class PlaceController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<PlaceDto>>> getAllPlaces(
+    public ResponseEntity<ApiResponse<?>> getAllPlaces(
             @RequestParam(required = false) String city,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String keyword) {
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        // Phân trang là opt-in: chỉ khi client gửi page/size mới trả PagedResponse,
+        // ngược lại giữ nguyên shape cũ (List) để không phá vỡ các màn hình đang dùng.
+        if (page != null || size != null) {
+            int safePage = page != null ? Math.max(page, 0) : 0;
+            int safeSize = size != null ? size : 24;
+            log.info("REST request to get paged places: page={}, size={}, city={}, category={}, status={}, keyword={}",
+                    safePage, safeSize, city, category, status, keyword);
+            return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm thành công",
+                    placeService.getPlacesPaged(city, category, status, keyword, safePage, safeSize)));
+        }
+
         log.info("REST request to get places: city={}, category={}, status={}, keyword={}", city, category, status, keyword);
         List<PlaceDto> places = placeService.getAllPlaces(city, category, status, keyword);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm thành công", places));

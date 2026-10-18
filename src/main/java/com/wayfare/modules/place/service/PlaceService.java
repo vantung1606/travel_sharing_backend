@@ -1,5 +1,6 @@
 package com.wayfare.modules.place.service;
 
+import com.wayfare.common.dto.PagedResponse;
 import com.wayfare.modules.place.dto.CreatePlaceRequest;
 import com.wayfare.modules.place.dto.PlaceDto;
 import com.wayfare.entity.Place;
@@ -9,6 +10,9 @@ import com.wayfare.repository.PlaceRepository;
 import com.wayfare.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +47,44 @@ public class PlaceService {
 
         List<Place> places = placeRepository.searchPlaces(cleanStatus, cleanCity, cleanCategory, cleanKeyword);
         return places.stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    /**
+     * Lấy danh sách địa điểm có phân trang (opt-in qua query param page/size).
+     * Chỉ map DTO cho đúng trang cần trả về, giảm tải payload và số câu query.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<PlaceDto> getPlacesPaged(String city, String category, String status, String keyword,
+                                                  int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        log.info("Fetching paged places - page: {}, size: {}, city: {}, category: {}, status: {}, keyword: {}",
+                safePage, safeSize, city, category, status, keyword);
+
+        String cleanCity = (city != null && !city.isBlank() && !city.equalsIgnoreCase("Tất cả")) ? city.trim() : null;
+        String cleanCategory = (category != null && !category.isBlank() && !category.equalsIgnoreCase("Tất cả")) ? category.trim() : null;
+        String cleanStatus = "ACTIVE";
+        if (status != null && !status.isBlank()) {
+            if (status.equalsIgnoreCase("ALL")) {
+                cleanStatus = null;
+            } else if (!status.equalsIgnoreCase("Tất cả")) {
+                cleanStatus = status.trim();
+            }
+        }
+        String cleanKeyword = (keyword != null && !keyword.isBlank()) ? keyword.trim() : null;
+
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        Page<Place> result = placeRepository.searchPlacesPaged(cleanStatus, cleanCity, cleanCategory, cleanKeyword, pageable);
+
+        List<PlaceDto> items = result.getContent().stream().map(this::toDto).collect(Collectors.toList());
+        return PagedResponse.<PlaceDto>builder()
+                .items(items)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .hasNext(result.hasNext())
+                .build();
     }
 
     @Transactional(readOnly = true)

@@ -42,11 +42,25 @@ public class PostController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<PostDto>>> getCommunityPosts(
+    public ResponseEntity<ApiResponse<?>> getCommunityPosts(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             Authentication authentication) {
         String effectiveEmail = extractViewerEmail(authentication);
+
+        // Phân trang là opt-in: chỉ khi client gửi page/size mới trả PagedResponse,
+        // ngược lại giữ nguyên shape cũ (List) để không phá vỡ các màn hình đang dùng.
+        if (page != null || size != null) {
+            int safePage = page != null ? Math.max(page, 0) : 0;
+            int safeSize = size != null ? size : 10;
+            log.info("REST request to get paged community posts: page={}, size={}, category={}, keyword={}, email={}",
+                    safePage, safeSize, category, keyword, effectiveEmail);
+            return ResponseEntity.ok(ApiResponse.success("Lấy danh sách bài viết thành công",
+                    postService.getCommunityPostsPaged(category, keyword, effectiveEmail, safePage, safeSize)));
+        }
+
         log.info("REST request to get community posts: category={}, keyword={}, email={}", category, keyword, effectiveEmail);
         List<PostDto> posts = postService.getCommunityPosts(category, keyword, effectiveEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách bài viết thành công", posts));
