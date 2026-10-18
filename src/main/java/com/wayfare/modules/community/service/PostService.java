@@ -1,5 +1,6 @@
 package com.wayfare.modules.community.service;
 
+import com.wayfare.common.dto.PagedResponse;
 import com.wayfare.modules.community.dto.CommentDto;
 import com.wayfare.modules.itinerary.dto.ItineraryDto;
 import com.wayfare.modules.notification.service.NotificationService;
@@ -59,9 +60,54 @@ public class PostService {
     public List<PostDto> getCommunityPosts(String category, String keyword, String currentUserEmail) {
         log.info("Fetching community posts with category='{}', keyword='{}', user='{}'", category, keyword, currentUserEmail);
 
-        final User currentUser = (currentUserEmail != null && !currentUserEmail.isBlank())
-                ? resolveUser(currentUserEmail)
-                : null;
+        final User currentUser = resolveViewer(currentUserEmail);
+        List<Post> posts = loadVisiblePosts(category, keyword, currentUser);
+        return posts.stream().map(p -> mapToDto(p, currentUser)).collect(Collectors.toList());
+    }
+
+    /**
+     * Danh sách bài viết cộng đồng có phân trang (opt-in qua query param page/size).
+     * Việc lọc visibility/category/pending vẫn giữ nguyên; chỉ map DTO cho đúng trang
+     * để giảm payload và giảm số câu query N+1 khi danh sách lớn.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<PostDto> getCommunityPostsPaged(String category, String keyword,
+                                                         String currentUserEmail, int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 50);
+        log.info("Fetching paged community posts - page: {}, size: {}, category='{}', keyword='{}', user='{}'",
+                safePage, safeSize, category, keyword, currentUserEmail);
+
+        final User currentUser = resolveViewer(currentUserEmail);
+        List<Post> all = loadVisiblePosts(category, keyword, currentUser);
+
+        int total = all.size();
+        int from = Math.min(safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+        List<PostDto> items = all.subList(from, to).stream()
+                .map(p -> mapToDto(p, currentUser))
+                .collect(Collectors.toList());
+        int totalPages = (int) Math.ceil((double) total / safeSize);
+
+        return PagedResponse.<PostDto>builder()
+                .items(items)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .hasNext(to < total)
+                .build();
+    }
+
+    private User resolveViewer(String email) {
+        return (email != null && !email.isBlank()) ? resolveUser(email) : null;
+    }
+
+    /**
+     * Lọc bài viết hiển thị theo visibility, pending review và category.
+     * Tách riêng để tái sử dụng cho cả API phân trang và không phân trang.
+     */
+    private List<Post> loadVisiblePosts(String category, String keyword, User currentUser) {
         final Long currentUserId = currentUser != null ? currentUser.getId() : null;
 
         List<Post> posts;
@@ -98,8 +144,7 @@ public class PostService {
                     .collect(Collectors.toList());
         }
 
-        final User loggedInUser = currentUser;
-        return posts.stream().map(p -> mapToDto(p, loggedInUser)).collect(Collectors.toList());
+        return posts;
     }
 
     public User resolveUser(String email) {
