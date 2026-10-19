@@ -33,6 +33,7 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.PostLikeRepository postLikeRepository;
     private final com.wayfare.repository.PostCommentRepository postCommentRepository;
     private final com.wayfare.repository.PlaceRepository placeRepository;
+    private final com.wayfare.repository.ReviewRepository reviewRepository;
     private final com.wayfare.repository.UserFollowRepository userFollowRepository;
     private final PasswordEncoder passwordEncoder;
     private final javax.sql.DataSource dataSource;
@@ -504,6 +505,88 @@ public class DataInitializer implements CommandLineRunner {
             }
         }
 
+        // ══════════════════════════════════════════════════════════════════
+        // Seed GIÁ VÉ THỰC TẾ (idempotent): 561/565 địa điểm đang ticketPrice = 0
+        // khiến bộ lọc giá bị vô nghĩa. Chỉ đụng vé = 0, GIỮ các giá thật đã có
+        // (Túi Mơ To 65k, Hội An 120k, Mã Pí Lèng 120k, Bà Nà Hills 950k).
+        // Guard: khi số địa điểm có vé > 0 vượt mốc -> KHÔNG chạy lại.
+        // ══════════════════════════════════════════════════════════════════
+        List<com.wayfare.entity.Place> allPlaces = placeRepository.findAll();
+        if (allPlaces.size() > 400) {
+            long paidCount = allPlaces.stream()
+                    .filter(p -> p.getTicketPrice() != null && p.getTicketPrice().compareTo(java.math.BigDecimal.ZERO) > 0)
+                    .count();
+            if (paidCount < 60) {
+                log.info("Auto-realistic pricing: {} places have no ticket price -> seeding realistic fares...", paidCount);
+                List<com.wayfare.entity.Place> pricedPlaces = new java.util.ArrayList<>();
+                for (com.wayfare.entity.Place p : allPlaces) {
+                    if (p.getTicketPrice() != null && p.getTicketPrice().compareTo(java.math.BigDecimal.ZERO) > 0) {
+                        continue; // giữ giá thật
+                    }
+                    int fare = seededTicketPrice(p.getId(), p.getCategoryName() == null ? "" : p.getCategoryName());
+                    p.setTicketPrice(java.math.BigDecimal.valueOf(fare));
+                    p.setPriceRange(fare > 0 ? ("Vé vào cổng: " + formatVndShort(fare) + "đ") : "Miễn phí tham quan");
+                    pricedPlaces.add(p);
+                }
+                placeRepository.saveAll(pricedPlaces);
+                log.info(">>> SUCCESS: Seeded realistic ticket prices for {} places (paid rate ~ reaching filter variety)", pricedPlaces.size());
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // Seed REVIEW THẬT CHO BẢNG REVIEWS (idempotent): seed cũ chỉ ghi cột
+        // averageRating/reviewCount SẢN trên place (VD 4.9/1280) trong khi bảng
+        // reviews trống -> web/mobile hiện "(1280 đánh giá)" mà danh sách = 0.
+        // Gieo 6-12 review thực tế/địa điểm, rồi RECOMPUTE lại cột rating/count
+        // từ bảng reviews (cùng logic ReviewService.recalculatePlaceRating)
+        // để mọi con số hiển thị đều trung thực.
+        // Guard: reviewRepository.count() đạt mốc -> không chạy lại.
+        // ══════════════════════════════════════════════════════════════════
+        if (allPlaces.size() > 400 && reviewRepository.count() < 100) {
+            List<com.wayfare.entity.User> authors = userRepository.findAll();
+            if (!authors.isEmpty()) {
+                log.info("Auto-seeding realistic reviews for {} places from {} user accounts...", allPlaces.size(), authors.size());
+                List<com.wayfare.entity.Review> newReviews = new java.util.ArrayList<>();
+                List<com.wayfare.entity.Place> touchedPlaces = new java.util.ArrayList<>();
+                for (com.wayfare.entity.Place p : allPlaces) {
+                    // Trung thực: chỉ gieo review cho nơi đã có rating gốc > 0
+                    if (p.getAverageRating() == null || p.getAverageRating().signum() <= 0) {
+                        continue;
+                    }
+                    int n = 6 + (int) (Math.abs(p.getId() * 40503L) % 7); // 6..12 bản ổn định theo id
+                    double base = p.getAverageRating().doubleValue();
+                    for (int k = 0; k < n; k++) {
+                        int jitter = new int[]{0, 1, 0, 0, -1, 1, 0}[(int) ((p.getId() + k * 31L) % 7)];
+                        int rating = Math.max(1, Math.min(5, (int) Math.round(base + jitter)));
+                        com.wayfare.entity.User author = authors.get((int) ((p.getId() * 13L + k * 29L) % authors.size()));
+                        newReviews.add(com.wayfare.entity.Review.builder()
+                                .place(p)
+                                .author(author)
+                                .rating(rating)
+                                .comment(seedReviewComment(rating, p.getId() + k * 11L))
+                                .build());
+                    }
+                    touchedPlaces.add(p);
+                }
+                if (!newReviews.isEmpty()) {
+                    reviewRepository.saveAll(newReviews);
+                    for (com.wayfare.entity.Place p : touchedPlaces) {
+                        Double avg = reviewRepository.calculateAverageRating(p.getId());
+                        Long cnt = reviewRepository.countByPlaceId(p.getId());
+                        if (avg != null && cnt != null && cnt > 0) {
+                            p.setAverageRating(java.math.BigDecimal.valueOf(avg).setScale(1, java.math.RoundingMode.HALF_UP));
+                            p.setReviewCount(cnt.intValue());
+                        } else {
+                            p.setAverageRating(java.math.BigDecimal.ZERO);
+                            p.setReviewCount(0);
+                        }
+                    }
+                    placeRepository.saveAll(touchedPlaces);
+                    log.info(">>> SUCCESS: Seeded {} reviews & recalculated ratings for {} places — số hiển thị giờ trung thực với bảng reviews", newReviews.size(), touchedPlaces.size());
+                }
+            }
+        }
+
         // Seed Sample Community Posts and Reports if empty
         if (postRepository.count() == 0) {
             log.info("Seeding community posts and reports for content moderation...");
@@ -963,6 +1046,68 @@ public class DataInitializer implements CommandLineRunner {
         } catch (Exception e) {
             log.error("Failed to seed 20 test users: {}", e.getMessage(), e);
         }
+    }
+
+    // ── Helper: giá vé deterministic theo id (hash Knuth — cùng pattern pool ảnh) ──
+    private static int seededTicketPrice(Long id, String category) {
+        long roll = Math.abs(id * 2654435761L) % 100; // 0..99 ổn định theo id
+        int price;
+        switch (category) {
+            case "Quán Cafe & Săn Mây":
+                price = 25000 + (int) ((roll % 6) * 10000L); // 25k..75k — quán luôn có phí đồ uống
+                break;
+            case "Di Sản & Phố Cổ":
+                price = roll < 70 ? 20000 + (int) ((roll % 7) * 15000L) : 0; // ~70% có vé 20k..110k
+                break;
+            case "Danh Lam & Thắng Cảnh":
+                price = roll < 80 ? 15000 + (int) ((roll % 6) * 15000L) : 0; // ~80% giá 15k..90k
+                break;
+            case "Biển Đảo & Nghỉ Dưỡng":
+                price = roll < 40 ? 0 : 60000 + (int) ((roll % 9) * 85000L); // ~60% tour 60k..740k
+                break;
+            default: // Núi Rừng & Mây Ngàn — đa số điểm trekking/săn mây miễn phí
+                price = roll < 82 ? 0 : 20000 + (int) ((roll % 9) * 15000L); // ~18% vé 20k..140k
+                break;
+        }
+        return price;
+    }
+
+    private static String formatVndShort(int v) {
+        return String.format("%,d", v).replace(',', '.');
+    }
+
+    // ── Helper: nội dung review tự nhiên theo số sao, chọn ổn định theo seed ──
+    private static String seedReviewComment(int rating, long seed) {
+        String[] five = {
+                "Trải nghiệm tuyệt vời, đẹp hơn cả hình — nhất định quay lại lần nữa!",
+                "Rất đáng đến, mọi thứ được chăm chút kỹ lưỡng và sạch sẽ.",
+                "Chụp ảnh sống ảo rất xịn, lưu ngay vào sổ check-in của mình.",
+                "Đúng chất bản địa, khí trời mát mẻ lắm, 5 sao xứng đáng."
+        };
+        String[] four = {
+                "Đẹp nhưng hơi đông khách lúc chiều, nên đi sáng sớm để chụp ổn hơn.",
+                "Khá ưng ý trong tầm giá, bãi đỗ xe rộng và đường đi dễ tìm.",
+                "View tuyệt, dịch vụ ổn; nếu nhà vệ sinh được cải thiện thì hơn nữa."
+        };
+        String[] three = {
+                "Ổn cho chuyến đi trong ngày, nhưng khu chờ hơi nóng thiếu mái che.",
+                "Cảnh vẫn đẹp, tuy nhiên dịch vụ chưa đồng đều giữa các khung giờ."
+        };
+        String[] two = {
+                "Hơi thất vọng so với hình trên mạng, phí vé khá cao so với trải nghiệm.",
+                "Đông và rác nhiều lúc cuối tuần, cần cải thiện công tác bảo quản môi trường."
+        };
+        String[] one = { "Không như mô tả, chắc không quay lại nữa." };
+        String[] pool;
+        switch (rating) {
+            case 5: pool = five; break;
+            case 4: pool = four; break;
+            case 3: pool = three; break;
+            case 2: pool = two; break;
+            default: pool = one; break;
+        }
+        int idx = (int) (Math.abs(seed * 6364136223846793005L + 1442695040888963407L) % pool.length);
+        return pool[idx];
     }
 }
 
