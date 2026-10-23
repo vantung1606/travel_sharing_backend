@@ -20,12 +20,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Endpoint kết nối WebSocket thời gian thực cho phân hệ Chat
-        registry.addEndpoint("/ws/chat")
-                .setAllowedOriginPatterns("*")
-                .withSockJS();
-
+        // Raw WebSocket endpoint for modern STOMP clients (@stomp/stompjs on Web & Mobile)
         registry.addEndpoint("/ws/chat")
                 .setAllowedOriginPatterns("*");
+
+        // Optional SockJS fallback
+        registry.addEndpoint("/ws/chat/sockjs", "/ws/chat-sockjs")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
     }
 }

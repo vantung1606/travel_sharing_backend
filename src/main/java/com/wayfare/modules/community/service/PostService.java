@@ -900,7 +900,7 @@ public class PostService {
         List<String> images = new ArrayList<>();
         if (p.getImages() != null && !p.getImages().isBlank()) {
             for (String img : p.getImages().split(";;;")) {
-                if (!img.isBlank()) images.add(img.trim());
+                if (!img.isBlank()) images.add(sanitizeMediaUrl(img.trim()));
             }
         }
         String firstImage = images.isEmpty() ? null : images.get(0);
@@ -939,7 +939,7 @@ public class PostService {
                 .locationTag(p.getLocationTag())
                 .imageUrl(firstImage)
                 .images(images)
-                .videoUrl(p.getVideoUrl())
+                .videoUrl(sanitizeMediaUrl(p.getVideoUrl()))
                 .visibility(p.getVisibility() != null ? p.getVisibility() : "PUBLIC")
                 .formattedDate(formattedDate)
                 .isOwner(isOwner)
@@ -958,7 +958,7 @@ public class PostService {
                 .authorName(p.getAuthor() != null ? p.getAuthor().getFullName() : "Du khách Wayfare")
                 .authorEmail(p.getAuthor() != null ? p.getAuthor().getEmail() : null)
                 .authorHandle(p.getAuthor() != null ? p.getAuthor().getHandle() : "@wayfarer")
-                .authorAvatar(p.getAuthor() != null ? p.getAuthor().getAvatarUrl() : null)
+                .authorAvatar(sanitizeMediaUrl(p.getAuthor() != null ? p.getAuthor().getAvatarUrl() : null))
                 .authorRole(p.getAuthor() != null && p.getAuthor().getRoles() != null && p.getAuthor().getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN")) ? "Quản trị viên" : "Phượt thủ tự do")
                 .authorTier(p.getAuthor() != null && p.getAuthor().getTier() != null ? p.getAuthor().getTier() : "bronze")
                 // Attached Itinerary
@@ -975,6 +975,47 @@ public class PostService {
                 .build();
     }
 
+    public String sanitizeMediaUrl(String url) {
+        if (url == null || url.isBlank()) return url;
+
+        String baseUrl = null;
+        try {
+            org.springframework.web.context.request.RequestAttributes attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (attrs instanceof org.springframework.web.context.request.ServletRequestAttributes) {
+                HttpServletRequest req = ((org.springframework.web.context.request.ServletRequestAttributes) attrs).getRequest();
+                String proto = req.getHeader("X-Forwarded-Proto");
+                String host = req.getHeader("X-Forwarded-Host");
+                if (host == null || host.isBlank()) {
+                    host = req.getHeader("Host");
+                }
+                if (host != null && !host.isBlank() && !host.contains("localhost")) {
+                    String scheme = (proto != null && !proto.isBlank()) ? proto : req.getScheme();
+                    baseUrl = scheme + "://" + host;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if (baseUrl == null) {
+            String railwayDomain = System.getenv("RAILWAY_PUBLIC_DOMAIN");
+            if (railwayDomain == null || railwayDomain.isBlank()) {
+                railwayDomain = System.getenv("RAILWAY_STATIC_URL");
+            }
+            if (railwayDomain != null && !railwayDomain.isBlank()) {
+                baseUrl = railwayDomain.startsWith("http") ? railwayDomain : "https://" + railwayDomain;
+            }
+        }
+
+        if (baseUrl != null && !baseUrl.contains("localhost")) {
+            if (url.startsWith("http://localhost:8081")) {
+                return url.replace("http://localhost:8081", baseUrl);
+            }
+            if (url.startsWith("http://localhost:")) {
+                return url.replaceFirst("^http://localhost:\\d+", baseUrl);
+            }
+        }
+        return url;
+    }
+
     private CommentDto mapCommentToDto(PostComment c) {
         return CommentDto.builder()
                 .id(c.getId())
@@ -982,7 +1023,7 @@ public class PostService {
                 .authorId(c.getAuthor().getId())
                 .authorName(c.getAuthor().getFullName())
                 .authorHandle(c.getAuthor().getHandle())
-                .authorAvatar(c.getAuthor().getAvatarUrl())
+                .authorAvatar(sanitizeMediaUrl(c.getAuthor() != null ? c.getAuthor().getAvatarUrl() : null))
                 .content(c.getContent())
                 .parentId(c.getParent() != null ? c.getParent().getId() : null)
                 .replyToUserId(c.getReplyToUser() != null ? c.getReplyToUser().getId() : null)
