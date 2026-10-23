@@ -276,7 +276,7 @@ public class PostService {
                 .reportReason(aiResult.getFlagReason())
                 .status(initialStatus)
                 .aiSafetyScore(aiResult.getSafetyScore())
-                .aiFlagReason(aiResult.getFlagReason())
+                .aiFlagReason(aiResult.getFlagReason() != null ? aiResult.getFlagReason() : aiResult.getAiAnalysis())
                 .build();
 
         Post saved = postRepository.save(newPost);
@@ -818,7 +818,7 @@ public class PostService {
         post.setCategory(postCategory);
         post.setStatus(status);
         post.setAiSafetyScore(aiResult.getSafetyScore());
-        post.setAiFlagReason(aiResult.getFlagReason());
+        post.setAiFlagReason(aiResult.getFlagReason() != null ? aiResult.getFlagReason() : aiResult.getAiAnalysis());
         post.setBadgeText(aiResult.getBadgeText());
 
         Post saved = postRepository.save(post);

@@ -1,8 +1,14 @@
 package com.wayfare.modules.community.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wayfare.modules.ai.dto.AiGenerateRequest;
+import com.wayfare.modules.ai.dto.AiGenerateResponse;
+import com.wayfare.modules.ai.service.AiService;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -11,6 +17,18 @@ import java.util.List;
 @Slf4j
 @Service
 public class AiContentModerationService {
+
+    private final AiService aiService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public AiContentModerationService(@Autowired(required = false) AiService aiService) {
+        this.aiService = aiService;
+        if (aiService != null && aiService.isApiKeyConfigured()) {
+            log.info("AiContentModerationService initialized with Google Gemini LLM API active.");
+        } else {
+            log.info("AiContentModerationService initialized with Enhanced Heuristic Fallback engine.");
+        }
+    }
 
     @Getter
     @Builder
@@ -21,92 +39,71 @@ public class AiContentModerationService {
         private String flagReason;
         private String badgeText;
         private List<String> flaggedViolations;
+        private String aiAnalysis; // Phân tích đa chiều từ Gemini
     }
 
-    // Rule Group 1: Debt Collection, Loan Sharking & Financial Disputes (STRICT BAN)
-    private static final List<String> DEBT_COLLECTION_VIOLATIONS = List.of(
-            "đòi nợ", "doi no", "trả nợ", "tra no", "quỵt nợ", "quyt no", "bùng nợ", "bung no",
-            "vay nợ", "vay no", "vay tiền", "vay tien", "mượn nợ", "muon no", "mượn tiền", "muon tien",
-            "cho mượn tiền", "trốn nợ", "tron no", "siết nợ", "siet no", "xiết nợ", "xiet no",
-            "nợ xấu", "no xau", "nợ nần", "no nan", "thu nợ", "thu no", "thu hồi nợ", "thu hoi no",
-            "con nợ", "con no", "chủ nợ", "chu no", "khất nợ", "khat no", "đáo hạn", "dao han",
-            "bán nợ", "ban no", "nhắc nợ", "nhac no", "trả tiền đây", "tra tien day", "mau trả tiền",
-            "mau tra tien", "cháy túi vì nợ", "bốc bát họ", "boc bat ho", "tín dụng đen", "tin dung den",
-            "lãi ngày", "lai ngay", "lãi suất cao", "cắt tai", "tạt sơn", "ném mắm tôm", "đầu gấu đòi",
-            "giang hồ đòi", "nợ tiền", "no tien", "thiếu nợ", "thieu no", "mắc nợ", "mac no"
+    // System instruction (Skill) chuyên sâu cho Gemini phân tích đa góc độ
+    private static final String GEMINI_MODERATION_SKILL = """
+            Bạn là Chuyên gia Thẩm định & Kiểm duyệt Nội dung Trí tuệ Nhân tạo (WanderAI Smart Shield) của mạng xã hội du lịch Wayfare.
+            Nhiệm vụ của bạn là phân tích sâu ngữ cảnh thực tế, sắc thái cảm xúc và tính chất của bài viết để đưa ra quyết định duyệt công bằng, nhân văn, hiểu văn hóa mạng xã hội Việt Nam và tuyệt đối không máy móc bắt bẻ từng từ khóa.
+
+            BẮT BUỘC PHÂN TÍCH THEO 4 GÓC ĐỘ CỐT LÕI:
+            1. Góc độ Bản chất Tài chính & Đòi nợ (Debt & Casual Humor):
+               - NGUY HIỂM (Chặn / Flag): Tín dụng đen, bốc bát họ, cho vay nặng lãi, đe dọa bạo lực (cắt tai, tạt sơn, ném mắm tôm), đòi nợ giang hồ, khủng bố tinh thần, bóc phốt quỵt nợ nghiêm trọng nhằm triệt hạ danh dự cá nhân.
+               - VÔ HẠI / ĐÙA VUI (Duyệt / Approved): Các bài đăng trêu đùa bạn bè, ảnh meme hài hước, nhắc nợ số tiền nhỏ (như đòi 10k, 20k ăn sáng, tiền ly trà sữa, đùa vui sau chuyến đi) có tính chất giải trí, thân thiện, gắn kết cộng đồng. Tuyệt đối không quá khắt khe với các tương tác vui này.
+
+            2. Góc độ Dấu hiệu Lừa đảo & Chiếm đoạt tài sản (Scams & Fraud):
+               - Bài viết có dấu hiệu lừa đảo, đa cấp, dụ dỗ đầu tư tài chính, tiền ảo, kêu gọi chuyển tiền mờ ám, việc nhẹ lương cao, cờ bạc tài xỉu, mạo danh lừa gạt cộng đồng hay không? Nếu có -> KHÔNG DUYỆT (approved = false, safetyScore < 50).
+
+            3. Góc độ Mức độ ảnh hưởng diện rộng & Tác hại xã hội (Social Harm & Public Impact):
+               - Bài viết có gây hại cho cộng đồng, kích động thù địch, hoang mang dư luận, phá hoại khu bảo tồn sinh thái / rừng cấm, hay ảnh hưởng tiêu cực diện rộng không? Nếu chỉ là status cá nhân, chia sẻ du lịch, trải nghiệm ẩm thực, meme đời sống vui vẻ -> DUYỆT (approved = true).
+
+            4. Góc độ Ngôn từ thù ghét, thô tục & khiêu dâm (Toxicity & Harassment):
+               - Có chửi bới xúc phạm nhân phẩm thậm tệ, đồi trụy hoặc quấy rối tình dục hay không?
+
+            QUY TẮC CHO ĐIỂM & DUYỆT:
+            - safetyScore: từ 0 đến 100.
+              + Điểm >= 80: Duyệt tự động công khai (approved = true). Các bài chia sẻ du lịch, ẩm thực, hoặc bài đăng đùa vui / meme vô hại (như đòi 20k ăn sáng) nên cho điểm cao từ 85 - 98.
+              + Điểm < 80: Giữ lại để Quản trị viên xem xét thủ công (approved = false).
+            - category: Đặt tên chuyên mục phù hợp (ví dụ: "Ẩm thực & Check-in", "Meme & Đời sống", "Trải nghiệm & Khám phá", "Cảnh báo Lừa đảo / Tín dụng đen", v.v.).
+
+            KẾT QUẢ ĐẦU RA BẮT BUỘC LÀ JSON THUẦN TÚY (không kèm markdown ```json ``` hay text thừa):
+            {
+              "approved": true,
+              "safetyScore": 95,
+              "category": "Ẩm thực & Check-in",
+              "badgeText": "Nội dung an toàn",
+              "flagReason": null,
+              "analysis": "Tóm tắt 1-2 câu nhận định theo các góc độ (tính chất lừa đảo, mức độ ảnh hưởng, mục đích bài viết) và lý do duyệt."
+            }
+            """;
+
+    // Danh sách từ khóa tín dụng đen / đe dọa bạo lực THỰC SỰ NGUY HIỂM (dùng cho Fallback engine)
+    private static final List<String> SEVERE_LOAN_SHARK_VIOLATIONS = List.of(
+            "bốc bát họ", "boc bat ho", "tín dụng đen", "tin dung den", "lãi ngày", "lai ngay",
+            "cắt tai", "cat tai", "tạt sơn", "tat son", "ném mắm tôm", "nem mam tom", "đầu gấu đòi",
+            "giang hồ đòi", "siết nợ", "siet no", "xiết nợ", "xiet no", "bán nợ", "ban no",
+            "vay nóng", "vay nong", "cho vay lãi cao"
     );
 
-    // Mẫu cấu trúc phạm quy đòi nợ (chống né từ khóa): "nợ <số tiền>", từ chối trả tiền, nhắc nợ theo số
-    private static final List<java.util.regex.Pattern> DEBT_STRUCTURAL_PATTERNS = List.of(
-            java.util.regex.Pattern.compile("\\bno\\s+\\d+\\s*(trieu|nghin|ngan|ty|k)\\b"),
-            java.util.regex.Pattern.compile("\\b(khong|ko)\\s+chiu\\s+tra\\b"),
-            java.util.regex.Pattern.compile("\\bkhong\\s+tra\\s+(no|tien)\\b"),
-            java.util.regex.Pattern.compile("\\b(tra|thu|doi|cho)\\s+no\\s+\\d+"),
-            java.util.regex.Pattern.compile("\\b(no|bo)\\s+phi\\s+\\d+")
+    // Mẫu trêu đùa đời sống vô hại (20k ăn sáng, trà sữa, cafe, ...)
+    private static final List<String> HARMLESS_HUMOR_PATTERNS = List.of(
+            "ăn sáng", "an sang", "trà sữa", "tra sua", "cafe", "cà phê", "bữa trưa", "bua trua",
+            "tiền ăn", "tien an", "bữa sáng", "bua sang", "20k", "10k", "30k", "50k", "hồ diện", "meme"
     );
 
-    // Mẫu xin thông tin liên hệ cá nhân của người khác ("ai biết cho tôi sdt...")
-    private static final java.util.regex.Pattern PHONE_SOLICITATION_PATTERN = java.util.regex.Pattern.compile(
-            "(ai\\s+(biet|co|giup)|cho\\s+(toi|minh|em)|cho\\s+xin)[^.\\n]{0,60}(sdt|so dien thoai|so dt|zalo)"
-    );
-
-    // Rule Group 2: Safety, Legal & Eco Conservation Violations
     private static final List<String> ECO_SAFETY_VIOLATIONS = List.of(
             "cấm lửa", "đốt lửa", "lách kiểm lâm", "chốt kiểm lâm", "vượt rào", "chui rào",
-            "vào rừng cấm", "săn bắt", "bắt thú", "bẻ san hô", "hái san hô", "vực sâu nguy hiểm",
-            "tự ý cắm trại", "cắm trại chui", "vứt rác bừa bãi", "đốt rác"
+            "vào rừng cấm", "săn bắt", "bắt thú", "bẻ san hô", "hái san hô", "tự ý cắm trại", "cắm trại chui"
     );
 
-    // Rule Group 3: Commercial Spam, Scams & Gambling
-    private static final List<String> SPAM_SCAM_VIOLATIONS = List.of(
-            "cho vay", "vay nóng", "tiền ảo", "crypto", "telegram", "zalo 0", "zalo:", "nhận tiền miễn phí",
-            "kiếm tiền online", "hoa hồng cao", "cờ bạc", "đánh bài", "kubet", "bet88", "tài xỉu", "lô đề",
-            "đánh đề", "soi cầu"
+    private static final List<String> SCAM_GAMBLING_VIOLATIONS = List.of(
+            "tiền ảo", "crypto", "telegram", "zalo 0", "zalo:", "kiếm tiền online",
+            "hoa hồng cao", "cờ bạc", "đánh bài", "kubet", "bet88", "tài xỉu", "lô đề", "soi cầu"
     );
 
-    // Rule Group 4: Off-topic Commercial, Real Estate, Fake Medicine
-    private static final List<String> OFF_TOPIC_COMMERCIAL_VIOLATIONS = List.of(
-            "bán đất", "ban dat", "bán nhà", "ban nha", "cho thuê nhà", "bất động sản", "bat dong san",
-            "sim số đẹp", "sim so dep", "việc nhẹ lương cao", "chữa bệnh trĩ", "chữa yếu sinh lý",
-            "đông y gia truyền", "thuốc nam trị", "thanh lý tủ lạnh", "thanh lý máy giặt"
-    );
-
-    // Rule Group 5: Toxicity, Defamation, Slander
     private static final List<String> DEFAMATION_TOXIC_VIOLATIONS = List.of(
-            "lừa đảo", "ăn cắp", "trộm cắp", "chó má", "khốn nạn", "súc vật", "đồ lừa đảo",
-            "tẩy chay", "bọn lừa tiền", "mất dạy", "vô học"
-    );
-
-    // Positive Context: Travel & Tourism Keywords (REQUIRED for auto-approval)
-    private static final List<String> TRAVEL_KEYWORDS = List.of(
-            "du lịch", "du lich", "phượt", "phuot", "hành trình", "hanh trinh", "chuyến đi", "chuyen di",
-            "trải nghiệm", "trai nghiem", "khám phá", "kham pha", "checkin", "check-in", "check in",
-            "lịch trình", "lich trinh", "lộ trình", "lo trinh", "tour", "vé máy bay", "ve may bay",
-            "chuyến bay", "chuyen bay", "tàu hỏa", "tau hoa", "xe khách", "xe khach", "thuê xe", "thue xe",
-            "homestay", "khách sạn", "khach san", "hotel", "resort", "villa", "cắm trại", "cam trai",
-            "camping", "glamping", "dựng lều", "dung leu", "trekking", "leo núi", "leo nui", "săn mây", "san may",
-            "bình minh", "binh minh", "hoàng hôn", "hoang hon", "ngắm cảnh", "ngam canh", "phong cảnh", "phong canh",
-            "bãi biển", "bai bien", "bờ biển", "bo bien", "biển", "bien", "hòn đảo", "hon dao", "đảo", "dao",
-            "lặn biển", "lan bien", "suối", "suoi", "thác", "thac", "ngọn đèo", "cung đèo", "đèo", "deo",
-            "đỉnh núi", "dinh nui", "hang động", "hang dong", "ẩm thực", "am thuc", "đặc sản", "dac san",
-            "món ngon", "mon ngon", "quán ăn", "quan an", "cà phê", "ca phe", "cafe", "sống ảo", "song ao",
-            "nghỉ dưỡng", "nghi duong", "kỳ nghỉ", "ky nghi", "dã ngoại", "da ngoai", "tham quan", "điểm đến",
-            "diem den", "chụp ảnh", "chup anh", "vali", "ba lô", "balo", "mùa hoa", "mua hoa", "mùa lúa", "mua lua"
-    );
-
-    // Popular Tourism Destinations
-    private static final List<String> DESTINATION_KEYWORDS = List.of(
-            "đà lạt", "da lat", "sa pa", "sapa", "hà giang", "ha giang", "phú quốc", "phu quoc",
-            "đà nẵng", "da nang", "hội an", "hoi an", "nha trang", "huế", "hue", "quy nhơn", "quy nhon",
-            "vũng tàu", "vung tau", "ninh bình", "ninh binh", "hạ long", "ha long", "mộc châu", "moc chau",
-            "tà xùa", "ta xua", "côn đảo", "con dao", "lý sơn", "ly son", "phan thiết", "phan thiet",
-            "mũi né", "mui ne", "tây bắc", "tay bac", "miền tây", "mien tay", "cát bà", "cat ba",
-            "ba bể", "ba be", "fansipan", "pù luông", "pu luong", "y tý", "y ty", "cô tô", "co to",
-            "đồng hới", "dong hoi", "phong nha", "quảng ninh", "quang ninh", "hà nội", "ha noi",
-            "sài gòn", "sai gon", "hồ chí minh", "ho chi minh", "mai châu", "mai chau", "tam đảo", "tam dao",
-            "cao bằng", "cao bang", "bắc kạn", "bac kan", "lạng sơn", "lang son", "yên bái", "yen bai",
-            "điện biên", "dien bien", "lai châu", "lai chau", "an giang", "bến tre", "ben tre",
-            "cần thơ", "can tho", "tiền giang", "tien giang", "bangkok", "bali", "singapore", "tokyo", "seoul"
+            "chó má", "khốn nạn", "súc vật", "mất dạy", "vô học"
     );
 
     private String removeAccents(String src) {
@@ -125,165 +122,159 @@ public class AiContentModerationService {
     }
 
     public ModerationResult moderate(String title, String content, String locationTag, String category, boolean hasAttachedItinerary, boolean isSharedPost) {
-        log.info("Running WanderAI Safety Shield evaluation for title: '{}', category: '{}', isSharedPost: {}", title, category, isSharedPost);
+        log.info("Running AI Content Moderation for post: '{}', Category: '{}', isShared: {}", title, category, isSharedPost);
 
+        // 1. ƯU TIÊN HÀNG ĐẦU: Gọi Gemini AI API phân tích ngữ nghĩa, mức độ ảnh hưởng và tính chất lừa đảo
+        if (aiService != null && aiService.isApiKeyConfigured()) {
+            ModerationResult geminiResult = moderateWithGemini(title, content, locationTag, category);
+            if (geminiResult != null) {
+                return geminiResult;
+            }
+        }
+
+        // 2. Dự phòng: Thuật toán Heuristic cải tiến (phân biệt rạch ròi giữa đùa vui vô hại vs. tín dụng đen)
+        return moderateWithHeuristicFallback(title, content, locationTag, category, hasAttachedItinerary, isSharedPost);
+    }
+
+    private ModerationResult moderateWithGemini(String title, String content, String locationTag, String category) {
+        try {
+            String userPrompt = String.format("""
+                    Hãy thẩm định bài viết mạng xã hội cộng đồng sau:
+                    - Tiêu đề: "%s"
+                    - Nội dung: "%s"
+                    - Địa điểm: "%s"
+                    - Chuyên mục: "%s"
+                    """,
+                    title != null ? title : "",
+                    content != null ? content : "",
+                    locationTag != null ? locationTag : "Việt Nam",
+                    category != null ? category : "Ẩm thực & Check-in"
+            );
+
+            AiGenerateRequest request = AiGenerateRequest.builder()
+                    .systemPrompt(GEMINI_MODERATION_SKILL)
+                    .prompt(userPrompt)
+                    .temperature(0.1)
+                    .maxTokens(1024)
+                    .responseMimeType("application/json")
+                    .build();
+
+            AiGenerateResponse response = aiService.generateContent(request);
+            if (response != null && response.getText() != null && !response.getText().isBlank()) {
+                String jsonText = response.getText().trim();
+                if (jsonText.startsWith("```")) {
+                    jsonText = jsonText.replaceAll("^```(json)?\\s*", "").replaceAll("\\s*```$", "").trim();
+                }
+
+                JsonNode root = objectMapper.readTree(jsonText);
+                boolean approved = root.path("approved").asBoolean(true);
+                int score = root.path("safetyScore").asInt(approved ? 92 : 40);
+                String cat = root.path("category").asText(category != null ? category : "Ẩm thực & Check-in");
+                String badge = root.path("badgeText").asText(approved ? "Nội dung an toàn" : "Chờ Admin kiểm duyệt");
+                String flagReason = root.hasNonNull("flagReason") && !root.path("flagReason").asText().isBlank()
+                        ? root.path("flagReason").asText()
+                        : null;
+                String analysis = root.path("analysis").asText("");
+
+                log.info("Gemini AI Content Moderation Successful -> Approved: {}, Score: {}/100, Analysis: {}",
+                        approved, score, analysis);
+
+                return ModerationResult.builder()
+                        .isApproved(approved)
+                        .safetyScore(score)
+                        .category(cat)
+                        .flagReason(flagReason)
+                        .badgeText(badge)
+                        .aiAnalysis(analysis)
+                        .flaggedViolations(approved ? List.of() : List.of(flagReason != null ? flagReason : "Vi phạm tiêu chuẩn an toàn"))
+                        .build();
+            }
+        } catch (Exception e) {
+            log.warn("Gemini AI moderation call failed or timed out: {}. Using enhanced fallback engine.", e.getMessage());
+        }
+        return null;
+    }
+
+    private ModerationResult moderateWithHeuristicFallback(String title, String content, String locationTag, String category, boolean hasAttachedItinerary, boolean isSharedPost) {
         String rawCombined = ((title != null ? title : "") + " " + (content != null ? content : "") + " " + (locationTag != null ? locationTag : "")).toLowerCase();
         String unaccented = removeAccents(rawCombined);
 
         int score = 100;
         List<String> violations = new ArrayList<>();
-        String detectedCategory = "Nội dung an toàn";
+        String detectedCategory = category != null && !category.isBlank() ? category : "Ẩm thực & Check-in";
         String mainReason = null;
+        String analysis = "Hệ thống duyệt tự động qua bộ lọc an toàn dự phòng.";
 
-        // 1. STRICT CHECK: DEBT COLLECTION & FINANCIAL SQUEEZE (Bắt buộc chặn đòi nợ)
-        for (String kw : DEBT_COLLECTION_VIOLATIONS) {
-            String unaccentedKw = removeAccents(kw);
-            if (rawCombined.contains(kw) || unaccented.contains(unaccentedKw)) {
-                score -= 85;
-                violations.add("Phát hiện nội dung đòi nợ / tranh chấp tài chính cá nhân: chứa từ khóa '" + kw + "'");
-                detectedCategory = "Đòi nợ & Tranh chấp Tài chính Cá nhân";
-                mainReason = "Hệ thống phát hiện nội dung mang tính chất đòi nợ, bóc phốt vay mượn hoặc giải quyết mâu thuẫn tiền bạc cá nhân. Wayfare chỉ hỗ trợ nội dung liên quan tới Du lịch & Phượt.";
+        // Kiểm tra xem có phải nội dung đùa vui/meme vô hại không (ví dụ: đòi 20k ăn sáng, trà sữa)
+        boolean isHarmlessHumor = false;
+        for (String jokeKw : HARMLESS_HUMOR_PATTERNS) {
+            if (rawCombined.contains(jokeKw) || unaccented.contains(removeAccents(jokeKw))) {
+                isHarmlessHumor = true;
                 break;
             }
         }
 
-        // 1b. STRUCTURAL CHECK: nợ theo số tiền / từ chối trả tiền — bắt các bài cố tình né từ khóa
-        for (java.util.regex.Pattern pattern : DEBT_STRUCTURAL_PATTERNS) {
-            java.util.regex.Matcher matcher = pattern.matcher(unaccented);
-            if (matcher.find()) {
+        // 1. Chỉ phạt nặng khi có dấu hiệu TÍN DỤNG ĐEN hoặc BẠO LỰC THỰC SỰ
+        for (String severeKw : SEVERE_LOAN_SHARK_VIOLATIONS) {
+            String unaccentedKw = removeAccents(severeKw);
+            if (rawCombined.contains(severeKw) || unaccented.contains(unaccentedKw)) {
                 score -= 85;
-                violations.add("Phát hiện nội dung đòi nợ / tranh chấp tài chính cá nhân (kể cả khi đã thay đổi cách diễn đạt)");
-                detectedCategory = "Đòi nợ & Tranh chấp Tài chính Cá nhân";
-                mainReason = "Hệ thống phát hiện nội dung mang tính chất đòi nợ, bóc phốt vay mượn hoặc giải quyết mâu thuẫn tiền bạc cá nhân. Wayfare chỉ hỗ trợ nội dung liên quan tới Du lịch & Phượt.";
+                violations.add("Phát hiện từ khóa tín dụng đen / đòi nợ bạo lực nguy hiểm: '" + severeKw + "'");
+                detectedCategory = "Tín dụng đen & Đe dọa";
+                mainReason = "Bài viết có dấu hiệu tín dụng đen, cho vay nặng lãi hoặc đe dọa bạo lực, vi phạm nghiêm trọng pháp luật.";
                 break;
             }
         }
 
-        // 1c. CHECK: xin thông tin liên hệ cá nhân của người khác
-        java.util.regex.Matcher phoneMatch = PHONE_SOLICITATION_PATTERN.matcher(unaccented);
-        if (phoneMatch.find()) {
-            score -= 60;
-            violations.add("Hành vi tìm kiếm/xin thông tin cá nhân (số điện thoại) của người khác");
-            if (detectedCategory.equals("Nội dung an toàn")) {
-                detectedCategory = "Đòi nợ & Tranh chấp Tài chính Cá nhân";
-                mainReason = "Nội dung có dấu hiệu xin số điện thoại hoặc thông tin cá nhân của người khác — không thuộc phạm trù chia sẻ du lịch.";
+        // Nếu chỉ là đùa vui đòi tiền ăn sáng/trà sữa và không có bạo lực -> Duyệt an toàn
+        if (isHarmlessHumor && violations.isEmpty()) {
+            score = 95;
+            detectedCategory = "Ẩm thực & Check-in";
+            analysis = "Bài viết mang tính chất trêu đùa hài hước vô hại trong cộng đồng (như đòi tiền ăn sáng/trà sữa), không có tính chất lừa đảo hay tín dụng đen.";
+        }
+
+        // 2. Kiểm tra dấu hiệu lừa đảo / cờ bạc
+        for (String scamKw : SCAM_GAMBLING_VIOLATIONS) {
+            String unaccentedKw = removeAccents(scamKw);
+            if (rawCombined.contains(scamKw) || unaccented.contains(unaccentedKw)) {
+                score -= 60;
+                violations.add("Dấu hiệu spam hoặc lừa đảo tài chính: '" + scamKw + "'");
+                if (mainReason == null) {
+                    detectedCategory = "Spam & Lừa đảo tài chính";
+                    mainReason = "Nội dung có dấu hiệu lừa đảo đa cấp, tiền ảo hoặc cờ bạc bất hợp pháp.";
+                }
             }
         }
 
-        // 2. CHECK: Eco & Fire Safety / Natural Reserve Violations
-        for (String kw : ECO_SAFETY_VIOLATIONS) {
-            String unaccentedKw = removeAccents(kw);
-            if (rawCombined.contains(kw) || unaccented.contains(unaccentedKw)) {
+        // 3. Kiểm tra phá hoại môi trường / an toàn
+        for (String ecoKw : ECO_SAFETY_VIOLATIONS) {
+            String unaccentedKw = removeAccents(ecoKw);
+            if (rawCombined.contains(ecoKw) || unaccented.contains(unaccentedKw)) {
                 score -= 40;
-                violations.add("Vi phạm an toàn du lịch & bảo tồn: chứa cụm từ '" + kw + "'");
+                violations.add("Vi phạm bảo tồn & an toàn sinh thái: '" + ecoKw + "'");
                 if (mainReason == null) {
-                    detectedCategory = "Nguy cơ an toàn & Pháp luật";
-                    mainReason = "Thông tin nguy hiểm, tuyên truyền cắm trại cấm lửa hoặc vi phạm quy định bảo tồn rừng đặc dụng/sinh thái.";
+                    detectedCategory = "Nguy cơ an toàn & Bảo tồn";
+                    mainReason = "Tuyên truyền hành vi xâm phạm rừng cấm hoặc cắm trại trái phép.";
                 }
             }
         }
 
-        // 3. CHECK: Commercial Spam, Scams & Gambling
-        for (String kw : SPAM_SCAM_VIOLATIONS) {
-            String unaccentedKw = removeAccents(kw);
-            if (rawCombined.contains(kw) || unaccented.contains(unaccentedKw)) {
-                score -= 50;
-                violations.add("Dấu hiệu spam hoặc lừa đảo tài chính: chứa cụm từ '" + kw + "'");
-                if (mainReason == null) {
-                    detectedCategory = "Spam Thương Mại & Tài Chính";
-                    mainReason = "Nội dung quảng cáo dịch vụ trái phép, cờ bạc hoặc kêu gọi giao dịch tài chính không xác thực.";
-                }
-            }
-        }
-
-        // 4. CHECK: Off-topic Commercial / Real Estate / Medicine
-        for (String kw : OFF_TOPIC_COMMERCIAL_VIOLATIONS) {
-            String unaccentedKw = removeAccents(kw);
-            if (rawCombined.contains(kw) || unaccented.contains(unaccentedKw)) {
+        // 4. Ngôn từ độc hại thậm tệ
+        for (String toxicKw : DEFAMATION_TOXIC_VIOLATIONS) {
+            String unaccentedKw = removeAccents(toxicKw);
+            if (rawCombined.contains(toxicKw) || unaccented.contains(unaccentedKw)) {
                 score -= 45;
-                violations.add("Nội dung rao vặt thương mại không thuộc du lịch: chứa cụm từ '" + kw + "'");
+                violations.add("Ngôn từ công kích / thù ghét: '" + toxicKw + "'");
                 if (mainReason == null) {
-                    detectedCategory = "Nội dung Lạc đề & Rao vặt";
-                    mainReason = "Nội dung mang tính chất rao vặt thương mại, bất động sản hoặc hàng quán không thuộc lĩnh vực du lịch.";
+                    detectedCategory = "Ngôn từ độc hại & Bôi nhọ";
+                    mainReason = "Bài viết chứa ngôn từ xúc phạm nghiêm trọng danh dự người khác.";
                 }
             }
         }
 
-        // 5. CHECK: Defamation & Toxic Language
-        for (String kw : DEFAMATION_TOXIC_VIOLATIONS) {
-            String unaccentedKw = removeAccents(kw);
-            if (rawCombined.contains(kw) || unaccented.contains(unaccentedKw)) {
-                score -= 30;
-                violations.add("Nội dung bôi nhọ hoặc công kích gay gắt: chứa cụm từ '" + kw + "'");
-                if (mainReason == null) {
-                    detectedCategory = "Khiếu nại Đánh giá & Bôi nhọ";
-                    mainReason = "Bài viết mang tính cáo buộc đối tác hoặc dùng ngôn từ công kích, cần kiểm tra tính xác thực để tránh gây thiệt hại danh tiếng.";
-                }
-            }
-        }
-
-        // 6. STRICT CHECK: TRAVEL DOMAIN RELEVANCE (Chỉ duyệt bài viết liên quan tới du lịch)
-        int travelKeywordHits = 0;
-        for (String tkw : TRAVEL_KEYWORDS) {
-            String unaccentedTkw = removeAccents(tkw);
-            if (rawCombined.contains(tkw) || unaccented.contains(unaccentedTkw)) {
-                travelKeywordHits++;
-            }
-        }
-
-        int destinationHits = 0;
-        for (String dest : DESTINATION_KEYWORDS) {
-            String unaccentedDest = removeAccents(dest);
-            if (rawCombined.contains(dest) || unaccented.contains(unaccentedDest)) {
-                destinationHits++;
-            }
-        }
-
-        boolean hasTravelContext = travelKeywordHits > 0 || destinationHits > 0 || hasAttachedItinerary || isSharedPost;
-
-        // Valid categories that show travel intent (Supports English, slug, and Vietnamese UTF-8 labels)
-        boolean hasValidCategory = isSharedPost || (category != null && (
-                category.equalsIgnoreCase("KhamPha") ||
-                category.equalsIgnoreCase("AmThuc") ||
-                category.equalsIgnoreCase("Phuot") ||
-                category.equalsIgnoreCase("BienDao") ||
-                category.equalsIgnoreCase("NghiDuong") ||
-                category.equalsIgnoreCase("CheckIn") ||
-                category.toLowerCase().contains("khám phá") ||
-                category.toLowerCase().contains("kham pha") ||
-                category.toLowerCase().contains("phượt") ||
-                category.toLowerCase().contains("phuot") ||
-                category.toLowerCase().contains("ẩm thực") ||
-                category.toLowerCase().contains("am thuc") ||
-                category.toLowerCase().contains("check-in") ||
-                category.toLowerCase().contains("checkin") ||
-                category.toLowerCase().contains("biển") ||
-                category.toLowerCase().contains("bien") ||
-                category.toLowerCase().contains("nghỉ dưỡng") ||
-                category.toLowerCase().contains("nghi duong") ||
-                category.toLowerCase().contains("du lịch") ||
-                category.toLowerCase().contains("hành trình") ||
-                category.toLowerCase().contains("lịch trình") ||
-                category.toLowerCase().contains("tour")
-        ));
-
-        if (!hasTravelContext && !hasValidCategory) {
-            score -= 45; // If zero travel context and non-travel category, fail auto-approval
-            violations.add("Bài viết không chứa các yếu tố, địa danh hay trải nghiệm liên quan đến Du lịch");
-            if (mainReason == null) {
-                detectedCategory = "Nội dung Lạc đề (Không liên quan Du lịch)";
-                mainReason = "Bài viết không chứa thông tin, địa danh hoặc trải nghiệm liên quan đến du lịch, khám phá hay văn hóa ẩm thực. Hệ thống chỉ tự động duyệt các nội dung đúng chủ đề Du lịch.";
-            }
-        }
-
-        // Clamp score between 10 and 100
         score = Math.max(10, Math.min(100, score));
-
         boolean approved = score >= 80;
-        String badge = approved ? "Nội dung an toàn" : "Chờ Admin duyệt thủ công";
-
-        log.info("WanderAI Moderation Result -> Score: {}/100, Approved: {}, Category: '{}', Violations: {}",
-                score, approved, detectedCategory, violations.size());
+        String badge = approved ? "Nội dung an toàn" : "Chờ Admin kiểm duyệt";
 
         return ModerationResult.builder()
                 .isApproved(approved)
@@ -292,7 +283,7 @@ public class AiContentModerationService {
                 .flagReason(approved ? null : mainReason)
                 .badgeText(badge)
                 .flaggedViolations(violations)
+                .aiAnalysis(analysis)
                 .build();
     }
 }
-
