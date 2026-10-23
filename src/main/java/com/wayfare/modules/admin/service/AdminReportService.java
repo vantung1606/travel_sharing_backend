@@ -290,6 +290,26 @@ public class AdminReportService {
             }
         }
 
+        boolean isPendingReview = "PENDING_REVIEW".equals(post.getStatus());
+        String defaultBadgeText;
+        if (isPendingReview) {
+            defaultBadgeText = "AI gắn cờ - Chờ duyệt";
+            if ("info".equals(categoryType)) categoryType = "warning";
+        } else if (post.getReportsCount() != null && post.getReportsCount() > 0) {
+            defaultBadgeText = post.getReportsCount() + " Lượt báo cáo";
+        } else {
+            defaultBadgeText = "Nội dung an toàn";
+        }
+
+        String reportReasonText = post.getReportReason();
+        if (reportReasonText == null || reportReasonText.isBlank()) {
+            if (isPendingReview) {
+                reportReasonText = post.getAiFlagReason() != null ? post.getAiFlagReason() : "Bài viết do người dùng đăng tải bị hệ thống AI giữ lại chờ duyệt thủ công.";
+            } else {
+                reportReasonText = "Báo cáo nội dung cần rà soát từ cộng đồng.";
+            }
+        }
+
         return AdminPostDto.builder()
                 .id(post.getId())
                 .postCode("PST-" + (89000 + post.getId()))
@@ -306,8 +326,8 @@ public class AdminReportService {
                 .status(post.getStatus() != null ? post.getStatus() : "ACTIVE")
                 .aiSafetyScore(post.getAiSafetyScore() != null ? post.getAiSafetyScore() : 98)
                 .aiFlagReason(post.getAiFlagReason() != null ? post.getAiFlagReason() : "Hệ thống AI không phát hiện vi phạm quy chuẩn nội dung.")
-                .reportReason(post.getReportReason() != null ? post.getReportReason() : "Báo cáo nội dung chưa phù hợp từ cộng đồng.")
-                .badgeText(post.getBadgeText() != null ? post.getBadgeText() : (post.getReportsCount() != null && post.getReportsCount() > 0 ? post.getReportsCount() + " Lượt báo cáo" : "Nội dung an toàn"))
+                .reportReason(reportReasonText)
+                .badgeText(post.getBadgeText() != null && !post.getBadgeText().isBlank() ? post.getBadgeText() : defaultBadgeText)
                 .createdAt(post.getCreatedAt())
                 .timeAgo(timeAgo)
                 .authorId(author != null ? author.getId() : null)
