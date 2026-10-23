@@ -32,6 +32,47 @@ public class AdminReportService {
     private final com.wayfare.repository.PostCommentRepository postCommentRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final ActivityLogService activityLogService;
+
+    private User getCurrentAdminUser() {
+        try {
+            org.springframework.security.core.Authentication auth =
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+                String email = auth.getName();
+                User user = userRepository.findByEmail(email).orElse(null);
+                if (user != null) return user;
+            }
+        } catch (Exception ignored) {}
+        return userRepository.findByEmail("admin@gmail.com")
+                .orElseGet(() -> userRepository.findAll().stream()
+                        .filter(u -> u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN")))
+                        .findFirst()
+                        .orElse(null));
+    }
+
+    private String extractClientIp() {
+        try {
+            org.springframework.web.context.request.RequestAttributes attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (attrs instanceof org.springframework.web.context.request.ServletRequestAttributes) {
+                jakarta.servlet.http.HttpServletRequest req = ((org.springframework.web.context.request.ServletRequestAttributes) attrs).getRequest();
+                return activityLogService.extractClientIp(req);
+            }
+        } catch (Exception ignored) {}
+        return "118.69.190.10";
+    }
+
+    private String extractUserAgent() {
+        try {
+            org.springframework.web.context.request.RequestAttributes attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (attrs instanceof org.springframework.web.context.request.ServletRequestAttributes) {
+                jakarta.servlet.http.HttpServletRequest req = ((org.springframework.web.context.request.ServletRequestAttributes) attrs).getRequest();
+                String ua = req.getHeader("User-Agent");
+                if (ua != null && !ua.isBlank()) return ua;
+            }
+        } catch (Exception ignored) {}
+        return "Wayfare Admin Moderation Console";
+    }
 
     public AdminReportMetricsDto getMetrics() {
         log.info("Calculating Admin Report and Moderation KPIs");
@@ -197,6 +238,21 @@ public class AdminReportService {
             }
         }
 
+        // Record Audit Log
+        try {
+            User admin = getCurrentAdminUser();
+            String authorName = post.getAuthor() != null ? post.getAuthor().getFullName() : "N/A";
+            activityLogService.recordLog(
+                    admin,
+                    "MODERATION_APPROVE",
+                    "Quản trị viên phê duyệt xuất bản bài viết #" + postId + " ('" + post.getTitle() + "') của tác giả " + authorName + ".",
+                    extractClientIp(),
+                    extractUserAgent()
+            );
+        } catch (Exception logEx) {
+            log.warn("Failed to record audit log for approvePost {}: {}", postId, logEx.getMessage());
+        }
+
         return mapToDto(saved);
     }
 
@@ -236,6 +292,20 @@ public class AdminReportService {
             }
         }
 
+        // Record Audit Log
+        try {
+            User admin = getCurrentAdminUser();
+            activityLogService.recordLog(
+                    admin,
+                    "MODERATION_DISMISS",
+                    "Quản trị viên bác bỏ các báo cáo đối với bài viết #" + postId + " ('" + post.getTitle() + "'). Bài viết an toàn và tiếp tục hiển thị.",
+                    extractClientIp(),
+                    extractUserAgent()
+            );
+        } catch (Exception logEx) {
+            log.warn("Failed to record audit log for dismissReport {}: {}", postId, logEx.getMessage());
+        }
+
         return mapToDto(saved);
     }
 
@@ -270,6 +340,21 @@ public class AdminReportService {
             } catch (Exception e) {
                 log.warn("Failed to notify author on post hide: {}", e.getMessage());
             }
+        }
+
+        // Record Audit Log
+        try {
+            User admin = getCurrentAdminUser();
+            String authorName = post.getAuthor() != null ? post.getAuthor().getFullName() : "N/A";
+            activityLogService.recordLog(
+                    admin,
+                    "MODERATION_HIDE",
+                    "Quản trị viên tạm ẩn bài viết #" + postId + " ('" + post.getTitle() + "') của tác giả " + authorName + " khỏi cộng đồng.",
+                    extractClientIp(),
+                    extractUserAgent()
+            );
+        } catch (Exception logEx) {
+            log.warn("Failed to record audit log for hidePost {}: {}", postId, logEx.getMessage());
         }
 
         return mapToDto(saved);
@@ -322,6 +407,20 @@ public class AdminReportService {
             }
         }
 
+        // Record Audit Log
+        try {
+            User admin = getCurrentAdminUser();
+            activityLogService.recordLog(
+                    admin,
+                    "MODERATION_UNHIDE",
+                    "Quản trị viên bỏ ẩn bài viết #" + postId + " ('" + post.getTitle() + "'), đưa về hàng đợi chờ duyệt xuất bản lại.",
+                    extractClientIp(),
+                    extractUserAgent()
+            );
+        } catch (Exception logEx) {
+            log.warn("Failed to record audit log for unhidePost {}: {}", postId, logEx.getMessage());
+        }
+
         return mapToDto(saved);
     }
 
@@ -354,6 +453,22 @@ public class AdminReportService {
         }
 
         Post saved = postRepository.save(post);
+
+        // Record Audit Log
+        try {
+            User admin = getCurrentAdminUser();
+            String authorEmail = author != null ? author.getEmail() : "N/A";
+            activityLogService.recordLog(
+                    admin,
+                    "MODERATION_REMOVE_BAN",
+                    "Quản trị viên gỡ bỏ bài viết #" + postId + " ('" + post.getTitle() + "') và khóa tài khoản tác giả " + authorEmail + " do vi phạm nghiêm trọng.",
+                    extractClientIp(),
+                    extractUserAgent()
+            );
+        } catch (Exception logEx) {
+            log.warn("Failed to record audit log for removePostAndBanAuthor {}: {}", postId, logEx.getMessage());
+        }
+
         return mapToDto(saved);
     }
 
@@ -362,6 +477,8 @@ public class AdminReportService {
         log.info("Permanently deleting Post ID: {}", postId);
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bài viết để xóa: " + postId));
+
+        String postTitle = post.getTitle();
 
         if (post.getAuthor() != null) {
             try {
@@ -382,6 +499,20 @@ public class AdminReportService {
         postCommentRepository.deleteByPostId(postId);
         postReportRepository.deleteByPostId(postId);
         postRepository.deleteById(postId);
+
+        // Record Audit Log
+        try {
+            User admin = getCurrentAdminUser();
+            activityLogService.recordLog(
+                    admin,
+                    "MODERATION_DELETE",
+                    "Quản trị viên xóa vĩnh viễn bài viết #" + postId + " ('" + postTitle + "') khỏi hệ thống.",
+                    extractClientIp(),
+                    extractUserAgent()
+            );
+        } catch (Exception logEx) {
+            log.warn("Failed to record audit log for deletePost {}: {}", postId, logEx.getMessage());
+        }
     }
 
     private AdminPostDto mapToDto(Post post) {

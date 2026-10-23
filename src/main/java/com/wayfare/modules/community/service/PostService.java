@@ -663,6 +663,29 @@ public class PostService {
 
         log.info("Successfully recorded report on post {} by user {}. Status is now PENDING_REPORT. Total reports: {}", postId, currentUserEmail, post.getReportsCount());
 
+        // Record Audit Log for Moderation Audit Trail
+        try {
+            jakarta.servlet.http.HttpServletRequest currentReq = null;
+            try {
+                org.springframework.web.context.request.RequestAttributes attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+                if (attrs instanceof org.springframework.web.context.request.ServletRequestAttributes) {
+                    currentReq = ((org.springframework.web.context.request.ServletRequestAttributes) attrs).getRequest();
+                }
+            } catch (Exception ignored) {}
+            String reportIp = activityLogService.extractClientIp(currentReq);
+            String reportUa = (currentReq != null && currentReq.getHeader("User-Agent") != null) ? currentReq.getHeader("User-Agent") : "Wayfare Community Client";
+
+            activityLogService.recordLog(
+                    reporter,
+                    "USER_REPORT_POST",
+                    "Thành viên " + reporter.getFullName() + " báo cáo bài viết #" + postId + " ('" + post.getTitle() + "') vi phạm [" + reportCategory + "]: " + fullReason,
+                    reportIp,
+                    reportUa
+            );
+        } catch (Exception logEx) {
+            log.warn("Failed to record audit log for reportPost {}: {}", postId, logEx.getMessage());
+        }
+
         return Map.of(
                 "success", true,
                 "message", "Cảm ơn bạn đã gửi báo cáo. Ban Quản Trị Wayfare sẽ xem xét bài viết này trong thời gian sớm nhất!",
