@@ -30,6 +30,7 @@ public class AdminPostDto {
     private String reportReason;
     private String badgeText;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private String timeAgo;
     
     // Author info

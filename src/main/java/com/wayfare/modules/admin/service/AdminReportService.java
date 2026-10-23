@@ -42,8 +42,8 @@ public class AdminReportService {
         }
 
         List<Post> reportedPosts = postRepository.findAll().stream()
-                .filter(p -> ("PENDING_REVIEW".equals(p.getStatus()) || "PENDING_REPORT".equals(p.getStatus()) || (p.getReportsCount() != null && p.getReportsCount() > 0)) &&
-                             !"DISMISSED".equals(p.getStatus()) && !"REMOVED".equals(p.getStatus()))
+                .filter(p -> ("PENDING_REVIEW".equalsIgnoreCase(p.getStatus()) || "PENDING_REPORT".equalsIgnoreCase(p.getStatus()) || (p.getReportsCount() != null && p.getReportsCount() > 0)) &&
+                             !"HIDDEN".equalsIgnoreCase(p.getStatus()) && !"REMOVED".equalsIgnoreCase(p.getStatus()) && !"DISMISSED".equalsIgnoreCase(p.getStatus()))
                 .collect(Collectors.toList());
         long pendingReportsCount = reportedPosts.size();
 
@@ -71,8 +71,8 @@ public class AdminReportService {
     public List<AdminPostDto> getReportedPosts(String keyword) {
         log.info("Fetching reported and pending community posts, keyword: '{}'", keyword);
         List<Post> posts = postRepository.findAll().stream()
-                .filter(p -> ("PENDING_REVIEW".equals(p.getStatus()) || "PENDING_REPORT".equals(p.getStatus()) || (p.getReportsCount() != null && p.getReportsCount() > 0)) &&
-                             !"DISMISSED".equals(p.getStatus()) && !"REMOVED".equals(p.getStatus()))
+                .filter(p -> ("PENDING_REVIEW".equalsIgnoreCase(p.getStatus()) || "PENDING_REPORT".equalsIgnoreCase(p.getStatus()) || (p.getReportsCount() != null && p.getReportsCount() > 0)) &&
+                             !"HIDDEN".equalsIgnoreCase(p.getStatus()) && !"REMOVED".equalsIgnoreCase(p.getStatus()) && !"DISMISSED".equalsIgnoreCase(p.getStatus()))
                 .collect(Collectors.toList());
 
         if (keyword != null && !keyword.trim().isEmpty()) {
@@ -128,7 +128,23 @@ public class AdminReportService {
                     .collect(Collectors.toList());
         }
 
-        return posts.stream().map(this::mapToDto).collect(Collectors.toList());
+        List<AdminPostDto> dtos = posts.stream().map(this::mapToDto).collect(Collectors.toList());
+
+        // Sort by newest: for hidden tab sort by updatedAt (when hidden) descending; for all tab sort by createdAt descending
+        dtos.sort((a, b) -> {
+            LocalDateTime timeA = "hidden".equalsIgnoreCase(status) ? (a.getUpdatedAt() != null ? a.getUpdatedAt() : a.getCreatedAt()) : a.getCreatedAt();
+            LocalDateTime timeB = "hidden".equalsIgnoreCase(status) ? (b.getUpdatedAt() != null ? b.getUpdatedAt() : b.getCreatedAt()) : b.getCreatedAt();
+            if (timeA != null && timeB != null) {
+                int cmp = timeB.compareTo(timeA);
+                if (cmp != 0) return cmp;
+            }
+            if (b.getId() != null && a.getId() != null) {
+                return b.getId().compareTo(a.getId());
+            }
+            return 0;
+        });
+
+        return dtos;
     }
 
     @Transactional
@@ -211,7 +227,16 @@ public class AdminReportService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bài viết với ID: " + postId));
 
         post.setStatus("HIDDEN");
+        post.setUpdatedAt(LocalDateTime.now());
         Post saved = postRepository.save(post);
+
+        // Update post reports status so they are resolved
+        List<com.wayfare.entity.PostReport> reports = postReportRepository.findByPostId(postId);
+        for (com.wayfare.entity.PostReport r : reports) {
+            r.setStatus("RESOLVED_HIDDEN");
+            r.setModeratorNotes("Bài viết đã được Quản trị viên xử lý và tạm ẩn.");
+            postReportRepository.save(r);
+        }
 
         // Notify author
         if (post.getAuthor() != null) {
@@ -374,8 +399,17 @@ public class AdminReportService {
             }
         }
 
-        // Calculate timeAgo accurately: use latest report time if available, otherwise post creation time
-        LocalDateTime referenceTime = latestReportedAt != null ? latestReportedAt : post.getCreatedAt();
+        // Calculate timeAgo accurately:
+        // For hidden/removed posts: use updatedAt (when post was hidden/removed), fallback to createdAt
+        // For active/reported posts: use latest report time if available, otherwise createdAt
+        LocalDateTime referenceTime;
+        if ("HIDDEN".equalsIgnoreCase(post.getStatus()) || "REMOVED".equalsIgnoreCase(post.getStatus())) {
+            referenceTime = post.getUpdatedAt() != null ? post.getUpdatedAt() : post.getCreatedAt();
+        } else if (latestReportedAt != null) {
+            referenceTime = latestReportedAt;
+        } else {
+            referenceTime = post.getCreatedAt();
+        }
         String timeAgo = calculateTimeAgo(referenceTime);
 
         User author = post.getAuthor();
@@ -421,6 +455,7 @@ public class AdminReportService {
                 .reportReason(reportReasonText)
                 .badgeText(post.getBadgeText() != null && !post.getBadgeText().isBlank() ? post.getBadgeText() : defaultBadgeText)
                 .createdAt(post.getCreatedAt())
+                .updatedAt(post.getUpdatedAt())
                 .timeAgo(timeAgo)
                 .authorId(author != null ? author.getId() : null)
                 .authorName(authorName)
