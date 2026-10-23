@@ -9,10 +9,15 @@ import com.wayfare.entity.User;
 import com.wayfare.exception.ResourceNotFoundException;
 import com.wayfare.repository.ItineraryRepository;
 import com.wayfare.repository.PostRepository;
+import com.wayfare.repository.ReviewRepository;
 import com.wayfare.repository.RoleRepository;
+import com.wayfare.repository.SavedPlaceRepository;
+import com.wayfare.repository.UserFollowRepository;
 import com.wayfare.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,14 +34,15 @@ public class AdminUserService {
     private final RoleRepository roleRepository;
     private final PostRepository postRepository;
     private final ItineraryRepository itineraryRepository;
+    private final ReviewRepository reviewRepository;
+    private final SavedPlaceRepository savedPlaceRepository;
+    private final UserFollowRepository userFollowRepository;
     private final PasswordEncoder passwordEncoder;
     private final ActivityLogService activityLogService;
     private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
-    public List<UserDto> getUsers(String keyword, String role, String status) {
-        log.info("Fetching users with keyword='{}', role='{}', status='{}'", keyword, role, status);
-
+    public Page<UserDto> getUsers(String keyword, String role, String status, Pageable pageable) {
         String normalizedStatus = null;
         if (status != null && !status.equalsIgnoreCase("all") && !status.isBlank()) {
             normalizedStatus = status.equalsIgnoreCase("banned") || status.equalsIgnoreCase("locked") ? "LOCKED" : "ACTIVE";
@@ -46,6 +52,8 @@ public class AdminUserService {
         if (role != null && !role.equalsIgnoreCase("all") && !role.isBlank()) {
             if (role.toLowerCase().contains("admin")) {
                 normalizedRole = "ROLE_ADMIN";
+            } else if (role.toLowerCase().contains("moderator")) {
+                normalizedRole = "ROLE_MODERATOR";
             } else if (role.toLowerCase().contains("user")) {
                 normalizedRole = "ROLE_USER";
             } else {
@@ -53,13 +61,12 @@ public class AdminUserService {
             }
         }
 
-        List<User> list = userRepository.searchUsers(
-                keyword != null && !keyword.isBlank() ? keyword.trim() : null,
+        Page<User> result = userRepository.searchUsersPage(                keyword != null && !keyword.isBlank() ? keyword.trim() : null,
                 normalizedStatus,
-                normalizedRole
-        );
+                normalizedRole,
+                pageable);
 
-        return list.stream().map(this::mapToDto).collect(Collectors.toList());
+        return result.map(this::mapToDto);
     }
 
     @Transactional(readOnly = true)
@@ -125,12 +132,19 @@ public class AdminUserService {
                         .description("Vai trò " + roleName)
                         .build()));
 
-        Set<Role> roles = new HashSet<>(user.getRoles());
+        Set<Role> roles = new HashSet<>(user.getRoles() != null ? user.getRoles() : Set.of());
         if ("ROLE_ADMIN".equalsIgnoreCase(targetRole)) {
             roles.add(role);
-        } else {
-            // Revert to USER only
+            roles.removeIf(r -> "ROLE_MODERATOR".equalsIgnoreCase(r.getName()));
+        } else if ("ROLE_MODERATOR".equalsIgnoreCase(targetRole)) {
+            // Moderator giữ quyền kiểm duyệt (bài viết / đánh giá / địa điểm)
+            // nhưng KHÔNG có quyền quản trị hệ thống (users, stats, audit logs).
+            roles.add(role);
             roles.removeIf(r -> "ROLE_ADMIN".equalsIgnoreCase(r.getName()));
+        } else {
+            // Hạ về USER thường: gỡ cả ADMIN lẫn MODERATOR
+            roles.removeIf(r -> "ROLE_ADMIN".equalsIgnoreCase(r.getName())
+                    || "ROLE_MODERATOR".equalsIgnoreCase(r.getName()));
             Role userRole = roleRepository.findByName("ROLE_USER").orElse(role);
             roles.add(userRole);
         }
@@ -168,7 +182,14 @@ public class AdminUserService {
             handle = "@" + request.getEmail().split("@")[0].toLowerCase().replaceAll("[^a-z0-9_]", "");
         }
 
-        String targetRole = (roleName != null && roleName.toUpperCase().contains("ADMIN")) ? "ROLE_ADMIN" : "ROLE_USER";
+        String targetRole;
+        if (roleName != null && roleName.toUpperCase().contains("ADMIN")) {
+            targetRole = "ROLE_ADMIN";
+        } else if (roleName != null && roleName.toUpperCase().contains("MODERATOR")) {
+            targetRole = "ROLE_MODERATOR";
+        } else {
+            targetRole = "ROLE_USER";
+        }
         Role role = roleRepository.findByName(targetRole)
                 .orElseGet(() -> roleRepository.save(Role.builder().name(targetRole).description("Role").build()));
 
@@ -177,7 +198,7 @@ public class AdminUserService {
 
         Set<Role> roles = new HashSet<>();
         roles.add(userRole);
-        if ("ROLE_ADMIN".equalsIgnoreCase(targetRole)) {
+        if (!"ROLE_USER".equalsIgnoreCase(targetRole)) {
             roles.add(role);
         }
 
@@ -205,14 +226,86 @@ public class AdminUserService {
         long activeUsers = userRepository.countByStatus("ACTIVE");
         long lockedUsers = userRepository.countByStatus("LOCKED");
         long adminCount = userRepository.countByRoleName("ROLE_ADMIN");
+        long moderatorCount = userRepository.countByRoleName("ROLE_MODERATOR");
+        // Số liệu THẬT: tài khoản tạo trong hôm nay (trước đây là totalUsers/10 — số ảo)
+        long newUsersToday = userRepository.countByCreatedAtAfter(java.time.LocalDate.now().atStartOfDay());
 
         Map<String, Object> metrics = new HashMap<>();
         metrics.put("totalUsers", totalUsers);
         metrics.put("activeUsers", activeUsers);
         metrics.put("lockedUsers", lockedUsers);
         metrics.put("adminCount", adminCount);
-        metrics.put("newUsersToday", Math.max(1, totalUsers / 10));
+        metrics.put("moderatorCount", moderatorCount);
+        metrics.put("newUsersToday", newUsersToday);
         return metrics;
+    }
+
+    /**
+     * Cấp / gỡ badge "Xác thực" cho người dùng (trước đây cờ này chỉ set
+     * ẩn trong DataInitializer — không có công cụ quản trị).
+     */
+    @Transactional
+    public UserDto setUserVerified(Long userId, boolean verified, String adminEmail) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + idForLog(userId)));
+        user.setIsVerified(verified);
+        User saved = userRepository.save(user);
+        activityLogService.recordLog(user, verified ? "USER_VERIFY" : "USER_UNVERIFY",
+                (verified ? "Cấp badge Xác thực cho tài khoản: " : "Gỡ badge Xác thực của tài khoản: ")
+                        + user.getEmail() + " bởi Admin " + adminEmail,
+                "127.0.0.1", "Admin Portal");
+        return mapToDto(saved);
+    }
+
+    /**
+     * Đặt lại mật khẩu cho người dùng: mật khẩu tạm ngẫu nhiên được trả về
+     * MỘT LẦN cho admin gửi cho người dùng (không lưu dạng plaintext trong DB),
+     * đồng thời ghi audit log + gửi notification trong app.
+     */
+    @Transactional
+    public Map<String, Object> resetPassword(Long userId, String adminEmail) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + idForLog(userId)));
+
+        String tempPassword = generateTempPassword();
+        user.setPassword(passwordEncoder.encode(tempPassword));
+        userRepository.save(user);
+        log.info("Admin '{}' reset password for user id: {}", adminEmail, userId);
+        activityLogService.recordLog(user, "USER_RESET_PASSWORD",
+                "Quản trị viên " + adminEmail + " đặt lại mật khẩu cho tài khoản " + user.getEmail(),
+                "127.0.0.1", "Admin Portal");
+
+        try {
+            notificationService.sendNotification(user, null, "SYSTEM",
+                    "Mật khẩu tài khoản của bạn đã được Quản trị viên đặt lại. Vui lòng liên hệ quản trị để nhận mật khẩu tạm và đổi lại ngay.",
+                    "/profile");
+        } catch (Exception e) {
+            log.warn("Failed to send reset-password notification: {}", e.getMessage());
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("userId", user.getId());
+        result.put("email", user.getEmail());
+        result.put("tempPassword", tempPassword);
+        return result;
+    }
+
+    /**
+     * Thống kê hoạt động THẬT của 1 người dùng (gọi từ trang chi tiết admin):
+     * bài viết, lịch trình, đánh giá, địa điểm lưu, follower/following.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getUserActivitySummary(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + idForLog(userId)));
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("posts", postRepository.findByAuthorOrderByCreatedAtDesc(user).size());
+        summary.put("trips", itineraryRepository.findByCreatorOrderByCreatedAtDesc(user).size());
+        summary.put("reviews", reviewRepository.countByAuthorId(userId));
+        summary.put("savedPlaces", savedPlaceRepository.countByUserId(userId));
+        summary.put("followers", userFollowRepository.countByFollowingId(userId));
+        summary.put("following", userFollowRepository.countByFollowerId(userId));
+        return summary;
     }
 
     private UserDto mapToDto(User u) {
@@ -258,12 +351,21 @@ public class AdminUserService {
                 .tier(resolvedTier)
                 .tripsCount(realTripsCount)
                 .postsCount(realPostsCount)
-                .reviewsCount(0)
-                .trustScore(isBanned ? 35 : (roleNames.contains("ROLE_ADMIN") ? 100 : 98))
-                .riskScore(isBanned ? 86 : 4)
+                // Số liệu THẬT từ bảng reviews (trước đây luôn hardcode 0)
+                .reviewsCount((int) reviewRepository.countByAuthorId(u.getId()))
                 .createdAt(u.getCreatedAt())
                 .updatedAt(u.getUpdatedAt())
                 .build();
+    }
+
+    private String generateTempPassword() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder(12);
+        for (int i = 0; i < 12; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 
     private String idForLog(Long id) {

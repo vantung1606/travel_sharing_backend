@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/stats")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class AdminStatsController {
 
     private final AdminStatsService adminStatsService;

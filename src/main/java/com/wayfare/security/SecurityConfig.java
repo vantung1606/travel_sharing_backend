@@ -52,8 +52,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/users/*/profile").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/following").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/followers").permitAll()
-                // Admin exclusive operations
-                .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                // Admin & moderator operations (method-level @PreAuthorize on each controller
+                // keeps sensitive areas like user management / stats restricted to ADMIN only)
+                .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_MODERATOR")
                 // All other operations require authenticated token
                 .anyRequest().authenticated()
             )

@@ -80,7 +80,7 @@ public class PlaceController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm của bạn thành công", myPlaces));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
     @GetMapping({"/admin/pending", "/pending"})
     public ResponseEntity<ApiResponse<List<PlaceDto>>> getPendingPlaces() {
         log.info("REST request to get all pending places for admin moderation");
@@ -88,7 +88,7 @@ public class PlaceController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm chờ duyệt thành công", pending));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
     @PutMapping("/admin/{id}/approve")
     public ResponseEntity<ApiResponse<PlaceDto>> approvePlace(@PathVariable Long id) {
         log.info("REST request to approve place ID: {}", id);
@@ -96,7 +96,7 @@ public class PlaceController {
         return ResponseEntity.ok(ApiResponse.success("Phê duyệt địa điểm thành công!", approved));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
     @PutMapping("/admin/{id}/reject")
     public ResponseEntity<ApiResponse<PlaceDto>> rejectPlace(
             @PathVariable Long id,
@@ -104,6 +104,22 @@ public class PlaceController {
         log.info("REST request to reject place ID: {} with reason: {}", id, reason);
         PlaceDto rejected = placeService.rejectPlace(id, reason);
         return ResponseEntity.ok(ApiResponse.success("Từ chối địa điểm thành công!", rejected));
+    }
+
+    /**
+     * Xác thực / bỏ xác thực địa điểm (quy trình Badge "Đã xác thực" — trước
+     * đây cờ này chỉ được set ẩn trong DataInitializer, admin không có công cụ).
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
+    @PutMapping("/admin/{id}/verified")
+    public ResponseEntity<ApiResponse<PlaceDto>> togglePlaceVerified(
+            @PathVariable Long id,
+            @RequestParam boolean verified,
+            Authentication authentication) {
+        log.info("REST request to set verified={} for place ID: {} by {}", verified, id, authentication.getName());
+        PlaceDto updated = placeService.setVerified(id, verified, authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success(
+                verified ? "Đã cấp badge Xác thực cho địa điểm!" : "Đã gỡ badge Xác thực của địa điểm!", updated));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

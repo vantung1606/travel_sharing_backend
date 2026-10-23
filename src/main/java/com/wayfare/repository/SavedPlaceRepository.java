@@ -11,6 +11,8 @@ import java.util.List;
 @Repository
 public interface SavedPlaceRepository extends JpaRepository<SavedPlace, Long> {
 
+    long countByUserId(Long userId);
+
     boolean existsByUserIdAndPlaceId(Long userId, Long placeId);
 
     void deleteByUserIdAndPlaceId(Long userId, Long placeId);
