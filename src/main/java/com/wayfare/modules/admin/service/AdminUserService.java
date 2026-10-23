@@ -190,11 +190,19 @@ public class AdminUserService {
         } else {
             targetRole = "ROLE_USER";
         }
+        final String roleDescription;
+        if ("ROLE_MODERATOR".equals(targetRole)) {
+            roleDescription = "Kiểm duyệt viên nội dung";
+        } else if ("ROLE_USER".equals(targetRole)) {
+            roleDescription = "Người dùng tiêu chuẩn";
+        } else {
+            roleDescription = "Quản trị viên hệ thống";
+        }
         Role role = roleRepository.findByName(targetRole)
-                .orElseGet(() -> roleRepository.save(Role.builder().name(targetRole).description("Role").build()));
+                .orElseGet(() -> roleRepository.save(Role.builder().name(targetRole).description(roleDescription).build()));
 
         Role userRole = roleRepository.findByName("ROLE_USER")
-                .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_USER").description("User Role").build()));
+                .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_USER").description("Người dùng tiêu chuẩn").build()));
 
         Set<Role> roles = new HashSet<>();
         roles.add(userRole);
