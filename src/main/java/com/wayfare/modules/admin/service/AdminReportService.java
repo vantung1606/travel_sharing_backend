@@ -105,10 +105,29 @@ public class AdminReportService {
 
     public List<AdminPostDto> getAllArticles(String keyword, String status) {
         log.info("Fetching all community posts for moderation, keyword: '{}', status: '{}'", keyword, status);
-        String filterStatus = (status == null || "all".equalsIgnoreCase(status)) ? null : status;
-        String filterKeyword = (keyword == null || keyword.trim().isEmpty()) ? null : keyword.trim();
+        String filterKeyword = (keyword == null || keyword.trim().isEmpty()) ? null : keyword.trim().toLowerCase();
 
-        List<Post> posts = postRepository.searchPosts(filterKeyword, filterStatus);
+        List<Post> posts;
+        if ("hidden".equalsIgnoreCase(status)) {
+            // Include both HIDDEN and REMOVED posts for hidden tab
+            posts = postRepository.findAll().stream()
+                    .filter(p -> "HIDDEN".equalsIgnoreCase(p.getStatus()) || "REMOVED".equalsIgnoreCase(p.getStatus()))
+                    .collect(Collectors.toList());
+        } else if (status != null && !"all".equalsIgnoreCase(status) && !"pending".equalsIgnoreCase(status)) {
+            posts = postRepository.searchPosts(filterKeyword, status.toUpperCase());
+        } else {
+            posts = postRepository.searchPosts(filterKeyword, null);
+        }
+
+        if (filterKeyword != null) {
+            posts = posts.stream()
+                    .filter(p -> (p.getTitle() != null && p.getTitle().toLowerCase().contains(filterKeyword)) ||
+                                 (p.getAuthor() != null && p.getAuthor().getFullName() != null && p.getAuthor().getFullName().toLowerCase().contains(filterKeyword)) ||
+                                 (p.getLocationTag() != null && p.getLocationTag().toLowerCase().contains(filterKeyword)) ||
+                                 String.valueOf(p.getId()).contains(filterKeyword))
+                    .collect(Collectors.toList());
+        }
+
         return posts.stream().map(this::mapToDto).collect(Collectors.toList());
     }
 
@@ -364,7 +383,7 @@ public class AdminReportService {
                 .category(effectiveCategory)
                 .categoryType(categoryType)
                 .locationTag(post.getLocationTag() != null ? post.getLocationTag() : "Việt Nam")
-                .imageUrl(post.getFirstImage() != null ? post.getFirstImage() : "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80")
+                .imageUrl(sanitizeMediaUrl(post.getFirstImage() != null ? post.getFirstImage() : "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"))
                 .likeCount(post.getLikeCount() != null ? post.getLikeCount() : 0)
                 .commentCount(post.getCommentCount() != null ? post.getCommentCount() : 0)
                 .reportsCount(post.getReportsCount() != null ? post.getReportsCount() : (latestReport != null ? 1 : 0))
@@ -378,7 +397,7 @@ public class AdminReportService {
                 .authorId(author != null ? author.getId() : null)
                 .authorName(authorName)
                 .authorHandle(authorHandle)
-                .authorAvatar(authorAvatar)
+                .authorAvatar(sanitizeMediaUrl(authorAvatar))
                 .authorTrustScore(authorTrustScore)
                 .authorAccountAge(authorAccountAge)
                 .reporterId(reporterId)
@@ -386,6 +405,47 @@ public class AdminReportService {
                 .reporterEmail(reporterEmail)
                 .latestReportedAt(latestReportedAt)
                 .build();
+    }
+
+    private String sanitizeMediaUrl(String url) {
+        if (url == null || url.isBlank()) return url;
+
+        String baseUrl = null;
+        try {
+            org.springframework.web.context.request.RequestAttributes attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (attrs instanceof org.springframework.web.context.request.ServletRequestAttributes) {
+                jakarta.servlet.http.HttpServletRequest req = ((org.springframework.web.context.request.ServletRequestAttributes) attrs).getRequest();
+                String proto = req.getHeader("X-Forwarded-Proto");
+                String host = req.getHeader("X-Forwarded-Host");
+                if (host == null || host.isBlank()) {
+                    host = req.getHeader("Host");
+                }
+                if (host != null && !host.isBlank() && !host.contains("localhost")) {
+                    String scheme = (proto != null && !proto.isBlank()) ? proto : req.getScheme();
+                    baseUrl = scheme + "://" + host;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if (baseUrl == null) {
+            String railwayDomain = System.getenv("RAILWAY_PUBLIC_DOMAIN");
+            if (railwayDomain == null || railwayDomain.isBlank()) {
+                railwayDomain = System.getenv("RAILWAY_STATIC_URL");
+            }
+            if (railwayDomain != null && !railwayDomain.isBlank()) {
+                baseUrl = railwayDomain.startsWith("http") ? railwayDomain : "https://" + railwayDomain;
+            }
+        }
+
+        if (baseUrl != null && !baseUrl.contains("localhost")) {
+            if (url.startsWith("http://localhost:8081")) {
+                return url.replace("http://localhost:8081", baseUrl);
+            }
+            if (url.startsWith("http://localhost:")) {
+                return url.replaceFirst("^http://localhost:\\d+", baseUrl);
+            }
+        }
+        return url;
     }
 
     public String calculateTimeAgo(LocalDateTime targetTime) {

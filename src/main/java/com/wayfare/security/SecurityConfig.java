@@ -43,8 +43,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Cho phép toàn bộ preflight OPTIONS requests đi qua tự do để CORS preflight không bị chặn
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // Public root, healthcheck, error and static resources
-                .requestMatchers("/", "/health", "/api/health", "/error", "/favicon.ico").permitAll()
+                // Public root, healthcheck, actuator, error and static resources
+                .requestMatchers("/", "/health", "/api/health", "/actuator/**", "/error", "/favicon.ico").permitAll()
                 // Public auth, static files, websockets, realtime sse streams and ai proxy
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/ws/**", "/uploads/**", "/api/realtime/**", "/api/ai/**", "/api/upload/**").permitAll()
