@@ -224,10 +224,17 @@ public class PostController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> reportPost(
             @PathVariable Long id,
             @Valid @RequestBody ReportPostRequest request,
+            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String email = requireAuthEmail(authentication);
-        log.info("REST request to report post {} by {}: reason={}", id, email, request.getReason());
-        Map<String, Object> result = postService.reportPost(id, request, email);
+        String effectiveEmail = extractViewerEmail(authentication);
+        if (effectiveEmail == null || effectiveEmail.isBlank()) {
+            effectiveEmail = email;
+        }
+        if (effectiveEmail == null || effectiveEmail.isBlank()) {
+            effectiveEmail = requireAuthEmail(authentication);
+        }
+        log.info("REST request to report post {} by {}: reason={}, category={}", id, effectiveEmail, request.getReason(), request.getCategory());
+        Map<String, Object> result = postService.reportPost(id, request, effectiveEmail);
         return ResponseEntity.ok(ApiResponse.success("Báo cáo vi phạm đã được ghi nhận thành công!", result));
     }
 }

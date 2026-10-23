@@ -39,5 +39,11 @@ public class AdminPostDto {
     private String authorAvatar;
     private Integer authorTrustScore;
     private String authorAccountAge;
+
+    // Reporter info (for user reported posts)
+    private Long reporterId;
+    private String reporterName;
+    private String reporterEmail;
+    private LocalDateTime latestReportedAt;
 }
 

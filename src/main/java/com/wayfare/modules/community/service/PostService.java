@@ -623,25 +623,27 @@ public class PostService {
             fullReason += " (Chi tiết: " + request.getDetails().trim() + ")";
         }
 
+        String reportCategory = (request.getCategory() != null && !request.getCategory().isBlank())
+                ? request.getCategory().trim()
+                : (request.getReason() != null ? request.getReason() : "Báo cáo từ thành viên");
+
         com.wayfare.entity.PostReport report = com.wayfare.entity.PostReport.builder()
                 .post(post)
                 .reporter(reporter)
-                .category(request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory() : "Báo cáo từ thành viên")
+                .category(reportCategory)
                 .reason(fullReason)
                 .status("PENDING")
+                .createdAt(LocalDateTime.now())
                 .build();
 
         postReportRepository.save(report);
 
         int currentCount = post.getReportsCount() != null ? post.getReportsCount() : 0;
         post.setReportsCount(currentCount + 1);
-        post.setReportReason(request.getReason());
+        post.setReportReason(fullReason);
         post.setBadgeText((currentCount + 1) + " Lượt báo cáo");
-
-        // If high number of reports, flag as pending review
-        if (post.getReportsCount() >= 3 && "ACTIVE".equals(post.getStatus())) {
-            post.setStatus("PENDING_REPORT");
-        }
+        post.setStatus("PENDING_REPORT");
+        post.setUpdatedAt(LocalDateTime.now());
 
         postRepository.save(post);
 
@@ -650,14 +652,14 @@ public class PostService {
             notificationService.cleanupNonAdminReportAlerts();
             notificationService.notifyAdmins(
                     "REPORT_ALERT",
-                    "Bài viết #" + postId + " ('" + post.getTitle() + "') vừa nhận thêm 1 báo cáo vi phạm: " + request.getReason(),
+                    "Bài viết #" + postId + " ('" + post.getTitle() + "') nhận báo cáo vi phạm [" + reportCategory + "]: " + fullReason,
                     "/admin/reports"
             );
         } catch (Exception e) {
             log.warn("Failed to notify admins of report on post {}: {}", postId, e.getMessage());
         }
 
-        log.info("Successfully recorded report on post {}. Total reports: {}", postId, post.getReportsCount());
+        log.info("Successfully recorded report on post {} by user {}. Status is now PENDING_REPORT. Total reports: {}", postId, currentUserEmail, post.getReportsCount());
 
         return Map.of(
                 "success", true,
