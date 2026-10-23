@@ -103,6 +103,17 @@ public class AdminReportController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{postId}/unhide")
+    public ResponseEntity<Map<String, Object>> unhidePost(@PathVariable Long postId) {
+        log.info("REST request to unhide post ID: {}", postId);
+        AdminPostDto updated = adminReportService.unhidePost(postId);
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Đã khôi phục hiển thị (bỏ ẩn) bài viết #" + postId + " lên Cộng đồng thành công!");
+        response.put("data", updated);
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/{postId}/remove-and-ban")
     public ResponseEntity<Map<String, Object>> removePostAndBanAuthor(@PathVariable Long postId) {
         log.info("REST request to remove post ID: {} and ban author", postId);

@@ -232,6 +232,34 @@ public class AdminReportService {
     }
 
     @Transactional
+    public AdminPostDto unhidePost(Long postId) {
+        log.info("Unhiding/restoring Post ID: {} to ACTIVE status", postId);
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy bài viết với ID: " + postId));
+
+        post.setStatus("ACTIVE");
+        post.setReportsCount(0);
+        Post saved = postRepository.save(post);
+
+        // Notify author
+        if (post.getAuthor() != null) {
+            try {
+                notificationService.sendNotification(
+                        post.getAuthor(),
+                        null,
+                        "POST_UNHIDDEN",
+                        "Bài viết '" + post.getTitle() + "' của bạn đã được Quản trị viên khôi phục hiển thị (bỏ ẩn) trên Cộng đồng Wayfare.",
+                        "/community"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify author on post unhide: {}", e.getMessage());
+            }
+        }
+
+        return mapToDto(saved);
+    }
+
+    @Transactional
     public AdminPostDto removePostAndBanAuthor(Long postId) {
         log.info("Removing Post ID: {} and locking author account", postId);
         Post post = postRepository.findById(postId)
