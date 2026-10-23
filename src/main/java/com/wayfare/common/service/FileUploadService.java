@@ -23,7 +23,16 @@ import java.util.UUID;
 public class FileUploadService {
 
     private final Cloudinary cloudinary;
-    private final Path rootUploadPath = Paths.get("uploads/posts");
+    // Chạy ở Railway (có Volume gắn vào) → lưu vào ổ đĩa bền; chạy local → thư mục uploads/posts như cũ
+    private final Path rootUploadPath = resolveUploadRoot();
+
+    private static Path resolveUploadRoot() {
+        String mountPath = System.getenv("RAILWAY_VOLUME_MOUNT_PATH");
+        if (mountPath != null && !mountPath.isBlank()) {
+            return Paths.get(mountPath, "uploads", "posts");
+        }
+        return Paths.get("uploads/posts");
+    }
 
     @Value("${cloudinary.folder:wayfare/media}")
     private String cloudinaryFolder;
@@ -120,7 +129,12 @@ public class FileUploadService {
             Path targetLocation = rootUploadPath.resolve(uniqueName);
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
 
-            String publicUrl = "http://localhost:8081/uploads/posts/" + uniqueName;
+            // URL công khai phải trỏ đúng nơi phục vụ ảnh: Railway dùng domain thật, local dùng localhost:8081
+            String publicDomain = System.getenv("RAILWAY_PUBLIC_DOMAIN");
+            String baseUrl = (publicDomain != null && !publicDomain.isBlank())
+                    ? "https://" + publicDomain
+                    : "http://localhost:8081";
+            String publicUrl = baseUrl + "/uploads/posts/" + uniqueName;
             log.info("Saved file locally to {}", publicUrl);
             return publicUrl;
         } catch (IOException e) {

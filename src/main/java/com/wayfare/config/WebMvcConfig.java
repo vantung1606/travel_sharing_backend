@@ -13,7 +13,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        Path uploadDir = Paths.get("uploads");
+        // Khớp với FileUploadService: Railway lưu ảnh vào Volume, local lưu vào uploads/
+        String mountPath = System.getenv("RAILWAY_VOLUME_MOUNT_PATH");
+        Path uploadDir = (mountPath != null && !mountPath.isBlank())
+                ? Paths.get(mountPath, "uploads")
+                : Paths.get("uploads");
         String uploadPath = uploadDir.toFile().getAbsolutePath();
 
         registry.addResourceHandler("/uploads/**")
