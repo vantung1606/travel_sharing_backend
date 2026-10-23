@@ -20,10 +20,12 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     long countByRecipientAndIsReadFalse(User recipient);
 
     @Modifying
+    @org.springframework.transaction.annotation.Transactional
     @Query("UPDATE Notification n SET n.isRead = true WHERE n.recipient = :recipient")
     void markAllAsReadByRecipient(@Param("recipient") User recipient);
 
     @Modifying
+    @org.springframework.transaction.annotation.Transactional
     @Query("DELETE FROM Notification n WHERE n.targetUrl LIKE '%/admin/reports%' " +
            "AND n.recipient.id NOT IN (SELECT u.id FROM User u JOIN u.roles r WHERE r.name = 'ROLE_ADMIN') " +
            "AND n.recipient.email <> 'admin@gmail.com'")
