@@ -17,12 +17,15 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
-@RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 @Slf4j
 public class UserController {
 
     private final UserFollowService userFollowService;
+
+    public UserController(UserFollowService userFollowService) {
+        this.userFollowService = userFollowService;
+    }
 
     private String extractViewerEmail(Authentication authentication) {
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
@@ -63,11 +66,24 @@ public class UserController {
 
     @GetMapping("/following/ids")
     public ResponseEntity<ApiResponse<List<Long>>> getFollowingUserIds(
+            @RequestParam(required = false) String email,
             Authentication authentication) {
-        String currentUserEmail = requireAuthEmail(authentication);
-        log.info("REST request to get following user IDs for viewer {}", currentUserEmail);
-        List<Long> ids = userFollowService.getFollowingUserIds(currentUserEmail);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách ID người đang theo dõi thành công", ids));
+        String currentUserEmail = (email != null && !email.trim().isEmpty())
+                ? email.trim()
+                : extractViewerEmail(authentication);
+
+        if (currentUserEmail == null || currentUserEmail.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.success("Chưa đăng nhập, danh sách theo dõi trống", List.of()));
+        }
+
+        try {
+            log.info("REST request to get following user IDs for viewer {}", currentUserEmail);
+            List<Long> ids = userFollowService.getFollowingUserIds(currentUserEmail);
+            return ResponseEntity.ok(ApiResponse.success("Lấy danh sách ID người đang theo dõi thành công", ids));
+        } catch (ResourceNotFoundException e) {
+            log.warn("User not found for following ids query: {}", currentUserEmail);
+            return ResponseEntity.ok(ApiResponse.success("Người dùng không tồn tại", List.of()));
+        }
     }
 
     @GetMapping("/me")

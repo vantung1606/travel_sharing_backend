@@ -21,10 +21,13 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
-@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -52,6 +55,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/users/*/profile").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/following").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/followers").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/users/following/ids").permitAll()
                 // Danh mục tỉnh thành công khai; dấu chân riêng (/visited) vẫn cần đăng nhập
                 .requestMatchers(HttpMethod.GET, "/api/provinces").permitAll()
                 // Admin & moderator operations (method-level @PreAuthorize on each controller

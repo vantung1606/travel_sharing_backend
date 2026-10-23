@@ -14,12 +14,15 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/upload")
-@RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 @Slf4j
 public class FileUploadController {
 
     private final FileUploadService fileUploadService;
+
+    public FileUploadController(FileUploadService fileUploadService) {
+        this.fileUploadService = fileUploadService;
+    }
 
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStorageStatus() {
