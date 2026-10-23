@@ -16,12 +16,15 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/places")
-@RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 @Slf4j
 public class ReviewController {
 
     private final ReviewService reviewService;
+
+    public ReviewController(ReviewService reviewService) {
+        this.reviewService = reviewService;
+    }
 
     private String requireAuthEmail(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {

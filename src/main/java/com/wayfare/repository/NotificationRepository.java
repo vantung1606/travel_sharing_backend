@@ -22,4 +22,10 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Modifying
     @Query("UPDATE Notification n SET n.isRead = true WHERE n.recipient = :recipient")
     void markAllAsReadByRecipient(@Param("recipient") User recipient);
+
+    @Modifying
+    @Query("DELETE FROM Notification n WHERE n.targetUrl LIKE '%/admin/reports%' " +
+           "AND n.recipient.id NOT IN (SELECT u.id FROM User u JOIN u.roles r WHERE r.name = 'ROLE_ADMIN') " +
+           "AND n.recipient.email <> 'admin@gmail.com'")
+    int deleteSpuriousAdminNotifications();
 }

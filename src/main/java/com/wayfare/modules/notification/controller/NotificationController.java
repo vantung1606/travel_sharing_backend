@@ -17,13 +17,17 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/notifications")
-@RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 @Slf4j
 public class NotificationController {
 
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
+
+    public NotificationController(NotificationService notificationService, ActivityLogService activityLogService) {
+        this.notificationService = notificationService;
+        this.activityLogService = activityLogService;
+    }
 
     private String requireAuthEmail(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {

@@ -12,18 +12,26 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+
+    public NotificationService(NotificationRepository notificationRepository,
+                               UserRepository userRepository,
+                               SimpMessagingTemplate messagingTemplate) {
+        this.notificationRepository = notificationRepository;
+        this.userRepository = userRepository;
+        this.messagingTemplate = messagingTemplate;
+    }
 
     @Transactional(readOnly = true)
     public List<NotificationDto> getNotificationsForUser(String email) {
@@ -230,10 +238,10 @@ public class NotificationService {
     @Transactional
     public void notifyAdmins(String type, String message, String targetUrl) {
         log.info("Sending admin-only notification: type={}, message={}", type, message);
-        List<User> admins = userRepository.findAll().stream()
-                .filter(u -> (u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName() != null && r.getName().contains("ADMIN")))
-                        || "admin@gmail.com".equalsIgnoreCase(u.getEmail()))
-                .collect(Collectors.toList());
+        List<User> admins = userRepository.searchUsers(null, null, "ROLE_ADMIN");
+        if (admins.isEmpty()) {
+            userRepository.findByEmail("admin@gmail.com").ifPresent(admins::add);
+        }
 
         for (User admin : admins) {
             sendNotification(admin, null, type != null ? type : "REPORT_ALERT", message, targetUrl != null ? targetUrl : "/admin/reports");
@@ -243,22 +251,16 @@ public class NotificationService {
 
     @Transactional
     public int cleanupNonAdminReportAlerts() {
-        List<Notification> spurious = notificationRepository.findAll().stream()
-                .filter(n -> n.getTargetUrl() != null && n.getTargetUrl().contains("/admin/reports"))
-                .filter(n -> {
-                    User u = n.getRecipient();
-                    if (u == null) return false;
-                    boolean isAdmin = (u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName() != null && r.getName().contains("ADMIN")))
-                            || "admin@gmail.com".equalsIgnoreCase(u.getEmail());
-                    return !isAdmin;
-                })
-                .collect(Collectors.toList());
-
-        if (!spurious.isEmpty()) {
-            notificationRepository.deleteAll(spurious);
-            log.info("Cleaned up {} spurious admin notifications from non-admin accounts.", spurious.size());
+        try {
+            int deleted = notificationRepository.deleteSpuriousAdminNotifications();
+            if (deleted > 0) {
+                log.info("Cleaned up {} spurious admin notifications from non-admin accounts.", deleted);
+            }
+            return deleted;
+        } catch (Exception e) {
+            log.warn("Spurious notification cleanup encountered: {}", e.getMessage());
+            return 0;
         }
-        return spurious.size();
     }
 
     public User getUserByEmail(String email) {

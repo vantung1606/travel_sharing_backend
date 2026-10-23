@@ -39,7 +39,6 @@ import java.util.stream.Collectors;
 import com.wayfare.exception.ResourceNotFoundException;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PostService {
 
@@ -55,6 +54,32 @@ public class PostService {
     private final PostReportRepository postReportRepository;
     private final PostBookmarkRepository postBookmarkRepository;
     private final UserFollowRepository userFollowRepository;
+
+    public PostService(PostRepository postRepository,
+                       PostLikeRepository postLikeRepository,
+                       PostCommentRepository postCommentRepository,
+                       UserRepository userRepository,
+                       ItineraryRepository itineraryRepository,
+                       ItineraryDetailRepository itineraryDetailRepository,
+                       NotificationService notificationService,
+                       ActivityLogService activityLogService,
+                       AiContentModerationService aiContentModerationService,
+                       PostReportRepository postReportRepository,
+                       PostBookmarkRepository postBookmarkRepository,
+                       UserFollowRepository userFollowRepository) {
+        this.postRepository = postRepository;
+        this.postLikeRepository = postLikeRepository;
+        this.postCommentRepository = postCommentRepository;
+        this.userRepository = userRepository;
+        this.itineraryRepository = itineraryRepository;
+        this.itineraryDetailRepository = itineraryDetailRepository;
+        this.notificationService = notificationService;
+        this.activityLogService = activityLogService;
+        this.aiContentModerationService = aiContentModerationService;
+        this.postReportRepository = postReportRepository;
+        this.postBookmarkRepository = postBookmarkRepository;
+        this.userFollowRepository = userFollowRepository;
+    }
 
     @Transactional(readOnly = true)
     public List<PostDto> getCommunityPosts(String category, String keyword, String currentUserEmail) {
