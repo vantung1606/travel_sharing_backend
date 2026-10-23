@@ -50,7 +50,10 @@ public class DataInitializer implements CommandLineRunner {
             rotateDefaultAdminPasswords();
         }
 
-        // Ensure Roles exist
+        // Ensure Roles exist — CHUẨN DUY NHẤT mọi môi trường (local == prod):
+        // cả 3 vai trò của hệ thống phải có sẵn trong bảng roles; thiếu là tự seed bù
+        // (trước đây ROLE_MODERATOR chỉ có ở local => prod bấm "Cấp Điều phối viên"
+        // sẽ tự chèn dòng rác description='Role').
         Role adminRole = roleRepository.findByName("ROLE_ADMIN")
                 .orElseGet(() -> roleRepository.save(Role.builder()
                         .name("ROLE_ADMIN")
@@ -62,6 +65,16 @@ public class DataInitializer implements CommandLineRunner {
                         .name("ROLE_USER")
                         .description("Người dùng tiêu chuẩn")
                         .build()));
+
+        roleRepository.findByName("ROLE_MODERATOR")
+                .orElseGet(() -> {
+                    Role moderator = roleRepository.save(Role.builder()
+                            .name("ROLE_MODERATOR")
+                            .description("Kiểm duyệt viên nội dung")
+                            .build());
+                    log.info(">>> SUCCESS: Seeded missing role ROLE_MODERATOR (id: {})", moderator.getId());
+                    return moderator;
+                });
 
         // Create Sample Admin User: admin@gmail.com / admin123
         User adminUser = userRepository.findByEmail("admin@gmail.com")
