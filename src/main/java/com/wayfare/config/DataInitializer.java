@@ -925,20 +925,16 @@ public class DataInitializer implements CommandLineRunner {
                             .isLocked(false)
                             .isVerified(true);
 
-                    if (userIndex == 1 && isRailwayDeployment()) {
+                    // tung1: CHUẨN DUY NHẤT cho mọi môi trường (local == prod) — luôn ROLE_USER.
+                    // CUỘC SỬA: trước đây local tự cấp ROLE_ADMIN (928-941 chia nhánh theo môi trường)
+                    // khiến local 3 ADMIN vs prod 2 ADMIN; giờ seed phải "y chang" giữa local & cloud.
+                    if (userIndex == 1) {
                         builder.fullName("Nguyễn Thanh Tùng")
                                .handle("@tung1_diamond")
                                .avatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80")
                                .bio("Thành viên sáng giá của cộng đồng Wayfare")
                                .tier("diamond")
                                .roles(Set.of(userRole));
-                    } else if (userIndex == 1) {
-                        builder.fullName("Nguyễn Thanh Tùng (Admin Kim Cương)")
-                               .handle("@tung1_diamond")
-                               .avatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80")
-                               .bio("Quản trị viên tối cao hệ thống Wayfare 🛡️ | Huyền Thoại Kim Cương 💎")
-                               .tier("diamond")
-                               .roles(Set.of(adminRole, userRole));
                     } else if (userIndex == 2) {
                         builder.fullName("Trần Tùng (Nhà Thám Hiểm Vàng)")
                                .handle("@tung2_gold")
@@ -964,17 +960,11 @@ public class DataInitializer implements CommandLineRunner {
                     user = userRepository.save(builder.build());
                     log.info("Created user account: {} (tier: {}, pass: 123456)", email, user.getTier());
                 } else {
-                    // PROD (Railway): KHÔNG đặt lại mật khẩu của người dùng có sẵn
-                    // (trước đây mỗi boot từng reset mọi tài khoản test về 123456 — lỗ hổng).
-                    if (!isRailwayDeployment()) {
-                        user.setPassword(defaultPassword);
-                    }
+                    // Chuẩn DUY NHẤT mọi môi trường: KHÔNG đụng mật khẩu user có sẵn và
+                    // KHÔNG tự cấp lại role (quyền chỉ thay đổi qua Admin Portal — Princípio
+                    // "local == prod": seed không đè thay đổi của người quản trị).
                     if (userIndex == 1) {
                         user.setTier("diamond");
-                        // PROD: không tự cấp ROLE_ADMIN cho tài khoản test mặc định
-                        if (!isRailwayDeployment()) {
-                            user.setRoles(Set.of(adminRole, userRole));
-                        }
                     } else if (userIndex == 2) {
                         user.setTier("gold");
                     } else if (userIndex == 3) {
@@ -1173,8 +1163,8 @@ public class DataInitializer implements CommandLineRunner {
                 }
             }
 
-            log.info(">>> SUCCESS: Seeded/Synchronized 20 test accounts (tung1 - tung20) with pass '123456'!");
-            log.info(">>> - tung1@gmail.com: ROLE_ADMIN + ROLE_USER -> Cấp Kim Cương (Diamond Legend 💎)");
+            log.info(">>> SUCCESS: Seeded/Synchronized 20 test accounts (tung1 - tung20)!");
+            log.info(">>> - tung1@gmail.com: ROLE_USER dùng chung mọi môi trường -> Cấp Kim Cương (Diamond Legend 💎)");
             log.info(">>> - tung2@gmail.com: ROLE_USER -> Cấp Vàng (Gold Voyager 👑)");
             log.info(">>> - tung3@gmail.com: ROLE_USER -> Cấp Bạc (Silver Wanderer 🥈)");
             log.info(">>> - tung4@gmail.com -> tung20@gmail.com: ROLE_USER -> Cấp Đồng (Bronze Explorer 🥉)");
