@@ -1,6 +1,7 @@
 package com.wayfare.config;
 
 import com.wayfare.entity.Notification;
+import com.wayfare.entity.Province;
 import com.wayfare.entity.Role;
 import com.wayfare.entity.User;
 import com.wayfare.repository.NotificationRepository;
@@ -35,6 +36,8 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.PlaceRepository placeRepository;
     private final com.wayfare.repository.ReviewRepository reviewRepository;
     private final com.wayfare.repository.UserFollowRepository userFollowRepository;
+    private final com.wayfare.repository.ProvinceRepository provinceRepository;
+    private final com.wayfare.repository.UserProvinceVisitRepository userProvinceVisitRepository;
     private final PasswordEncoder passwordEncoder;
     private final javax.sql.DataSource dataSource;
 
@@ -787,9 +790,78 @@ public class DataInitializer implements CommandLineRunner {
 
         // 7. Seed 20 test accounts (tung1 - tung20) with tiers & roles
         seedTwentyTestUsers(adminRole, userRole);
+
+        // 8. Seed danh mục tỉnh thành (34 đơn vị hành chính cấp tỉnh theo sáp nhập 2025)
+        seedProvinces();
     }
 
-    /** Railway tự inject các biến môi trường RAILWAY_* — đây là dấu hiệu môi trường prod. */
+    /**
+     * Danh mục tỉnh thành phục vụ dấu chân du lịch + thống kê phủ sóng.
+     * Seed idempotent: chỉ chạy khi bảng provinces còn trống.
+     * Alias bao gồm tên các tỉnh CŌ (trước sáp nhập) + tên tiếng Anh để nhận diện
+     * từ dữ liệu địa điểm/bài viết đang dùng tên tỉnh cũ.
+     */
+        private void seedProvinces() {
+        try {
+            if (provinceRepository.count() == 0) {
+                List<Province> provinces = List.of(
+                        // MIEN BAC (15)
+                        prov("VN01", "Hà Nội", "north", "hà nội,ha noi,hanoi,thủ đô"),
+                        prov("VN02", "Hải Phòng", "north", "hải phòng,hai phong,haiphong,hải dương,hai duong,cát bà,đồ sơn"),
+                        prov("VN03", "Quảng Ninh", "north", "quảng ninh,quang ninh,hạ long,ha long,cô tô,yên tử"),
+                        prov("VN04", "Lào Cai", "north", "lào cai,lao cai,yên bái,yen bai,sa pa,sapa,fansipan,mù cang chải,thác bà"),
+                        prov("VN05", "Điện Biên", "north", "điện biên,dien biên,mường thanh,a1"),
+                        prov("VN06", "Lai Châu", "north", "lai châu,lai chau,ô quy hồ,sin suối hồ"),
+                        prov("VN07", "Sơn La", "north", "sơn la,son la,mộc châu,moc chau,tà xùa,ta xua"),
+                        prov("VN08", "Tuyên Quang", "north", "tuyên quang,tuyen quang,hà giang,ha giang,mã pí lèng,đồng văn,lũng cú,na hang"),
+                        prov("VN09", "Cao Bằng", "north", "cao bằng,cao bang,bản giốc,pac bo"),
+                        prov("VN10", "Thái Nguyên", "north", "thái nguyên,thai nguyen,bắc kạn,bac kan,núi cốc,ba bể"),
+                        prov("VN11", "Phú Thọ", "north", "phú thọ,phu tho,vĩnh phúc,vinh phuc,hòa bình,hoa binh,tam đảo,xuân sơn"),
+                        prov("VN12", "Lạng Sơn", "north", "lạng sơn,lang son,mẫu sơn,mau son"),
+                        prov("VN13", "Bắc Ninh", "north", "bắc ninh,bac ninh,bắc giang,bac giang,quan họ,tây yên tử"),
+                        prov("VN14", "Hưng Yên", "north", "hưng yên,hung yen,thái bình,thai binh,phố hiến,cồn vành"),
+                        prov("VN15", "Ninh Bình", "north", "ninh bình,ninh binh,hà nam,ha nam,nam định,nam dinh,tràng an,tam cốc"),
+
+                        // MIEN TRUNG (8)
+                        prov("VN16", "Thanh Hóa", "central", "thanh hóa,thanh hoa,sầm sơn"),
+                        prov("VN17", "Nghệ An", "central", "nghệ an,nghe an,vinh,cửa lò"),
+                        prov("VN18", "Hà Tĩnh", "central", "hà tĩnh,ha tinh,bãi biển từng"),
+                        prov("VN19", "Quảng Trị", "central", "quảng trị,quang tri,quảng bình,quang binh,đồng hới,phong nha"),
+                        prov("VN20", "Huế", "central", "huế,hue,thừa thiên,thừa thiên huế"),
+                        prov("VN21", "Đà Nẵng", "central", "đà nẵng,da nang,danang,quảng nam,quang nam,hội an,hoi an,bà na,tam kỳ"),
+                        prov("VN22", "Quảng Ngãi", "central", "quảng ngãi,quang ngai,kon tum,đăk tô"),
+                        prov("VN23", "Khánh Hòa", "central", "khánh hòa,khanh hoa,nha trang,ninh thuận,ninh thuan"),
+
+                        // TAY NGUYEN (3)
+                        prov("VN24", "Gia Lai", "highlands", "gia lai,bình định,binh dinh,quy nhơn,pleiku"),
+                        prov("VN25", "Đắk Lắk", "highlands", "đắk lắk,dak lak,phú yên,phu yen,tuy hòa"),
+                        prov("VN26", "Lâm Đồng", "highlands", "lâm đồng,lam dong,bình thuận,binh thuan,phan thiết,đắk nông,dak nong"),
+
+                        // MIEN NAM (8)
+                        prov("VN27", "TP. Hồ Chí Minh", "south", "hồ chí minh,ho chi minh,sài gòn,saigon,hcm,bà rịa,vũng tàu,bình dương,bình phước"),
+                        prov("VN28", "Đồng Nai", "south", "đồng nai,dong nai,biên hòa,bien hoa"),
+                        prov("VN29", "Tây Ninh", "south", "tây ninh,tay ninh,long an"),
+                        prov("VN30", "Đồng Tháp", "south", "đồng tháp,dong thap,tiền giang,tien giang,mỹ tho"),
+                        prov("VN31", "An Giang", "south", "an giang,kiên giang,kien giang,phú quốc,phu quoc,long xuyên"),
+                        prov("VN32", "Vĩnh Long", "south", "vĩnh long,vinh long,bến tre,ben tre,trà vinh,tra vinh"),
+                        prov("VN33", "Cà Mau", "south", "cà mau,ca mau,bạc liêu,bac lieu"),
+                        prov("VN34", "Cần Thơ", "south", "cần thơ,can tho,sóc trăng,soc trang,hậu giang,hau giang")
+                );
+
+                provinceRepository.saveAll(provinces);
+                log.info(">>> SUCCESS: Seeded {} provinces into 'provinces' table!", provinces.size());
+            } else {
+                log.info("Province catalog already present ({} rows) - skip seeding.", provinceRepository.count());
+            }
+        } catch (Exception e) {
+            log.error("Failed to seed provinces: {}", e.getMessage());
+        }
+    }
+
+    private Province prov(String code, String name, String region, String aliases) {
+        return Province.builder().code(code).name(name).region(region).aliases(aliases).build();
+    }
+
     private boolean isRailwayDeployment() {
         return System.getenv().keySet().stream().anyMatch(k -> k.startsWith("RAILWAY_"));
     }

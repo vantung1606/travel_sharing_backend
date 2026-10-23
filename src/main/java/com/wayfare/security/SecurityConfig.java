@@ -52,6 +52,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/users/*/profile").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/following").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/*/followers").permitAll()
+                // Danh mục tỉnh thành công khai; dấu chân riêng (/visited) vẫn cần đăng nhập
+                .requestMatchers(HttpMethod.GET, "/api/provinces").permitAll()
                 // Admin & moderator operations (method-level @PreAuthorize on each controller
                 // keeps sensitive areas like user management / stats restricted to ADMIN only)
                 .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_MODERATOR")
