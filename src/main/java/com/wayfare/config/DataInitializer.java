@@ -45,11 +45,6 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) throws Exception {
         log.info("Checking sample data initialization...");
 
-        boolean onRailway = isRailwayDeployment();
-        if (onRailway) {
-            rotateDefaultAdminPasswords();
-        }
-
         // Ensure Roles exist — CHUẨN DUY NHẤT mọi môi trường (local == prod):
         // cả 3 vai trò của hệ thống phải có sẵn trong bảng roles; thiếu là tự seed bù
         // (trước đây ROLE_MODERATOR chỉ có ở local => prod bấm "Cấp Điều phối viên"
@@ -66,7 +61,7 @@ public class DataInitializer implements CommandLineRunner {
                         .description("Người dùng tiêu chuẩn")
                         .build()));
 
-        roleRepository.findByName("ROLE_MODERATOR")
+        Role moderatorRole = roleRepository.findByName("ROLE_MODERATOR")
                 .orElseGet(() -> {
                     Role moderator = roleRepository.save(Role.builder()
                             .name("ROLE_MODERATOR")
@@ -76,21 +71,57 @@ public class DataInitializer implements CommandLineRunner {
                     return moderator;
                 });
 
-        // Create Sample Admin User: admin@gmail.com / admin123
+        // Ensure Admin User: admin@gmail.com
+        String targetAdminPassword = System.getenv("ADMIN_PASSWORD");
+        if (targetAdminPassword == null || targetAdminPassword.isBlank()) {
+            targetAdminPassword = "admin123";
+        }
+        final String finalAdminPassword = targetAdminPassword;
+
         User adminUser = userRepository.findByEmail("admin@gmail.com")
+                .map(existingAdmin -> {
+                    boolean needSave = false;
+                    if (!passwordEncoder.matches(finalAdminPassword, existingAdmin.getPassword())) {
+                        existingAdmin.setPassword(passwordEncoder.encode(finalAdminPassword));
+                        needSave = true;
+                        log.info(">>> SUCCESS: Synchronized Admin password for admin@gmail.com");
+                    }
+                    if (existingAdmin.getStatus() == null || !"ACTIVE".equals(existingAdmin.getStatus())) {
+                        existingAdmin.setStatus("ACTIVE");
+                        needSave = true;
+                    }
+                    if (Boolean.TRUE.equals(existingAdmin.getIsLocked())) {
+                        existingAdmin.setIsLocked(false);
+                        needSave = true;
+                    }
+                    if (!Boolean.TRUE.equals(existingAdmin.getIsVerified())) {
+                        existingAdmin.setIsVerified(true);
+                        needSave = true;
+                    }
+                    if (existingAdmin.getRoles() == null || !existingAdmin.getRoles().contains(adminRole)) {
+                        Set<Role> roles = new java.util.HashSet<>(existingAdmin.getRoles() != null ? existingAdmin.getRoles() : Set.of());
+                        roles.add(adminRole);
+                        roles.add(userRole);
+                        existingAdmin.setRoles(roles);
+                        needSave = true;
+                    }
+                    return needSave ? userRepository.save(existingAdmin) : existingAdmin;
+                })
                 .orElseGet(() -> {
                     User user = User.builder()
                             .email("admin@gmail.com")
-                            .password(passwordEncoder.encode("admin123"))
+                            .password(passwordEncoder.encode(finalAdminPassword))
                             .fullName("Quản Trị Viên (Admin)")
                             .handle("@admin_wayfare")
                             .avatarUrl("https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                             .bio("Quản trị viên hệ thống Wayfare Platform 🛡️")
+                            .status("ACTIVE")
+                            .isLocked(false)
                             .isVerified(true)
                             .tier("diamond")
                             .roles(Set.of(adminRole, userRole))
                             .build();
-                    log.info(">>> SUCCESS: Created Sample Admin Account -> Email: admin@gmail.com | Password: admin123");
+                    log.info(">>> SUCCESS: Created Sample Admin Account -> Email: admin@gmail.com | Password: {}", finalAdminPassword);
                     return userRepository.save(user);
                 });
 
@@ -113,20 +144,41 @@ public class DataInitializer implements CommandLineRunner {
                 });
 
         // Seed Minh Anh (Community Moderator)
-        if (!userRepository.existsByEmail("minhanh@gmail.com")) {
-            userRepository.save(User.builder()
-                    .email("minhanh@gmail.com")
-                    .password(passwordEncoder.encode("password123"))
-                    .fullName("Minh Anh")
-                    .handle("@minhanhtravel")
-                    .avatarUrl("https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80")
-                    .bio("Kiểm duyệt viên cộng đồng WanderAI khu vực miền Bắc")
-                    .status("ACTIVE")
-                    .isLocked(false)
-                    .isVerified(true)
-                    .roles(Set.of(adminRole, userRole))
-                    .build());
-        }
+        userRepository.findByEmail("minhanh@gmail.com").ifPresentOrElse(
+                minhanh -> {
+                    boolean needSave = false;
+                    if (!passwordEncoder.matches("password123", minhanh.getPassword())) {
+                        minhanh.setPassword(passwordEncoder.encode("password123"));
+                        needSave = true;
+                        log.info(">>> SUCCESS: Restored password for minhanh@gmail.com to password123");
+                    }
+                    if (minhanh.getStatus() == null || !"ACTIVE".equals(minhanh.getStatus())) {
+                        minhanh.setStatus("ACTIVE");
+                        needSave = true;
+                    }
+                    if (Boolean.TRUE.equals(minhanh.getIsLocked())) {
+                        minhanh.setIsLocked(false);
+                        needSave = true;
+                    }
+                    if (needSave) {
+                        userRepository.save(minhanh);
+                    }
+                },
+                () -> {
+                    userRepository.save(User.builder()
+                            .email("minhanh@gmail.com")
+                            .password(passwordEncoder.encode("password123"))
+                            .fullName("Minh Anh")
+                            .handle("@minhanhtravel")
+                            .avatarUrl("https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80")
+                            .bio("Kiểm duyệt viên cộng đồng WanderAI khu vực miền Bắc")
+                            .status("ACTIVE")
+                            .isLocked(false)
+                            .isVerified(true)
+                            .roles(Set.of(adminRole, moderatorRole, userRole))
+                            .build());
+                }
+        );
 
         // Seed Hoàng Nam (Gold Member)
         if (!userRepository.existsByEmail("hoangnam@gmail.com")) {
@@ -873,50 +925,6 @@ public class DataInitializer implements CommandLineRunner {
 
     private Province prov(String code, String name, String region, String aliases) {
         return Province.builder().code(code).name(name).region(region).aliases(aliases).build();
-    }
-
-    private boolean isRailwayDeployment() {
-        return System.getenv().keySet().stream().anyMatch(k -> k.startsWith("RAILWAY_"));
-    }
-
-    /**
-     * QUAN TRỌNG: tài khoản có quyền ADMIN nhưng vẫn dùng mật khẩu mặc định
-     * công khai trong source (admin123 / password123 / 123456) sẽ bị XOAY VÒNG
-     * sang mật khẩu ngẫu nhiên khi chạy trên Railway. Mật khẩu mới được in MỘT LẦN
-     * vào log khởi động để chủ hệ thống ghi lại (Railway → Deployments → Logs).
-     */
-    private void rotateDefaultAdminPasswords() {
-        Set<String> defaults = Set.of("admin123", "password123", "123456");
-        try {
-            List<User> admins = userRepository.findAll().stream()
-                    .filter(u -> u.getRoles() != null && u.getRoles().stream()
-                            .anyMatch(r -> r.getName() != null && r.getName().contains("ADMIN")))
-                    .collect(java.util.stream.Collectors.toList());
-            for (User admin : admins) {
-                boolean matchesDefault = defaults.stream().anyMatch(d -> passwordEncoder.matches(d, admin.getPassword()));
-                if (matchesDefault) {
-                    String newPassword = generateRandomPassword(16);
-                    admin.setPassword(passwordEncoder.encode(newPassword));
-                    userRepository.save(admin);
-                    log.warn("===========================================================================");
-                    log.warn(">>> SECURITY: Mật khẩu mặc định của tài khoản ADMIN '{}' vừa bị vô hiệu hóa.", admin.getEmail());
-                    log.warn(">>> MẬT KHẨU MỚI (chỉ hiện lần này, hãy lưu ngay): {}", newPassword);
-                    log.warn("===========================================================================");
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to rotate default admin passwords: {}", e.getMessage());
-        }
-    }
-
-    private String generateRandomPassword(int length) {
-        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-        java.security.SecureRandom random = new java.security.SecureRandom();
-        StringBuilder sb = new StringBuilder(length);
-        for (int i = 0; i < length; i++) {
-            sb.append(chars.charAt(random.nextInt(chars.length())));
-        }
-        return sb.toString();
     }
 
     private void seedTwentyTestUsers(Role adminRole, Role userRole) {        log.info("Checking/seeding 20 test accounts (tung1@gmail.com -> tung20@gmail.com)...");
