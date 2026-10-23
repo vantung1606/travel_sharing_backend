@@ -154,8 +154,10 @@ public class AdminReportService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bài viết với ID: " + postId));
 
         post.setStatus("ACTIVE");
+        post.setFlagSource(null);
         post.setReportsCount(0);
         post.setBadgeText("Đã duyệt bởi Admin");
+        post.setUpdatedAt(LocalDateTime.now());
         Post saved = postRepository.save(post);
 
         // Update post reports
@@ -192,6 +194,9 @@ public class AdminReportService {
 
         post.setReportsCount(0);
         post.setStatus("ACTIVE");
+        post.setFlagSource(null);
+        post.setBadgeText("Nội dung an toàn");
+        post.setUpdatedAt(LocalDateTime.now());
         Post saved = postRepository.save(post);
 
         // Update post reports status
@@ -258,12 +263,34 @@ public class AdminReportService {
 
     @Transactional
     public AdminPostDto unhidePost(Long postId) {
-        log.info("Unhiding/moving Post ID: {} back to PENDING_REVIEW moderation queue", postId);
+        log.info("Unhiding/moving Post ID: {} back to moderation queue", postId);
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bài viết với ID: " + postId));
 
-        post.setStatus("PENDING_REVIEW");
-        post.setReportsCount(0);
+        List<com.wayfare.entity.PostReport> reports = postReportRepository.findByPostId(postId);
+        boolean hasUserReports = reports != null && reports.stream().anyMatch(r ->
+                r.getReporter() != null && (post.getAuthor() == null || !r.getReporter().getId().equals(post.getAuthor().getId())));
+
+        String source = post.getFlagSource();
+        if (source == null) {
+            source = hasUserReports ? "USER" : "AI";
+            post.setFlagSource(source);
+        }
+
+        if ("USER".equalsIgnoreCase(source) || hasUserReports) {
+            post.setStatus("PENDING_REPORT");
+            post.setFlagSource("USER");
+            int count = post.getReportsCount() != null && post.getReportsCount() > 0 ? post.getReportsCount() : (reports != null ? reports.size() : 1);
+            post.setReportsCount(count);
+            post.setBadgeText(count + " Lượt báo cáo");
+        } else {
+            post.setStatus("PENDING_REVIEW");
+            post.setFlagSource("AI");
+            post.setReportsCount(0);
+            post.setBadgeText("AI Gắn Cờ - Chờ Duyệt");
+        }
+
+        post.setUpdatedAt(LocalDateTime.now());
         Post saved = postRepository.save(post);
 
         // Notify author
@@ -357,11 +384,69 @@ public class AdminReportService {
                     .max(java.util.Comparator.comparing(r -> r.getId() != null ? r.getId() : 0L))
                     .orElse(null);
         }
+        User author = post.getAuthor();
+        String authorName = author != null ? author.getFullName() : "Người dùng ẩn danh";
+        String authorHandle = author != null && author.getHandle() != null ? author.getHandle() : "@wanderer";
+        String authorAvatar = author != null ? author.getAvatarUrl() : null;
+        Integer authorTrustScore = 80;
+        String authorAccountAge = "Thành viên";
 
-        boolean isPendingReview = "PENDING_REVIEW".equals(post.getStatus());
-        String effectiveCategory = (latestReport != null && latestReport.getCategory() != null && !latestReport.getCategory().isBlank())
-                ? latestReport.getCategory()
-                : (post.getCategory() != null ? post.getCategory() : "Chia sẻ kinh nghiệm");
+        if (author != null) {
+            if (author.getCreatedAt() != null) {
+                long years = Duration.between(author.getCreatedAt(), LocalDateTime.now()).toDays() / 365;
+                authorAccountAge = years >= 1 ? years + " năm" : "Mới tham gia";
+            }
+        }
+
+        // An authentic community user report MUST have a reporter that is NOT the post author
+        com.wayfare.entity.PostReport authenticUserReport = null;
+        if (reports != null && !reports.isEmpty()) {
+            authenticUserReport = reports.stream()
+                    .filter(r -> r.getReporter() != null && (author == null || !r.getReporter().getId().equals(author.getId())))
+                    .max(java.util.Comparator.comparing(r -> r.getId() != null ? r.getId() : 0L))
+                    .orElse(null);
+        }
+
+        // Determine flagSource & isUserReported vs isAiPending
+        String flagSource = post.getFlagSource();
+        if (flagSource == null) {
+            if ("PENDING_REPORT".equalsIgnoreCase(post.getStatus()) || (authenticUserReport != null && !"DISMISSED".equalsIgnoreCase(authenticUserReport.getStatus()))) {
+                flagSource = "USER";
+            } else if ("PENDING_REVIEW".equalsIgnoreCase(post.getStatus()) || (post.getAiSafetyScore() != null && post.getAiSafetyScore() < 80)) {
+                flagSource = "AI";
+            }
+        }
+
+        boolean isUserReported = "USER".equalsIgnoreCase(flagSource) || "PENDING_REPORT".equalsIgnoreCase(post.getStatus()) || (authenticUserReport != null && !"DISMISSED".equalsIgnoreCase(authenticUserReport.getStatus()));
+        boolean isAiPending = !isUserReported && ("AI".equalsIgnoreCase(flagSource) || "PENDING_REVIEW".equalsIgnoreCase(post.getStatus()) || (post.getAiSafetyScore() != null && post.getAiSafetyScore() < 80));
+
+        Long reporterId = null;
+        String reporterName = null;
+        String reporterEmail = null;
+        LocalDateTime latestReportedAt = null;
+        String reportReasonText;
+        String effectiveCategory;
+
+        if (isUserReported && authenticUserReport != null) {
+            reporterId = authenticUserReport.getReporter().getId();
+            reporterName = authenticUserReport.getReporter().getFullName();
+            reporterEmail = authenticUserReport.getReporter().getEmail();
+            latestReportedAt = authenticUserReport.getCreatedAt() != null ? authenticUserReport.getCreatedAt() : post.getUpdatedAt();
+            reportReasonText = (authenticUserReport.getReason() != null && !authenticUserReport.getReason().isBlank())
+                    ? authenticUserReport.getReason()
+                    : (post.getReportReason() != null ? post.getReportReason() : "Báo cáo nội dung vi phạm từ cộng đồng.");
+            effectiveCategory = (authenticUserReport.getCategory() != null && !authenticUserReport.getCategory().isBlank())
+                    ? authenticUserReport.getCategory()
+                    : (post.getCategory() != null ? post.getCategory() : "Báo cáo vi phạm");
+        } else {
+            // Strictly AI flagged post -> ZERO reporter info (system automated)
+            reporterId = null;
+            reporterName = null;
+            reporterEmail = null;
+            latestReportedAt = null;
+            reportReasonText = post.getAiFlagReason() != null ? post.getAiFlagReason() : (post.getReportReason() != null ? post.getReportReason() : "Nội dung do hệ thống AI tạm giữ để Quản trị viên xem xét.");
+            effectiveCategory = post.getCategory() != null ? post.getCategory() : "Kiểm duyệt AI";
+        }
 
         String categoryType = "info";
         String cat = effectiveCategory.toLowerCase();
@@ -371,32 +456,6 @@ public class AdminReportService {
             categoryType = "error";
         } else if (cat.contains("spam") || cat.contains("scam") || cat.contains("thương mại") || cat.contains("bản quyền")) {
             categoryType = "warning";
-        }
-
-        Long reporterId = null;
-        String reporterName = null;
-        String reporterEmail = null;
-        LocalDateTime latestReportedAt = null;
-        String reportReasonText = post.getReportReason();
-
-        if (latestReport != null) {
-            if (latestReport.getReason() != null && !latestReport.getReason().isBlank()) {
-                reportReasonText = latestReport.getReason();
-            }
-            if (latestReport.getReporter() != null) {
-                reporterId = latestReport.getReporter().getId();
-                reporterName = latestReport.getReporter().getFullName();
-                reporterEmail = latestReport.getReporter().getEmail();
-            }
-            latestReportedAt = latestReport.getCreatedAt() != null ? latestReport.getCreatedAt() : post.getUpdatedAt();
-        }
-
-        if (reportReasonText == null || reportReasonText.isBlank()) {
-            if (isPendingReview) {
-                reportReasonText = post.getAiFlagReason() != null ? post.getAiFlagReason() : "Bài viết do người dùng đăng tải bị hệ thống AI giữ lại chờ duyệt thủ công.";
-            } else {
-                reportReasonText = "Báo cáo nội dung cần rà soát từ cộng đồng.";
-            }
         }
 
         // Calculate timeAgo accurately:
@@ -412,28 +471,15 @@ public class AdminReportService {
         }
         String timeAgo = calculateTimeAgo(referenceTime);
 
-        User author = post.getAuthor();
-        String authorName = author != null ? author.getFullName() : "Người dùng ẩn danh";
-        String authorHandle = author != null && author.getHandle() != null ? author.getHandle() : "@wanderer";
-        String authorAvatar = author != null ? author.getAvatarUrl() : null;
-        Integer authorTrustScore = 80;
-        String authorAccountAge = "Thành viên";
-
-        if (author != null) {
-            if (author.getCreatedAt() != null) {
-                long years = Duration.between(author.getCreatedAt(), LocalDateTime.now()).toDays() / 365;
-                authorAccountAge = years >= 1 ? years + " năm" : "Mới tham gia";
-            }
-        }
-
-        String defaultBadgeText;
-        if (isPendingReview) {
-            defaultBadgeText = "AI gắn cờ - Chờ duyệt";
+        String badgeText;
+        if (isAiPending) {
+            badgeText = "AI Gắn Cờ - Chờ Duyệt";
             if ("info".equals(categoryType)) categoryType = "warning";
-        } else if (post.getReportsCount() != null && post.getReportsCount() > 0) {
-            defaultBadgeText = post.getReportsCount() + " Lượt báo cáo";
+        } else if (isUserReported) {
+            int count = post.getReportsCount() != null && post.getReportsCount() > 0 ? post.getReportsCount() : 1;
+            badgeText = count + " Lượt báo cáo";
         } else {
-            defaultBadgeText = "Nội dung an toàn";
+            badgeText = "Nội dung an toàn";
         }
 
         return AdminPostDto.builder()
@@ -448,12 +494,14 @@ public class AdminReportService {
                 .imageUrl(sanitizeMediaUrl(post.getFirstImage() != null ? post.getFirstImage() : "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80"))
                 .likeCount(post.getLikeCount() != null ? post.getLikeCount() : 0)
                 .commentCount(post.getCommentCount() != null ? post.getCommentCount() : 0)
-                .reportsCount(post.getReportsCount() != null ? post.getReportsCount() : (latestReport != null ? 1 : 0))
+                .reportsCount(isUserReported ? (post.getReportsCount() != null && post.getReportsCount() > 0 ? post.getReportsCount() : 1) : 0)
                 .status(post.getStatus() != null ? post.getStatus() : "ACTIVE")
+                .flagSource(isAiPending ? "AI" : (isUserReported ? "USER" : null))
+                .isAiPending(isAiPending)
                 .aiSafetyScore(post.getAiSafetyScore() != null ? post.getAiSafetyScore() : 98)
                 .aiFlagReason(post.getAiFlagReason() != null ? post.getAiFlagReason() : "Hệ thống AI không phát hiện vi phạm quy chuẩn nội dung.")
                 .reportReason(reportReasonText)
-                .badgeText(post.getBadgeText() != null && !post.getBadgeText().isBlank() ? post.getBadgeText() : defaultBadgeText)
+                .badgeText(badgeText)
                 .createdAt(post.getCreatedAt())
                 .updatedAt(post.getUpdatedAt())
                 .timeAgo(timeAgo)

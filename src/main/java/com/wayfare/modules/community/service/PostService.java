@@ -272,8 +272,9 @@ public class PostService {
                 .sharedPost(sharedOriginalPost)
                 .likeCount(0)
                 .commentCount(0)
-                .reportsCount(aiResult.isApproved() ? 0 : 1)
-                .reportReason(aiResult.getFlagReason())
+                .reportsCount(0)
+                .reportReason(null)
+                .flagSource(aiResult.isApproved() ? null : "AI")
                 .status(initialStatus)
                 .aiSafetyScore(aiResult.getSafetyScore())
                 .aiFlagReason(aiResult.getFlagReason() != null ? aiResult.getFlagReason() : aiResult.getAiAnalysis())
@@ -337,7 +338,7 @@ public class PostService {
             try {
                 com.wayfare.entity.PostReport report = com.wayfare.entity.PostReport.builder()
                         .post(saved)
-                        .reporter(author)
+                        .reporter(null)
                         .category(aiResult.getCategory())
                         .reason(aiResult.getFlagReason())
                         .aiAnalysisSnippet("WanderAI Shield: Điểm an toàn " + aiResult.getSafetyScore() + "/100. Các vi phạm: " + String.join("; ", aiResult.getFlaggedViolations()))
@@ -643,6 +644,7 @@ public class PostService {
         post.setReportReason(fullReason);
         post.setBadgeText((currentCount + 1) + " Lượt báo cáo");
         post.setStatus("PENDING_REPORT");
+        post.setFlagSource("USER");
         post.setUpdatedAt(LocalDateTime.now());
 
         postRepository.save(post);

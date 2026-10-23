@@ -83,6 +83,9 @@ public class Post {
     @Column(name = "badge_text", length = 100)
     private String badgeText;
 
+    @Column(name = "flag_source", length = 20)
+    private String flagSource; // "AI" (WanderAI quét bài) hoặc "USER" (Người dùng báo cáo)
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

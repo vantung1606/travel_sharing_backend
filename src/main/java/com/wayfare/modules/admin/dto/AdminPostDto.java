@@ -25,6 +25,8 @@ public class AdminPostDto {
     private Integer commentCount;
     private Integer reportsCount;
     private String status; // ACTIVE, PENDING_REPORT, HIDDEN, REMOVED
+    private String flagSource; // AI, USER
+    private Boolean isAiPending; // true = AI flagged, false = user reported
     private Integer aiSafetyScore;
     private String aiFlagReason;
     private String reportReason;
