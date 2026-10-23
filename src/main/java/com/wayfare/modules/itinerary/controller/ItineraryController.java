@@ -16,12 +16,15 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/itineraries")
-@RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 @Slf4j
 public class ItineraryController {
 
     private final ItineraryService itineraryService;
+
+    public ItineraryController(ItineraryService itineraryService) {
+        this.itineraryService = itineraryService;
+    }
 
     private String extractViewerEmail(Authentication authentication) {
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {

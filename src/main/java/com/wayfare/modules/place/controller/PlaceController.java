@@ -17,12 +17,15 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/places")
-@RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 @Slf4j
 public class PlaceController {
 
     private final PlaceService placeService;
+
+    public PlaceController(PlaceService placeService) {
+        this.placeService = placeService;
+    }
 
     private String requireAuthEmail(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {

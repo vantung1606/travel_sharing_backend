@@ -19,13 +19,17 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/posts")
-@RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 @Slf4j
 public class PostController {
 
     private final PostService postService;
     private final CommunityRealtimeService communityRealtimeService;
+
+    public PostController(PostService postService, CommunityRealtimeService communityRealtimeService) {
+        this.postService = postService;
+        this.communityRealtimeService = communityRealtimeService;
+    }
 
     private String extractViewerEmail(Authentication authentication) {
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
