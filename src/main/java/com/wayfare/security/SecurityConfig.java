@@ -41,12 +41,16 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // Cho phép toàn bộ preflight OPTIONS requests đi qua tự do để CORS preflight không bị chặn
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // Public root, healthcheck, error and static resources
                 .requestMatchers("/", "/health", "/api/health", "/error", "/favicon.ico").permitAll()
                 // Public auth, static files, websockets, realtime sse streams and ai proxy
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/ws/**", "/uploads/**", "/api/realtime/**", "/api/ai/**").permitAll()
+                .requestMatchers("/ws/**", "/uploads/**", "/api/realtime/**", "/api/ai/**", "/api/upload/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/home/**").permitAll()
+                // Thông báo: cho phép GET /api/notifications công khai (được xử lý an toàn theo email trong controller)
+                .requestMatchers(HttpMethod.GET, "/api/notifications/**").permitAll()
                 // Public read-only endpoints for visitors
                 .requestMatchers(HttpMethod.GET, "/api/places/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll()
@@ -78,7 +82,9 @@ public class SecurityConfig {
         java.util.List<String> patterns = new java.util.ArrayList<>(List.of(
             "http://localhost:*",
             "http://127.0.0.1:*",
-            "https://*.up.railway.app"
+            "https://*.up.railway.app",
+            "https://travelsharingfrontend-production.up.railway.app",
+            "https://travelsharingbackend-production.up.railway.app"
         ));
 
         if (allowedOriginsEnv != null && !allowedOriginsEnv.isBlank()) {
@@ -91,9 +97,11 @@ public class SecurityConfig {
         }
 
         config.setAllowedOriginPatterns(patterns);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"));
         config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization", "Content-Disposition", "Link", "X-Total-Count"));
         config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

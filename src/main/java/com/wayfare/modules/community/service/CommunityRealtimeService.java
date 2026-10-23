@@ -23,8 +23,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Slf4j
 public class CommunityRealtimeService {
 
-    /** 0 = no server-side timeout; dead connections are cleaned on send failure / heartbeat. */
-    private static final long EMITTER_TIMEOUT_MS = 0L;
+    /** 180s timeout; proxies don't hang, client EventSource cleanly auto-reconnects. */
+    private static final long EMITTER_TIMEOUT_MS = 180_000L;
 
     private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
 
@@ -33,8 +33,18 @@ public class CommunityRealtimeService {
         emitters.add(emitter);
 
         emitter.onCompletion(() -> removeEmitter(emitter, "completed"));
-        emitter.onTimeout(() -> removeEmitter(emitter, "timeout"));
-        emitter.onError(ex -> removeEmitter(emitter, "error: " + ex.getMessage()));
+        emitter.onTimeout(() -> {
+            removeEmitter(emitter, "timeout");
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {}
+        });
+        emitter.onError(ex -> {
+            removeEmitter(emitter, "error: " + ex.getMessage());
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {}
+        });
 
         try {
             emitter.send(SseEmitter.event()
@@ -70,8 +80,8 @@ public class CommunityRealtimeService {
         broadcast("like", payload);
     }
 
-    /** Heartbeat keeps proxies (Vite dev proxy, nginx) from closing idle connections. */
-    @Scheduled(fixedRate = 25_000)
+    /** Heartbeat keeps proxies (Railway, Vite dev proxy, nginx, Cloudflare) from closing idle connections. */
+    @Scheduled(fixedRate = 15_000)
     public void heartbeat() {
         if (emitters.isEmpty()) return;
         for (SseEmitter emitter : emitters) {

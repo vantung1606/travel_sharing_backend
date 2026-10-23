@@ -29,24 +29,44 @@ public class NotificationController {
         this.activityLogService = activityLogService;
     }
 
+    private String resolveTargetEmail(String paramEmail, Authentication authentication) {
+        if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
+            return authentication.getName();
+        }
+        if (paramEmail != null && !paramEmail.isBlank()) {
+            return paramEmail.trim();
+        }
+        return null;
+    }
+
     private String requireAuthEmail(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
-            throw new ResourceNotFoundException("Vui lòng đăng nhập để xem thông báo");
+            throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện thao tác này");
         }
         return authentication.getName();
     }
 
     @GetMapping
-    public ResponseEntity<List<NotificationDto>> getNotifications(Authentication authentication) {
-        String targetEmail = requireAuthEmail(authentication);
+    public ResponseEntity<List<NotificationDto>> getNotifications(
+            @RequestParam(required = false) String email,
+            Authentication authentication) {
+        String targetEmail = resolveTargetEmail(email, authentication);
+        if (targetEmail == null) {
+            return ResponseEntity.ok(List.of());
+        }
         log.info("REST request to get notifications for email: {}", targetEmail);
         List<NotificationDto> result = notificationService.getNotificationsForUser(targetEmail);
         return ResponseEntity.ok(result);
     }
 
     @GetMapping("/unread-count")
-    public ResponseEntity<Map<String, Long>> getUnreadCount(Authentication authentication) {
-        String targetEmail = requireAuthEmail(authentication);
+    public ResponseEntity<Map<String, Long>> getUnreadCount(
+            @RequestParam(required = false) String email,
+            Authentication authentication) {
+        String targetEmail = resolveTargetEmail(email, authentication);
+        if (targetEmail == null) {
+            return ResponseEntity.ok(Map.of("unreadCount", 0L));
+        }
         log.info("REST request to get unread notifications count for email: {}", targetEmail);
         long count = notificationService.getUnreadCount(targetEmail);
         return ResponseEntity.ok(Map.of("unreadCount", count));

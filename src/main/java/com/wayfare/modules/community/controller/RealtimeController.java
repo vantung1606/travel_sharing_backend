@@ -1,7 +1,7 @@
 package com.wayfare.modules.community.controller;
 
 import com.wayfare.modules.community.service.CommunityRealtimeService;
-import lombok.RequiredArgsConstructor;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -9,15 +9,22 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/realtime")
-@RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 @Slf4j
 public class RealtimeController {
 
     private final CommunityRealtimeService communityRealtimeService;
 
+    public RealtimeController(CommunityRealtimeService communityRealtimeService) {
+        this.communityRealtimeService = communityRealtimeService;
+    }
+
     @GetMapping(value = "/community/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamCommunityEvents() {
+    public SseEmitter streamCommunityEvents(HttpServletResponse response) {
+        // Essential headers to avoid buffering and keep-alive issues through reverse proxies (Railway, Cloudflare, Nginx)
+        response.setHeader("Cache-Control", "no-cache, no-transform");
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Connection", "keep-alive");
         log.info("REST request to subscribe community realtime stream");
         return communityRealtimeService.subscribe();
     }
