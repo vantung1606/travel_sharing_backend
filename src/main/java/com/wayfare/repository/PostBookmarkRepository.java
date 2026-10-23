@@ -22,6 +22,8 @@ public interface PostBookmarkRepository extends JpaRepository<PostBookmark, Long
 
     void deleteByUserIdAndPostId(Long userId, Long postId);
 
+    void deleteByPostId(Long postId);
+
     List<PostBookmark> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     @Query("SELECT pb.post.id FROM PostBookmark pb WHERE pb.user.id = :userId ORDER BY pb.createdAt DESC")

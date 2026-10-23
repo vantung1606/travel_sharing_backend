@@ -27,6 +27,9 @@ public class AdminReportService {
 
     private final PostRepository postRepository;
     private final PostReportRepository postReportRepository;
+    private final com.wayfare.repository.PostLikeRepository postLikeRepository;
+    private final com.wayfare.repository.PostBookmarkRepository postBookmarkRepository;
+    private final com.wayfare.repository.PostCommentRepository postCommentRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
 
@@ -246,6 +249,9 @@ public class AdminReportService {
             }
         }
 
+        postLikeRepository.deleteByPostId(postId);
+        postBookmarkRepository.deleteByPostId(postId);
+        postCommentRepository.deleteByPostId(postId);
         postReportRepository.deleteByPostId(postId);
         postRepository.deleteById(postId);
     }

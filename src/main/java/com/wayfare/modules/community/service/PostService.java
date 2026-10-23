@@ -879,6 +879,10 @@ public class PostService {
             throw new RuntimeException("Bạn không có quyền xóa bài viết này!");
         }
 
+        postLikeRepository.deleteByPostId(postId);
+        postBookmarkRepository.deleteByPostId(postId);
+        postCommentRepository.deleteByPostId(postId);
+        postReportRepository.deleteByPostId(postId);
         postRepository.delete(post);
     }
 
