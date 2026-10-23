@@ -1,5 +1,6 @@
 package com.wayfare.modules.place.service;
 
+import com.wayfare.modules.admin.service.ActivityLogService;
 import com.wayfare.common.dto.PagedResponse;
 import com.wayfare.modules.place.dto.CreatePlaceRequest;
 import com.wayfare.modules.place.dto.PlaceDto;
@@ -27,6 +28,7 @@ public class PlaceService {
 
     private final PlaceRepository placeRepository;
     private final UserRepository userRepository;
+    private final ActivityLogService activityLogService;
 
     @Transactional(readOnly = true)
     public List<PlaceDto> getAllPlaces(String city, String category, String status, String keyword) {
@@ -104,6 +106,29 @@ public class PlaceService {
         return toDto(place);
     }
 
+    /**
+     * Quy trình Badge Xác thực: admin/moderator cấp hoặc gỡ cờ is_verified_host.
+     * Mọi thao tác đều ghi nhật ký kiểm toán (audit trail).
+     */
+    @Transactional
+    public PlaceDto setVerified(Long id, boolean verified, String adminEmail) {
+        Place place = placeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Địa điểm không tồn tại với ID: " + id));
+        place.setIsVerifiedHost(verified);
+        Place saved = placeRepository.save(place);
+        log.info("Place ID: {} verified={} set by {}", id, verified, adminEmail);
+
+        try {
+            activityLogService.recordLog(saved.getOwner(), verified ? "PLACE_VERIFY" : "PLACE_UNVERIFY",
+                    (verified ? "Cấp badge Xác thực cho địa điểm: " : "Gỡ badge Xác thực của địa điểm: ")
+                            + saved.getName() + " (#" + id + ") bởi " + adminEmail,
+                    "127.0.0.1", "Admin Portal");
+        } catch (Exception e) {
+            log.warn("Failed to record verify badge audit log: {}", e.getMessage());
+        }
+        return toDto(saved);
+    }
+
     @Transactional
     public PlaceDto createPlace(CreatePlaceRequest request, String userEmail) {
         log.info("Creating new place: {} by user: {}", request.getName(), userEmail);
@@ -168,8 +193,7 @@ public class PlaceService {
     }
 
     @Transactional
-    public PlaceDto approvePlace(Long id) {
-        log.info("Admin approving place ID: {}", id);
+    public PlaceDto approvePlace(Long id) {        log.info("Admin approving place ID: {}", id);
         Place place = placeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với ID: " + id));
         place.setStatus("ACTIVE");

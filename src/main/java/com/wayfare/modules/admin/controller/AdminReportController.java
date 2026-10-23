@@ -17,8 +17,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/reports")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
-@CrossOrigin(origins = "*")
+@PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
 public class AdminReportController {
 
     private final AdminReportService adminReportService;

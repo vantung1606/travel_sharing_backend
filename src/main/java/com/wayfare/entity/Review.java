@@ -33,6 +33,14 @@ public class Review {
     @Column(columnDefinition = "TEXT")
     private String comment;
 
+    /**
+     * Kiểm duyệt: review bị ẩn sẽ không hiện ở trang công khai và không tính
+     * vào điểm trung bình/số lượt của địa điểm (mặc định false; giá trị NULL
+     * từ bản dữ liệu cũ được xử lý như false).
+     */
+    @Column(name = "is_hidden")
+    private Boolean isHidden = false;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

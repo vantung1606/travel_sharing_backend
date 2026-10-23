@@ -112,6 +112,38 @@ public class ReviewService {
                 place.getId(), place.getAverageRating(), place.getReviewCount());
     }
 
+    /**
+     * Kiểm duyệt: ẩn/hiện review. Số điểm trung bình & lượt đánh giá của địa
+     * điểm được tính lại ngay (review ẩn không được tính — số liệu luôn thật).
+     */
+    @Transactional
+    public ReviewDto setReviewHidden(Long reviewId, boolean hidden) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Đánh giá không tồn tại với ID: " + reviewId));
+        review.setIsHidden(hidden);
+        Review saved = reviewRepository.save(review);
+        log.info("Review ID: {} hidden={} (moderation)", reviewId, hidden);
+
+        Place place = saved.getPlace();
+        if (place != null) {
+            recalculatePlaceRating(place);
+        }
+        return toDto(saved);
+    }
+
+    /** Xóa vĩnh viễn review bởi ADMIN/MODERATOR (không cần là tác giả). */
+    @Transactional
+    public void deleteReviewByModerator(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Đánh giá không tồn tại với ID: " + reviewId));
+        Place place = review.getPlace();
+        reviewRepository.delete(review);
+        log.info("Review ID: {} permanently deleted by moderator", reviewId);
+        if (place != null) {
+            recalculatePlaceRating(place);
+        }
+    }
+
     public ReviewDto toDto(Review review) {
         if (review == null) return null;
 
@@ -122,12 +154,14 @@ public class ReviewService {
                 .id(review.getId())
                 .placeId(place != null ? place.getId() : null)
                 .placeName(place != null ? place.getName() : null)
+                .placeCity(place != null ? place.getCity() : null)
                 .authorId(author != null ? author.getId() : null)
                 .authorName(author != null ? author.getFullName() : "Du khách Wayfare")
                 .authorHandle(author != null ? author.getHandle() : "@traveler")
                 .authorAvatar(author != null ? author.getAvatarUrl() : null)
                 .rating(review.getRating())
                 .comment(review.getComment())
+                .isHidden(Boolean.TRUE.equals(review.getIsHidden()))
                 .createdAt(review.getCreatedAt())
                 .build();
     }

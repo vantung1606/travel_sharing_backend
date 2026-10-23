@@ -20,7 +20,6 @@ import java.util.Map;
 @RequestMapping("/api/admin/audit-logs")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
-@CrossOrigin(origins = "*")
 @Slf4j
 public class AdminAuditLogController {
 

@@ -42,6 +42,11 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) throws Exception {
         log.info("Checking sample data initialization...");
 
+        boolean onRailway = isRailwayDeployment();
+        if (onRailway) {
+            rotateDefaultAdminPasswords();
+        }
+
         // Ensure Roles exist
         Role adminRole = roleRepository.findByName("ROLE_ADMIN")
                 .orElseGet(() -> roleRepository.save(Role.builder()
@@ -784,8 +789,52 @@ public class DataInitializer implements CommandLineRunner {
         seedTwentyTestUsers(adminRole, userRole);
     }
 
-    private void seedTwentyTestUsers(Role adminRole, Role userRole) {
-        log.info("Checking/seeding 20 test accounts (tung1@gmail.com -> tung20@gmail.com)...");
+    /** Railway tự inject các biến môi trường RAILWAY_* — đây là dấu hiệu môi trường prod. */
+    private boolean isRailwayDeployment() {
+        return System.getenv().keySet().stream().anyMatch(k -> k.startsWith("RAILWAY_"));
+    }
+
+    /**
+     * QUAN TRỌNG: tài khoản có quyền ADMIN nhưng vẫn dùng mật khẩu mặc định
+     * công khai trong source (admin123 / password123 / 123456) sẽ bị XOAY VÒNG
+     * sang mật khẩu ngẫu nhiên khi chạy trên Railway. Mật khẩu mới được in MỘT LẦN
+     * vào log khởi động để chủ hệ thống ghi lại (Railway → Deployments → Logs).
+     */
+    private void rotateDefaultAdminPasswords() {
+        Set<String> defaults = Set.of("admin123", "password123", "123456");
+        try {
+            List<User> admins = userRepository.findAll().stream()
+                    .filter(u -> u.getRoles() != null && u.getRoles().stream()
+                            .anyMatch(r -> r.getName() != null && r.getName().contains("ADMIN")))
+                    .collect(java.util.stream.Collectors.toList());
+            for (User admin : admins) {
+                boolean matchesDefault = defaults.stream().anyMatch(d -> passwordEncoder.matches(d, admin.getPassword()));
+                if (matchesDefault) {
+                    String newPassword = generateRandomPassword(16);
+                    admin.setPassword(passwordEncoder.encode(newPassword));
+                    userRepository.save(admin);
+                    log.warn("===========================================================================");
+                    log.warn(">>> SECURITY: Mật khẩu mặc định của tài khoản ADMIN '{}' vừa bị vô hiệu hóa.", admin.getEmail());
+                    log.warn(">>> MẬT KHẨU MỚI (chỉ hiện lần này, hãy lưu ngay): {}", newPassword);
+                    log.warn("===========================================================================");
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to rotate default admin passwords: {}", e.getMessage());
+        }
+    }
+
+    private String generateRandomPassword(int length) {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
+    }
+
+    private void seedTwentyTestUsers(Role adminRole, Role userRole) {        log.info("Checking/seeding 20 test accounts (tung1@gmail.com -> tung20@gmail.com)...");
         try {
             String defaultPassword = passwordEncoder.encode("123456");
             java.util.Map<Integer, User> userMap = new java.util.HashMap<>();
@@ -804,7 +853,14 @@ public class DataInitializer implements CommandLineRunner {
                             .isLocked(false)
                             .isVerified(true);
 
-                    if (userIndex == 1) {
+                    if (userIndex == 1 && isRailwayDeployment()) {
+                        builder.fullName("Nguyễn Thanh Tùng")
+                               .handle("@tung1_diamond")
+                               .avatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80")
+                               .bio("Thành viên sáng giá của cộng đồng Wayfare")
+                               .tier("diamond")
+                               .roles(Set.of(userRole));
+                    } else if (userIndex == 1) {
                         builder.fullName("Nguyễn Thanh Tùng (Admin Kim Cương)")
                                .handle("@tung1_diamond")
                                .avatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80")
@@ -836,10 +892,17 @@ public class DataInitializer implements CommandLineRunner {
                     user = userRepository.save(builder.build());
                     log.info("Created user account: {} (tier: {}, pass: 123456)", email, user.getTier());
                 } else {
-                    user.setPassword(defaultPassword);
+                    // PROD (Railway): KHÔNG đặt lại mật khẩu của người dùng có sẵn
+                    // (trước đây mỗi boot từng reset mọi tài khoản test về 123456 — lỗ hổng).
+                    if (!isRailwayDeployment()) {
+                        user.setPassword(defaultPassword);
+                    }
                     if (userIndex == 1) {
                         user.setTier("diamond");
-                        user.setRoles(Set.of(adminRole, userRole));
+                        // PROD: không tự cấp ROLE_ADMIN cho tài khoản test mặc định
+                        if (!isRailwayDeployment()) {
+                            user.setRoles(Set.of(adminRole, userRole));
+                        }
                     } else if (userIndex == 2) {
                         user.setTier("gold");
                     } else if (userIndex == 3) {
