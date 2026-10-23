@@ -84,6 +84,20 @@ public class AdminReportService {
                     .collect(Collectors.toList());
         }
 
+        for (Post p : posts) {
+            boolean changed = false;
+            if ("USER".equalsIgnoreCase(p.getFlagSource()) && "PENDING_REVIEW".equalsIgnoreCase(p.getStatus())) {
+                p.setStatus("PENDING_REPORT");
+                changed = true;
+            } else if ("AI".equalsIgnoreCase(p.getFlagSource()) && "PENDING_REPORT".equalsIgnoreCase(p.getStatus())) {
+                p.setStatus("PENDING_REVIEW");
+                changed = true;
+            }
+            if (changed) {
+                postRepository.save(p);
+            }
+        }
+
         List<AdminPostDto> dtos = posts.stream().map(this::mapToDto).collect(Collectors.toList());
 
         // Sort by newest activity: latest report timestamp (for user reports) or post createdAt (for AI review)
