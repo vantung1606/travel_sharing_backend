@@ -21,10 +21,9 @@ public class RealtimeController {
 
     @GetMapping(value = "/community/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamCommunityEvents(HttpServletResponse response) {
-        // Essential headers to avoid buffering and keep-alive issues through reverse proxies (Railway, Cloudflare, Nginx)
+        // Essential headers to avoid buffering through reverse proxies (Railway, Cloudflare, Nginx)
         response.setHeader("Cache-Control", "no-cache, no-transform");
         response.setHeader("X-Accel-Buffering", "no");
-        response.setHeader("Connection", "keep-alive");
         log.info("REST request to subscribe community realtime stream");
         return communityRealtimeService.subscribe();
     }
