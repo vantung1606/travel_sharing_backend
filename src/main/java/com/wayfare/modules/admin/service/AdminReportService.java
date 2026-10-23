@@ -233,11 +233,11 @@ public class AdminReportService {
 
     @Transactional
     public AdminPostDto unhidePost(Long postId) {
-        log.info("Unhiding/restoring Post ID: {} to ACTIVE status", postId);
+        log.info("Unhiding/moving Post ID: {} back to PENDING_REVIEW moderation queue", postId);
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bài viết với ID: " + postId));
 
-        post.setStatus("ACTIVE");
+        post.setStatus("PENDING_REVIEW");
         post.setReportsCount(0);
         Post saved = postRepository.save(post);
 
@@ -247,8 +247,8 @@ public class AdminReportService {
                 notificationService.sendNotification(
                         post.getAuthor(),
                         null,
-                        "POST_UNHIDDEN",
-                        "Bài viết '" + post.getTitle() + "' của bạn đã được Quản trị viên khôi phục hiển thị (bỏ ẩn) trên Cộng đồng Wayfare.",
+                        "POST_PENDING_REVIEW",
+                        "Bài viết '" + post.getTitle() + "' của bạn đã được Quản trị viên đưa trở lại hàng đợi chờ duyệt để xem xét xuất bản.",
                         "/community"
                 );
             } catch (Exception e) {

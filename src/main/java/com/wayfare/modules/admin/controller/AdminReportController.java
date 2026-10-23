@@ -109,7 +109,7 @@ public class AdminReportController {
         AdminPostDto updated = adminReportService.unhidePost(postId);
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("message", "Đã khôi phục hiển thị (bỏ ẩn) bài viết #" + postId + " lên Cộng đồng thành công!");
+        response.put("message", "Đã chuyển bài viết #" + postId + " quay trở lại hàng đợi chờ duyệt thành công!");
         response.put("data", updated);
         return ResponseEntity.ok(response);
     }
