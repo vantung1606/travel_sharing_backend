@@ -36,6 +36,20 @@ public class AiContentModerationService {
             "giang hồ đòi", "nợ tiền", "no tien", "thiếu nợ", "thieu no", "mắc nợ", "mac no"
     );
 
+    // Mẫu cấu trúc phạm quy đòi nợ (chống né từ khóa): "nợ <số tiền>", từ chối trả tiền, nhắc nợ theo số
+    private static final List<java.util.regex.Pattern> DEBT_STRUCTURAL_PATTERNS = List.of(
+            java.util.regex.Pattern.compile("\\bno\\s+\\d+\\s*(trieu|nghin|ngan|ty|k)\\b"),
+            java.util.regex.Pattern.compile("\\b(khong|ko)\\s+chiu\\s+tra\\b"),
+            java.util.regex.Pattern.compile("\\bkhong\\s+tra\\s+(no|tien)\\b"),
+            java.util.regex.Pattern.compile("\\b(tra|thu|doi|cho)\\s+no\\s+\\d+"),
+            java.util.regex.Pattern.compile("\\b(no|bo)\\s+phi\\s+\\d+")
+    );
+
+    // Mẫu xin thông tin liên hệ cá nhân của người khác ("ai biết cho tôi sdt...")
+    private static final java.util.regex.Pattern PHONE_SOLICITATION_PATTERN = java.util.regex.Pattern.compile(
+            "(ai\\s+(biet|co|giup)|cho\\s+(toi|minh|em)|cho\\s+xin)[^.\\n]{0,60}(sdt|so dien thoai|so dt|zalo)"
+    );
+
     // Rule Group 2: Safety, Legal & Eco Conservation Violations
     private static final List<String> ECO_SAFETY_VIOLATIONS = List.of(
             "cấm lửa", "đốt lửa", "lách kiểm lâm", "chốt kiểm lâm", "vượt rào", "chui rào",
@@ -130,6 +144,29 @@ public class AiContentModerationService {
                 detectedCategory = "Đòi nợ & Tranh chấp Tài chính Cá nhân";
                 mainReason = "Hệ thống phát hiện nội dung mang tính chất đòi nợ, bóc phốt vay mượn hoặc giải quyết mâu thuẫn tiền bạc cá nhân. Wayfare chỉ hỗ trợ nội dung liên quan tới Du lịch & Phượt.";
                 break;
+            }
+        }
+
+        // 1b. STRUCTURAL CHECK: nợ theo số tiền / từ chối trả tiền — bắt các bài cố tình né từ khóa
+        for (java.util.regex.Pattern pattern : DEBT_STRUCTURAL_PATTERNS) {
+            java.util.regex.Matcher matcher = pattern.matcher(unaccented);
+            if (matcher.find()) {
+                score -= 85;
+                violations.add("Phát hiện nội dung đòi nợ / tranh chấp tài chính cá nhân (kể cả khi đã thay đổi cách diễn đạt)");
+                detectedCategory = "Đòi nợ & Tranh chấp Tài chính Cá nhân";
+                mainReason = "Hệ thống phát hiện nội dung mang tính chất đòi nợ, bóc phốt vay mượn hoặc giải quyết mâu thuẫn tiền bạc cá nhân. Wayfare chỉ hỗ trợ nội dung liên quan tới Du lịch & Phượt.";
+                break;
+            }
+        }
+
+        // 1c. CHECK: xin thông tin liên hệ cá nhân của người khác
+        java.util.regex.Matcher phoneMatch = PHONE_SOLICITATION_PATTERN.matcher(unaccented);
+        if (phoneMatch.find()) {
+            score -= 60;
+            violations.add("Hành vi tìm kiếm/xin thông tin cá nhân (số điện thoại) của người khác");
+            if (detectedCategory.equals("Nội dung an toàn")) {
+                detectedCategory = "Đòi nợ & Tranh chấp Tài chính Cá nhân";
+                mainReason = "Nội dung có dấu hiệu xin số điện thoại hoặc thông tin cá nhân của người khác — không thuộc phạm trù chia sẻ du lịch.";
             }
         }
 
