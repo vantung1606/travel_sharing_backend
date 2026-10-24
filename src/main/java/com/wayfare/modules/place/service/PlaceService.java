@@ -242,6 +242,12 @@ public class PlaceService {
             }
         }
 
+        // Unlink and cascade delete dependent foreign key references to prevent DataIntegrityViolationException
+        placeRepository.unlinkItineraryDetails(id);
+        placeRepository.deleteReviewsByPlaceId(id);
+        placeRepository.deleteSavedPlacesByPlaceId(id);
+        placeRepository.deletePlaceImagesByPlaceId(id);
+
         placeRepository.delete(place);
         log.info("Successfully deleted place ID: {}", id);
     }

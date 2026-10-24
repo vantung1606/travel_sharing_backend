@@ -588,7 +588,8 @@ public class PostService {
 
         boolean isCommentAuthor = comment.getAuthor() != null && comment.getAuthor().getId().equals(user.getId());
         boolean isPostAuthor = comment.getPost().getAuthor() != null && comment.getPost().getAuthor().getId().equals(user.getId());
-        boolean isAdmin = user.getEmail() != null && user.getEmail().toLowerCase().contains("admin");
+        boolean isAdmin = user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(r -> r.getName().contains("ADMIN") || r.getName().contains("MODERATOR"));
 
         if (!isCommentAuthor && !isPostAuthor && !isAdmin) {
             throw new RuntimeException("Bạn không có quyền xóa bình luận này!");

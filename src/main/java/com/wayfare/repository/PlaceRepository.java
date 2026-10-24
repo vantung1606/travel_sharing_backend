@@ -65,4 +65,20 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             @org.springframework.data.repository.query.Param("keyword") String keyword,
             Pageable pageable
     );
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE ItineraryDetail id SET id.place = NULL WHERE id.place.id = :placeId")
+    void unlinkItineraryDetails(@org.springframework.data.repository.query.Param("placeId") Long placeId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM Review r WHERE r.place.id = :placeId")
+    void deleteReviewsByPlaceId(@org.springframework.data.repository.query.Param("placeId") Long placeId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM SavedPlace sp WHERE sp.place.id = :placeId")
+    void deleteSavedPlacesByPlaceId(@org.springframework.data.repository.query.Param("placeId") Long placeId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM PlaceImage pi WHERE pi.place.id = :placeId")
+    void deletePlaceImagesByPlaceId(@org.springframework.data.repository.query.Param("placeId") Long placeId);
 }
