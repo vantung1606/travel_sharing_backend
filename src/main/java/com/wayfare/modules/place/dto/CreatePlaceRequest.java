@@ -9,7 +9,10 @@ public class CreatePlaceRequest {
     private String name;
 
     private String description;
+
+    @NotBlank(message = "Địa chỉ cụ thể không được để trống. Vui lòng ghi rõ Số nhà/Đường - Phường/Quận/Huyện - Tỉnh/Thành phố (Ví dụ: 202 Chương Dương - Sơn Trà - Đà Nẵng)")
     private String address;
+
     private String city;
     private BigDecimal latitude;
     private BigDecimal longitude;

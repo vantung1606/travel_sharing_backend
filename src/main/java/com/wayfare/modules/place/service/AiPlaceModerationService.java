@@ -53,9 +53,10 @@ public class AiPlaceModerationService {
                - CẢNH BÁO TỪ CHỐI (approved = false): Địa điểm bịa đặt, troll, tên nhảm nhí, ký tự rác, nhà riêng cá nhân không làm dịch vụ, địa chỉ ảo không tồn tại trên thực tế tại thành phố đó.
                - DUYỆT (approved = true): Địa điểm có thật hoặc có tính khả thi cao, thông tin địa chỉ và dịch vụ rõ ràng, phù hợp trải nghiệm du lịch.
 
-            2. TÍNH PHÙ HỢP CỦA ĐỊA CHỈ:
-               - Địa chỉ phải khớp với tỉnh/thành phố khai báo.
-               - Tuyệt đối từ chối các địa chỉ vô nghĩa (ví dụ: 'không biết', 'ở đâu đó', '123 abc', 'gần nhà', 'test').
+            2. YÊU CẦU ĐỊA CHỈ PHẢI CỤ THỂ ĐẦY ĐỦ CÁC CẤP HÀNH CHÍNH (BẮT BUỘC):
+               - KHÔNG ĐƯỢC CỘC LỐC: Tuyệt đối không chấp nhận các địa chỉ sơ sài chỉ ghi mỗi tên đường như '202 Chương Dương'.
+               - PHẢI CỤ THỂ ĐẦY ĐỦ: Địa chỉ bắt buộc phải có Số nhà/Tên đường kèm Phường/Xã/Quận/Huyện và Tỉnh/Thành phố (Ví dụ chuẩn: '202 Chương Dương - Sơn Trà - Đà Nẵng' hoặc '202 Chương Dương, Phường Mỹ An, Quận Ngũ Hành Sơn, Đà Nẵng').
+               - Nếu địa chỉ ghi cộc lốc hoặc thiếu Quận/Huyện/Thành phố -> BẮT BUỘC approved = false, flagReason = '⚠️ Địa chỉ chưa đủ cụ thể! Không được chỉ ghi tên đường cộc lốc như "202 Chương Dương". Yêu cầu ghi rõ Số nhà/Đường - Phường/Quận/Huyện - Tỉnh/Thành phố (Ví dụ: "202 Chương Dương - Sơn Trà - Đà Nẵng").'
 
             KẾT QUẢ ĐẦU RA BẮT BUỘC LÀ JSON THUẦN TÚY (không markdown):
             {
@@ -176,8 +177,11 @@ public class AiPlaceModerationService {
         if (name.length() < 3) {
             return "⚠️ Tên địa điểm quá ngắn (dưới 3 ký tự), không đủ thông tin nhận diện.";
         }
-        if (address.length() < 6) {
-            return "⚠️ Địa chỉ cụ thể quá ngắn hoặc không rõ ràng, yêu cầu Admin thẩm định.";
+
+        // Kiểm tra tính cụ thể của địa chỉ (không được cộc lốc như '202 Chương Dương')
+        String addressCheck = checkAddressSpecificity(address, req.getCity());
+        if (addressCheck != null) {
+            return addressCheck;
         }
 
         String normName = normalizeText(name);
@@ -192,6 +196,46 @@ public class AiPlaceModerationService {
         for (String spam : spamKeywords) {
             if (normName.contains(spam) || normAddr.contains(spam)) {
                 return "⚠️ Tên hoặc địa chỉ có dấu hiệu spam, troll hoặc không có thật trên thực tế.";
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Bắt buộc địa chỉ phải cụ thể đầy đủ cấu trúc Số nhà/Đường - Phường/Quận/Huyện - Tỉnh/Thành phố.
+     * Cấm cộc lốc chỉ ghi mỗi tên đường như "202 Chương Dương".
+     */
+    private String checkAddressSpecificity(String address, String city) {
+        if (address == null || address.trim().isBlank()) {
+            return "⚠️ Địa chỉ cụ thể không được để trống.";
+        }
+        String trimmed = address.trim();
+        if (trimmed.length() < 10) {
+            return "⚠️ Địa chỉ chưa đủ cụ thể! Không được chỉ ghi tên đường cộc lốc như '202 Chương Dương'. Vui lòng ghi rõ: Số nhà/Đường - Phường/Quận/Huyện - Tỉnh/Thành phố (Ví dụ: '202 Chương Dương - Sơn Trà - Đà Nẵng').";
+        }
+
+        String norm = normalizeText(trimmed);
+        boolean hasHyphenOrComma = trimmed.contains("-") || trimmed.contains(",") || trimmed.contains("/");
+        boolean hasAdminKeyword = norm.contains("quan ") || norm.contains("huyen ") || 
+                                  norm.contains("phuong ") || norm.contains("xa ") || 
+                                  norm.contains("thi xa ") || norm.contains("thanh pho ") || 
+                                  norm.contains("tp ");
+        
+        // Nếu địa chỉ chỉ cộc lốc dạng '202 chương dương' (không có dấu phân cách cấp hành chính và không có từ khóa phường/quận/huyện)
+        if (!hasHyphenOrComma && !hasAdminKeyword) {
+            return "⚠️ Địa chỉ chưa đủ cụ thể! Không được chỉ ghi tên đường cộc lốc như '202 Chương Dương'. Yêu cầu ghi đầy đủ: Số nhà/Đường - Phường/Quận/Huyện - Tỉnh/Thành phố (Ví dụ: '202 Chương Dương - Sơn Trà - Đà Nẵng').";
+        }
+
+        // Nếu có dấu phân cách '-' hoặc ',', kiểm tra xem có ít nhất 2 phân đoạn trở lên
+        if (hasHyphenOrComma) {
+            String[] segments = trimmed.split("[-.,/]");
+            int validSegments = 0;
+            for (String s : segments) {
+                if (s.trim().length() >= 2) validSegments++;
+            }
+            if (validSegments < 2 && !hasAdminKeyword) {
+                return "⚠️ Địa chỉ chưa đủ cụ thể! Yêu cầu ghi rõ cấu trúc: Số nhà/Đường - Phường/Quận/Huyện - Tỉnh/Thành phố (Ví dụ: '202 Chương Dương - Sơn Trà - Đà Nẵng').";
             }
         }
 
