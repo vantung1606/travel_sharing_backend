@@ -37,6 +37,8 @@ public class PlaceDto {
     private String amenities;
     private String status;
     private Boolean isVerifiedHost;
+    private String aiModerationStatus;
+    private String aiModerationNote;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

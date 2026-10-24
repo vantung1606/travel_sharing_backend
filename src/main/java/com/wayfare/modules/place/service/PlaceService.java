@@ -9,6 +9,7 @@ import com.wayfare.entity.User;
 import com.wayfare.exception.ResourceNotFoundException;
 import com.wayfare.repository.PlaceRepository;
 import com.wayfare.repository.UserRepository;
+import com.wayfare.modules.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,8 @@ public class PlaceService {
     private final PlaceRepository placeRepository;
     private final UserRepository userRepository;
     private final ActivityLogService activityLogService;
+    private final AiPlaceModerationService aiPlaceModerationService;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public List<PlaceDto> getAllPlaces(String city, String category, String status, String keyword) {
@@ -147,14 +150,45 @@ public class PlaceService {
                     .anyMatch(r -> r.getName().equalsIgnoreCase("ROLE_ADMIN") || r.getName().equalsIgnoreCase("ROLE_MODERATOR"));
         }
 
-        // Quyết định trạng thái khởi tạo:
-        // MẶC ĐỊNH 100% địa điểm người dùng gửi lên từ form công cộng -> PENDING_APPROVAL để chờ Ban Quản Trị kiểm duyệt!
-        // CHỈ KHI được tạo từ trang Quản trị Admin (gửi status = "ACTIVE" và người tạo có quyền ROLE_ADMIN) -> mới được ACTIVE ngay.
-        String initialStatus = "PENDING_APPROVAL";
+        // Quyết định trạng thái khởi tạo và thẩm định AI:
+        String initialStatus;
         boolean isVerifiedHost = false;
+        String aiModerationStatus;
+        String aiModerationNote;
+
         if (isAdminOrMod && "ACTIVE".equalsIgnoreCase(request.getStatus())) {
             initialStatus = "ACTIVE";
             isVerifiedHost = true;
+            aiModerationStatus = "APPROVED_BY_ADMIN";
+            aiModerationNote = "Được khởi tạo trực tiếp bởi Quản trị viên";
+        } else {
+            // Thẩm định bằng AI WanderAI:
+            // 1. Kiểm tra trùng lặp địa chỉ cụ thể & tên địa điểm trên toàn bộ CSDL.
+            // 2. Kiểm tra tính có thật của địa điểm và địa chỉ.
+            // 3. Nếu AI từ chối (trùng, không có thật, nghi vấn) -> KHÔNG xóa mà chuyển toàn bộ sang Admin kiểm duyệt (PENDING_APPROVAL).
+            AiPlaceModerationService.PlaceModerationResult aiResult = aiPlaceModerationService.moderatePlace(request);
+            if (aiResult.isApproved()) {
+                initialStatus = "ACTIVE";
+                isVerifiedHost = true;
+                aiModerationStatus = "APPROVED_BY_AI";
+                aiModerationNote = aiResult.getNote();
+            } else {
+                initialStatus = "PENDING_APPROVAL";
+                isVerifiedHost = false;
+                aiModerationStatus = aiResult.getModerationStatus();
+                aiModerationNote = aiResult.getNote();
+
+                // Gửi thông báo đến toàn bộ Quản trị viên vào hàng đợi duyệt
+                try {
+                    notificationService.notifyAdmins(
+                            "PLACE_MODERATION",
+                            "Địa điểm mới '" + request.getName() + "' cần thẩm định do AI từ chối: " + aiResult.getNote(),
+                            "/admin/places"
+                    );
+                } catch (Exception e) {
+                    log.warn("Failed to notify admins for place moderation: {}", e.getMessage());
+                }
+            }
         }
 
         Place place = Place.builder()
@@ -178,10 +212,39 @@ public class PlaceService {
                 .reviewCount(0)
                 .status(initialStatus)
                 .isVerifiedHost(isVerifiedHost)
+                .aiModerationStatus(aiModerationStatus)
+                .aiModerationNote(aiModerationNote)
                 .build();
 
         Place saved = placeRepository.save(place);
-        log.info("Successfully created place ID: {} with status: {} by user: {}", saved.getId(), initialStatus, userEmail);
+        log.info("Successfully created place ID: {} with status: {}, aiStatus: {} by user: {}",
+                saved.getId(), initialStatus, aiModerationStatus, userEmail);
+
+        // Gửi thông báo cho người đăng
+        if (owner != null) {
+            try {
+                if ("ACTIVE".equals(initialStatus)) {
+                    notificationService.sendNotification(
+                            owner,
+                            null,
+                            "PLACE_APPROVED",
+                            "Địa điểm '" + saved.getName() + "' đã được AI WanderAI thẩm định thành công và xuất hiện trên Wayfare!",
+                            "/places/" + saved.getId()
+                    );
+                } else {
+                    notificationService.sendNotification(
+                            owner,
+                            null,
+                            "PLACE_PENDING",
+                            "Địa điểm '" + saved.getName() + "' đang được chuyển tiếp tới Ban Quản Trị xem xét: " + aiModerationNote,
+                            null
+                    );
+                }
+            } catch (Exception e) {
+                log.warn("Failed to send place creation notification to owner: {}", e.getMessage());
+            }
+        }
+
         return toDto(saved);
     }
 
@@ -197,13 +260,30 @@ public class PlaceService {
     }
 
     @Transactional
-    public PlaceDto approvePlace(Long id) {        log.info("Admin approving place ID: {}", id);
+    public PlaceDto approvePlace(Long id) {
+        log.info("Admin approving place ID: {}", id);
         Place place = placeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với ID: " + id));
         place.setStatus("ACTIVE");
         place.setIsVerifiedHost(true);
+        place.setAiModerationStatus("APPROVED_BY_ADMIN");
+        place.setAiModerationNote("Được Ban Quản Trị phê duyệt chính thức.");
         Place saved = placeRepository.save(place);
         log.info("Place ID: {} approved successfully and marked as verified host", id);
+
+        if (saved.getOwner() != null) {
+            try {
+                notificationService.sendNotification(
+                        saved.getOwner(),
+                        null,
+                        "PLACE_APPROVED",
+                        "Địa điểm '" + saved.getName() + "' của bạn đã được Ban Quản Trị phê duyệt chính thức!",
+                        "/places/" + saved.getId()
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify place owner of approval: {}", e.getMessage());
+            }
+        }
         return toDto(saved);
     }
 
@@ -214,8 +294,24 @@ public class PlaceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với ID: " + id));
         place.setStatus("REJECTED");
         place.setIsVerifiedHost(false);
+        place.setAiModerationStatus("REJECTED_BY_ADMIN");
+        place.setAiModerationNote(reason != null && !reason.isBlank() ? reason : "Bị Ban Quản Trị từ chối");
         Place saved = placeRepository.save(place);
         log.info("Place ID: {} rejected successfully", id);
+
+        if (saved.getOwner() != null) {
+            try {
+                notificationService.sendNotification(
+                        saved.getOwner(),
+                        null,
+                        "PLACE_REJECTED",
+                        "Địa điểm '" + saved.getName() + "' của bạn không được phê duyệt. Lý do: " + saved.getAiModerationNote(),
+                        null
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify place owner of rejection: {}", e.getMessage());
+            }
+        }
         return toDto(saved);
     }
 
@@ -279,6 +375,8 @@ public class PlaceService {
                 .amenities(place.getAmenities())
                 .status(place.getStatus() != null ? place.getStatus() : "ACTIVE")
                 .isVerifiedHost(place.getIsVerifiedHost() != null ? place.getIsVerifiedHost() : false)
+                .aiModerationStatus(place.getAiModerationStatus() != null ? place.getAiModerationStatus() : "APPROVED_BY_AI")
+                .aiModerationNote(place.getAiModerationNote())
                 .ownerId(owner != null ? owner.getId() : null)
                 .ownerName(owner != null ? owner.getFullName() : null)
                 .ownerHandle(owner != null ? owner.getHandle() : null)

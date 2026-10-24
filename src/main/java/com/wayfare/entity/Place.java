@@ -82,6 +82,13 @@ public class Place {
     @Column(name = "is_verified_host")
     private Boolean isVerifiedHost = false;
 
+    @Builder.Default
+    @Column(name = "ai_moderation_status", length = 50)
+    private String aiModerationStatus = "APPROVED_BY_AI";
+
+    @Column(name = "ai_moderation_note", columnDefinition = "TEXT")
+    private String aiModerationNote;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "place_categories",

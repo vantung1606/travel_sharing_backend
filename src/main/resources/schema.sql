@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 -- WAYFARE SMART TRAVEL PLATFORM - MYSQL DATABASE SCHEMA (28 TABLES)
 -- Generated & Verified directly from Live MySQL 8.0 Database (wayfare_db)
 -- =============================================================================
@@ -252,6 +252,8 @@ CREATE TABLE IF NOT EXISTS `places` (
   `amenities` varchar(500) DEFAULT NULL,
   `status` varchar(30) DEFAULT 'ACTIVE',
   `is_verified_host` tinyint(1) DEFAULT '0',
+  `ai_moderation_status` varchar(50) DEFAULT 'APPROVED_BY_AI',
+  `ai_moderation_note` text DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `fk_places_owner` (`owner_id`),
   CONSTRAINT `fk_places_owner` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
