@@ -41,6 +41,8 @@ public class PlaceService {
         if (status != null && !status.isBlank()) {
             if (status.equalsIgnoreCase("ALL")) {
                 cleanStatus = null;
+            } else if (status.equalsIgnoreCase("APPROVED") || status.equalsIgnoreCase("ACTIVE")) {
+                cleanStatus = "ACTIVE";
             } else if (!status.equalsIgnoreCase("Tất cả")) {
                 cleanStatus = status.trim();
             }
@@ -69,6 +71,8 @@ public class PlaceService {
         if (status != null && !status.isBlank()) {
             if (status.equalsIgnoreCase("ALL")) {
                 cleanStatus = null;
+            } else if (status.equalsIgnoreCase("APPROVED") || status.equalsIgnoreCase("ACTIVE")) {
+                cleanStatus = "ACTIVE";
             } else if (!status.equalsIgnoreCase("Tất cả")) {
                 cleanStatus = status.trim();
             }
