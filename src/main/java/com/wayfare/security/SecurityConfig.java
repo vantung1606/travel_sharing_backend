@@ -49,8 +49,6 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/ws/**", "/uploads/**", "/api/realtime/**", "/api/ai/**", "/api/upload/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/home/**").permitAll()
-                // Thông báo: cho phép GET /api/notifications công khai (được xử lý an toàn theo email trong controller)
-                .requestMatchers(HttpMethod.GET, "/api/notifications/**").permitAll()
                 // Public read-only endpoints for visitors
                 .requestMatchers(HttpMethod.GET, "/api/places/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll()

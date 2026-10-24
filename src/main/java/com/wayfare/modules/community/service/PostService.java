@@ -395,7 +395,7 @@ public class PostService {
 
         if (existingLike.isPresent()) {
             postLikeRepository.delete(existingLike.get());
-            post.setLikeCount(Math.max(0, post.getLikeCount() - 1));
+            postRepository.updateLikeCount(postId, -1);
             isLiked = false;
         } else {
             PostLike newLike = PostLike.builder()
@@ -403,11 +403,11 @@ public class PostService {
                     .post(post)
                     .build();
             postLikeRepository.save(newLike);
-            post.setLikeCount(post.getLikeCount() + 1);
+            postRepository.updateLikeCount(postId, 1);
             isLiked = true;
 
             // Send notification to author if not liking own post
-            if (!post.getAuthor().getId().equals(user.getId())) {
+            if (post.getAuthor() != null && !post.getAuthor().getId().equals(user.getId())) {
                 try {
                     notificationService.sendNotification(
                             post.getAuthor(),
@@ -422,8 +422,8 @@ public class PostService {
             }
         }
 
-        postRepository.save(post);
-        return Map.of("isLiked", isLiked, "likeCount", post.getLikeCount());
+        int accurateLikeCount = (int) postLikeRepository.countByPostId(postId);
+        return Map.of("isLiked", isLiked, "likeCount", accurateLikeCount);
     }
 
     @Transactional
@@ -905,6 +905,9 @@ public class PostService {
         if (!post.getAuthor().getId().equals(currentUser.getId()) && !isAdmin) {
             throw new RuntimeException("Bạn không có quyền xóa bài viết này!");
         }
+
+        // Unlink any shared posts that reference this post to prevent FK constraint failure
+        postRepository.unlinkSharedPost(postId);
 
         postLikeRepository.deleteByPostId(postId);
         postBookmarkRepository.deleteByPostId(postId);

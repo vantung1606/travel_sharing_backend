@@ -494,6 +494,9 @@ public class AdminReportService {
             }
         }
 
+        // Unlink any shared posts that reference this post to prevent FK constraint failure
+        postRepository.unlinkSharedPost(postId);
+
         postLikeRepository.deleteByPostId(postId);
         postBookmarkRepository.deleteByPostId(postId);
         postCommentRepository.deleteByPostId(postId);

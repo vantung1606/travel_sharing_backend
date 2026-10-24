@@ -31,17 +31,19 @@ public class NotificationController {
 
     private String resolveTargetEmail(String paramEmail, Authentication authentication) {
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
+            boolean isAdmin = authentication.getAuthorities().stream().anyMatch(a -> a.getAuthority().contains("ADMIN"));
+            if (isAdmin && paramEmail != null && !paramEmail.isBlank()) {
+                return paramEmail.trim();
+            }
             return authentication.getName();
         }
-        if (paramEmail != null && !paramEmail.isBlank()) {
-            return paramEmail.trim();
-        }
+        // Strict Security: Unauthenticated or anonymous callers CANNOT view any user notifications
         return null;
     }
 
     private String requireAuthEmail(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
-            throw new ResourceNotFoundException("Vui lòng đăng nhập để thực hiện thao tác này");
+            throw new org.springframework.security.access.AccessDeniedException("Vui lòng đăng nhập để thực hiện thao tác này");
         }
         return authentication.getName();
     }

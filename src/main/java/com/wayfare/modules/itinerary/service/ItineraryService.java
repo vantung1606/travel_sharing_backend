@@ -42,6 +42,7 @@ public class ItineraryService {
     private final PlaceRepository placeRepository;
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
+    private final com.wayfare.repository.PostRepository postRepository;
 
     @Transactional(readOnly = true)
     public List<ItineraryDto> getItinerariesForUser(String email) {
@@ -195,6 +196,9 @@ public class ItineraryService {
         log.info("Deleting itinerary id: {} by user: {}", id, email);
         Itinerary itinerary = itineraryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + id));
+
+        // Unlink any community posts referencing this itinerary so FK doesn't fail
+        postRepository.unlinkItinerary(id);
 
         // Cascade delete child entities
         itineraryMemberRepository.deleteByItineraryId(id);

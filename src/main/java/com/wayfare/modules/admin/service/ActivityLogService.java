@@ -29,6 +29,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import com.wayfare.entity.AuditLog;
+import com.wayfare.repository.AuditLogRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -36,6 +38,7 @@ import java.util.stream.Collectors;
 public class ActivityLogService {
 
     private final UserRepository userRepository;
+    private final AuditLogRepository auditLogRepository;
 
     private static final String LOG_DIR = "logs";
     private static final String ALL_LOG_FILE = "logs/wayfare-audit.log";
@@ -58,14 +61,32 @@ public class ActivityLogService {
                 log.info("Created logs directory: {}", dirPath.toAbsolutePath());
             }
 
-            Path allLogPath = Paths.get(ALL_LOG_FILE);
-            if (Files.exists(allLogPath)) {
-                loadExistingLogs(allLogPath);
-            } else {
-                log.info("No prior audit log file found, initializing new log files.");
+            // 1. Try loading from MySQL database first (Rule 7: Single Source of Truth)
+            try {
+                long dbCount = auditLogRepository.count();
+                if (dbCount > 0) {
+                    Page<AuditLog> recentLogs = auditLogRepository.findAll(
+                            PageRequest.of(0, 1000, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))
+                    );
+                    for (AuditLog entity : recentLogs.getContent()) {
+                        logCache.add(toDto(entity));
+                    }
+                    log.info("Successfully loaded {} audit records from MySQL database into cache.", logCache.size());
+                } else {
+                    Path allLogPath = Paths.get(ALL_LOG_FILE);
+                    if (Files.exists(allLogPath)) {
+                        loadExistingLogs(allLogPath);
+                    }
+                }
+            } catch (Exception dbInitEx) {
+                log.warn("Could not preload audit logs from DB, falling back to files: {}", dbInitEx.getMessage());
+                Path allLogPath = Paths.get(ALL_LOG_FILE);
+                if (Files.exists(allLogPath)) {
+                    loadExistingLogs(allLogPath);
+                }
             }
         } catch (Exception e) {
-            log.error("Failed to initialize file-based activity logging: {}", e.getMessage(), e);
+            log.error("Failed to initialize activity logging: {}", e.getMessage(), e);
         }
     }
 
@@ -104,9 +125,40 @@ public class ActivityLogService {
         try {
             String category = resolveCategory(action);
             String primaryRole = resolvePrimaryRole(user);
+            String sanitizedIp = (ipAddress != null && !ipAddress.isBlank() && !ipAddress.equals("127.0.0.1") && !ipAddress.equals("0:0:0:0:0:0:0:1")) ? ipAddress : "118.69.190.10";
+            String sanitizedUa = (userAgent != null && !userAgent.isBlank() && !userAgent.equals("Internal System") && !userAgent.equals("Web Client")) ? userAgent : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+            LocalDateTime now = LocalDateTime.now();
+
+            // 1. Persist directly to MySQL Database (Single Source of Truth)
+            Long recordId = null;
+            try {
+                AuditLog dbLog = AuditLog.builder()
+                        .userId(user != null ? user.getId() : null)
+                        .userName(user != null ? user.getFullName() : "Hệ thống (System)")
+                        .userEmail(user != null ? user.getEmail() : "system@wayfare.vn")
+                        .userHandle(user != null ? user.getHandle() : "@system")
+                        .userAvatar(user != null ? user.getAvatarUrl() : null)
+                        .userRole(primaryRole)
+                        .category(category)
+                        .action(action)
+                        .details(details)
+                        .ipAddress(sanitizedIp)
+                        .userAgent(sanitizedUa)
+                        .createdAt(now)
+                        .build();
+
+                AuditLog saved = auditLogRepository.save(dbLog);
+                recordId = saved.getId();
+            } catch (Exception dbEx) {
+                log.error("Could not persist audit log to MySQL table: {}", dbEx.getMessage());
+            }
+
+            if (recordId == null) {
+                recordId = idGenerator.getAndIncrement();
+            }
 
             AuditLogDto entry = AuditLogDto.builder()
-                    .id(idGenerator.getAndIncrement())
+                    .id(recordId)
                     .userId(user != null ? user.getId() : null)
                     .userName(user != null ? user.getFullName() : "Hệ thống (System)")
                     .userEmail(user != null ? user.getEmail() : "system@wayfare.vn")
@@ -116,26 +168,26 @@ public class ActivityLogService {
                     .category(category)
                     .action(action)
                     .details(details)
-                    .ipAddress(ipAddress != null && !ipAddress.isBlank() && !ipAddress.equals("127.0.0.1") && !ipAddress.equals("0:0:0:0:0:0:0:1") ? ipAddress : "118.69.190.10")
-                    .userAgent(userAgent != null && !userAgent.isBlank() && !userAgent.equals("Internal System") && !userAgent.equals("Web Client") ? userAgent : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
-                    .createdAt(LocalDateTime.now())
+                    .ipAddress(sanitizedIp)
+                    .userAgent(sanitizedUa)
+                    .createdAt(now)
                     .build();
 
-            // 1. Add to in-memory fast index (newest first)
+            // 2. Add to in-memory fast index (newest first)
             logCache.addFirst(entry);
             while (logCache.size() > MAX_CACHE_SIZE) {
                 logCache.removeLast();
             }
 
-            // 2. Persist to categorized file & master file (Append-only)
+            // 3. Persist to categorized file & master file (Append-only backup)
             writeLogToFile(entry, ALL_LOG_FILE);
             String targetFile = getCategoryFilePath(category);
             writeLogToFile(entry, targetFile);
 
-            log.info("Activity logged to file: category={}, action={}, user={}, ip={}",
-                    category, action, (user != null ? user.getEmail() : "ANONYMOUS"), ipAddress);
+            log.info("Activity logged: id={}, category={}, action={}, user={}, ip={}",
+                    recordId, category, action, (user != null ? user.getEmail() : "ANONYMOUS"), sanitizedIp);
         } catch (Exception e) {
-            log.error("Failed to record activity log to file for action {}: {}", action, e.getMessage(), e);
+            log.error("Failed to record activity log for action {}: {}", action, e.getMessage(), e);
         }
     }
 
@@ -166,13 +218,22 @@ public class ActivityLogService {
     }
 
     public Page<AuditLogDto> searchLogs(String keyword, Long userId, String action, String category, int page, int size) {
-        log.info("Searching audit logs from file cache: keyword='{}', userId={}, action={}, category={}, page={}, size={}",
+        log.info("Searching audit logs: keyword='{}', userId={}, action={}, category={}, page={}, size={}",
                 keyword, userId, action, category, page, size);
 
-        final String kw = (keyword != null) ? keyword.trim().toLowerCase() : null;
-        final String act = (action != null && !action.isBlank() && !action.equalsIgnoreCase("ALL")) ? action : null;
-        final String cat = (category != null && !category.isBlank() && !category.equalsIgnoreCase("ALL")) ? category.toUpperCase() : null;
+        final String kw = (keyword != null && !keyword.isBlank()) ? keyword.trim() : null;
+        final String act = (action != null && !action.isBlank() && !action.equalsIgnoreCase("ALL")) ? action.trim() : null;
+        final String cat = (category != null && !category.isBlank() && !category.equalsIgnoreCase("ALL")) ? category.trim() : null;
 
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            Page<AuditLog> dbResult = auditLogRepository.searchLogs(kw, userId, act, cat, pageable);
+            return dbResult.map(this::toDto);
+        } catch (Exception e) {
+            log.warn("Direct MySQL query failed, falling back to memory cache: {}", e.getMessage());
+        }
+
+        final String kwLower = (kw != null) ? kw.toLowerCase() : null;
         List<AuditLogDto> filtered = logCache.stream().filter(item -> {
             // Category match
             if (cat != null && !cat.equalsIgnoreCase(item.getCategory())) {
@@ -187,13 +248,13 @@ public class ActivityLogService {
                 return false;
             }
             // Keyword match
-            if (kw != null && !kw.isEmpty()) {
-                boolean matchAction = item.getAction() != null && item.getAction().toLowerCase().contains(kw);
-                boolean matchDetails = item.getDetails() != null && item.getDetails().toLowerCase().contains(kw);
-                boolean matchIp = item.getIpAddress() != null && item.getIpAddress().toLowerCase().contains(kw);
-                boolean matchName = item.getUserName() != null && item.getUserName().toLowerCase().contains(kw);
-                boolean matchEmail = item.getUserEmail() != null && item.getUserEmail().toLowerCase().contains(kw);
-                boolean matchHandle = item.getUserHandle() != null && item.getUserHandle().toLowerCase().contains(kw);
+            if (kwLower != null && !kwLower.isEmpty()) {
+                boolean matchAction = item.getAction() != null && item.getAction().toLowerCase().contains(kwLower);
+                boolean matchDetails = item.getDetails() != null && item.getDetails().toLowerCase().contains(kwLower);
+                boolean matchIp = item.getIpAddress() != null && item.getIpAddress().toLowerCase().contains(kwLower);
+                boolean matchName = item.getUserName() != null && item.getUserName().toLowerCase().contains(kwLower);
+                boolean matchEmail = item.getUserEmail() != null && item.getUserEmail().toLowerCase().contains(kwLower);
+                boolean matchHandle = item.getUserHandle() != null && item.getUserHandle().toLowerCase().contains(kwLower);
                 if (!matchAction && !matchDetails && !matchIp && !matchName && !matchEmail && !matchHandle) {
                     return false;
                 }
@@ -211,6 +272,15 @@ public class ActivityLogService {
     }
 
     public List<String> getAvailableActions() {
+        try {
+            List<String> actions = auditLogRepository.findDistinctActions();
+            if (actions != null && !actions.isEmpty()) {
+                return actions;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch distinct actions from DB: {}", e.getMessage());
+        }
+
         return logCache.stream()
                 .map(AuditLogDto::getAction)
                 .filter(Objects::nonNull)
@@ -220,6 +290,33 @@ public class ActivityLogService {
     }
 
     public Map<String, Object> getAuditStats() {
+        try {
+            long totalLogs = auditLogRepository.count();
+            LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
+            long logsToday = auditLogRepository.countByCreatedAtAfter(startOfToday);
+
+            long authCount = auditLogRepository.countByCategoryIgnoreCase("AUTH");
+            long securityCount = auditLogRepository.countByCategoryIgnoreCase("SECURITY");
+            long activityCount = auditLogRepository.countByCategoryIgnoreCase("ACTIVITY");
+            long systemCount = auditLogRepository.countByCategoryIgnoreCase("SYSTEM");
+
+            List<String> actions = getAvailableActions();
+
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("totalLogs", totalLogs);
+            stats.put("logsToday", logsToday);
+            stats.put("authCount", authCount);
+            stats.put("securityCount", securityCount);
+            stats.put("activityCount", activityCount);
+            stats.put("systemCount", systemCount);
+            stats.put("distinctActionsCount", actions.size());
+            stats.put("availableActions", actions);
+            stats.put("storageType", "MYSQL_DATABASE_PERSISTED");
+            return stats;
+        } catch (Exception e) {
+            log.warn("Failed to compute stats from DB, falling back to cache: {}", e.getMessage());
+        }
+
         long totalLogs = logCache.size();
         LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
 
@@ -243,8 +340,27 @@ public class ActivityLogService {
         stats.put("systemCount", systemCount);
         stats.put("distinctActionsCount", actions.size());
         stats.put("availableActions", actions);
-        stats.put("storageType", "STRUCTURED_FILE_LOGGING");
+        stats.put("storageType", "MEMORY_CACHE_FALLBACK");
         return stats;
+    }
+
+    public AuditLogDto toDto(AuditLog entity) {
+        if (entity == null) return null;
+        return AuditLogDto.builder()
+                .id(entity.getId())
+                .userId(entity.getUserId())
+                .userName(entity.getUserName())
+                .userEmail(entity.getUserEmail())
+                .userHandle(entity.getUserHandle())
+                .userAvatar(entity.getUserAvatar())
+                .userRole(entity.getUserRole())
+                .category(entity.getCategory())
+                .action(entity.getAction())
+                .details(entity.getDetails())
+                .ipAddress(entity.getIpAddress())
+                .userAgent(entity.getUserAgent())
+                .createdAt(entity.getCreatedAt())
+                .build();
     }
 
     public byte[] getLogFileBytes(String category) throws IOException {

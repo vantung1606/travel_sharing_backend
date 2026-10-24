@@ -42,4 +42,20 @@ public interface PostRepository extends JpaRepository<Post, Long> {
            "(:status IS NULL OR p.status = :status) " +
            "ORDER BY p.createdAt DESC")
     List<Post> searchPosts(@Param("keyword") String keyword, @Param("status") String status);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Post p SET p.sharedPost = null WHERE p.sharedPost.id = :postId")
+    void unlinkSharedPost(@Param("postId") Long postId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Post p SET p.itinerary = null WHERE p.itinerary.id = :itineraryId")
+    void unlinkItinerary(@Param("itineraryId") Long itineraryId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Post p SET p.likeCount = GREATEST(0, p.likeCount + :delta) WHERE p.id = :postId")
+    void updateLikeCount(@Param("postId") Long postId, @Param("delta") int delta);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Post p SET p.commentCount = GREATEST(0, p.commentCount + :delta) WHERE p.id = :postId")
+    void updateCommentCount(@Param("postId") Long postId, @Param("delta") int delta);
 }
