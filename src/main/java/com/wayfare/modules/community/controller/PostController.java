@@ -49,6 +49,7 @@ public class PostController {
     public ResponseEntity<ApiResponse<?>> getCommunityPosts(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long placeId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             Authentication authentication) {
@@ -59,14 +60,14 @@ public class PostController {
         if (page != null || size != null) {
             int safePage = page != null ? Math.max(page, 0) : 0;
             int safeSize = size != null ? size : 10;
-            log.info("REST request to get paged community posts: page={}, size={}, category={}, keyword={}, email={}",
-                    safePage, safeSize, category, keyword, effectiveEmail);
+            log.info("REST request to get paged community posts: page={}, size={}, category={}, keyword={}, placeId={}, email={}",
+                    safePage, safeSize, category, keyword, placeId, effectiveEmail);
             return ResponseEntity.ok(ApiResponse.success("Lấy danh sách bài viết thành công",
-                    postService.getCommunityPostsPaged(category, keyword, effectiveEmail, safePage, safeSize)));
+                    postService.getCommunityPostsPaged(category, keyword, effectiveEmail, placeId, safePage, safeSize)));
         }
 
-        log.info("REST request to get community posts: category={}, keyword={}, email={}", category, keyword, effectiveEmail);
-        List<PostDto> posts = postService.getCommunityPosts(category, keyword, effectiveEmail);
+        log.info("REST request to get community posts: category={}, keyword={}, placeId={}, email={}", category, keyword, placeId, effectiveEmail);
+        List<PostDto> posts = postService.getCommunityPosts(category, keyword, effectiveEmail, placeId);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách bài viết thành công", posts));
     }
 

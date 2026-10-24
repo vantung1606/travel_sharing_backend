@@ -23,6 +23,7 @@ public class UpdatePostRequest {
     private String videoUrl;
     private String category;
     private Long itineraryId;
+    private Long placeId;
     private String visibility; // PUBLIC, PRIVATE
 }
 

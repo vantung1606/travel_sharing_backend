@@ -29,6 +29,10 @@ public class Post {
     private Itinerary itinerary;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "place_id")
+    private Place place;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shared_post_id")
     private Post sharedPost;
 

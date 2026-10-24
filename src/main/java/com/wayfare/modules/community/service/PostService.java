@@ -12,6 +12,7 @@ import com.wayfare.modules.community.dto.CreatePostRequest;
 import com.wayfare.modules.community.dto.CreateCommentRequest;
 
 import com.wayfare.entity.*;
+import com.wayfare.repository.PlaceRepository;
 import com.wayfare.repository.PostRepository;
 import com.wayfare.repository.PostLikeRepository;
 import com.wayfare.repository.PostCommentRepository;
@@ -48,6 +49,7 @@ public class PostService {
     private final UserRepository userRepository;
     private final ItineraryRepository itineraryRepository;
     private final ItineraryDetailRepository itineraryDetailRepository;
+    private final PlaceRepository placeRepository;
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
     private final AiContentModerationService aiContentModerationService;
@@ -61,6 +63,7 @@ public class PostService {
                        UserRepository userRepository,
                        ItineraryRepository itineraryRepository,
                        ItineraryDetailRepository itineraryDetailRepository,
+                       PlaceRepository placeRepository,
                        NotificationService notificationService,
                        ActivityLogService activityLogService,
                        AiContentModerationService aiContentModerationService,
@@ -73,6 +76,7 @@ public class PostService {
         this.userRepository = userRepository;
         this.itineraryRepository = itineraryRepository;
         this.itineraryDetailRepository = itineraryDetailRepository;
+        this.placeRepository = placeRepository;
         this.notificationService = notificationService;
         this.activityLogService = activityLogService;
         this.aiContentModerationService = aiContentModerationService;
@@ -83,28 +87,39 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public List<PostDto> getCommunityPosts(String category, String keyword, String currentUserEmail) {
-        log.info("Fetching community posts with category='{}', keyword='{}', user='{}'", category, keyword, currentUserEmail);
+        return getCommunityPosts(category, keyword, currentUserEmail, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PostDto> getCommunityPosts(String category, String keyword, String currentUserEmail, Long placeId) {
+        log.info("Fetching community posts with category='{}', keyword='{}', user='{}', placeId='{}'", category, keyword, currentUserEmail, placeId);
 
         final User currentUser = resolveViewer(currentUserEmail);
-        List<Post> posts = loadVisiblePosts(category, keyword, currentUser);
+        List<Post> posts = loadVisiblePosts(category, keyword, currentUser, placeId);
         return posts.stream().map(p -> mapToDto(p, currentUser)).collect(Collectors.toList());
     }
 
     /**
      * Danh sách bài viết cộng đồng có phân trang (opt-in qua query param page/size).
-     * Việc lọc visibility/category/pending vẫn giữ nguyên; chỉ map DTO cho đúng trang
+     * Việc lọc visibility/category/pending/placeId vẫn giữ nguyên; chỉ map DTO cho đúng trang
      * để giảm payload và giảm số câu query N+1 khi danh sách lớn.
      */
     @Transactional(readOnly = true)
     public PagedResponse<PostDto> getCommunityPostsPaged(String category, String keyword,
                                                          String currentUserEmail, int page, int size) {
+        return getCommunityPostsPaged(category, keyword, currentUserEmail, null, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<PostDto> getCommunityPostsPaged(String category, String keyword,
+                                                         String currentUserEmail, Long placeId, int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 50);
-        log.info("Fetching paged community posts - page: {}, size: {}, category='{}', keyword='{}', user='{}'",
-                safePage, safeSize, category, keyword, currentUserEmail);
+        log.info("Fetching paged community posts - page: {}, size: {}, category='{}', keyword='{}', user='{}', placeId='{}'",
+                safePage, safeSize, category, keyword, currentUserEmail, placeId);
 
         final User currentUser = resolveViewer(currentUserEmail);
-        List<Post> all = loadVisiblePosts(category, keyword, currentUser);
+        List<Post> all = loadVisiblePosts(category, keyword, currentUser, placeId);
 
         int total = all.size();
         int from = Math.min(safePage * safeSize, total);
@@ -129,10 +144,10 @@ public class PostService {
     }
 
     /**
-     * Lọc bài viết hiển thị theo visibility, pending review và category.
+     * Lọc bài viết hiển thị theo visibility, pending review, category và placeId.
      * Tách riêng để tái sử dụng cho cả API phân trang và không phân trang.
      */
-    private List<Post> loadVisiblePosts(String category, String keyword, User currentUser) {
+    private List<Post> loadVisiblePosts(String category, String keyword, User currentUser, Long placeId) {
         final Long currentUserId = currentUser != null ? currentUser.getId() : null;
 
         List<Post> posts;
@@ -166,6 +181,12 @@ public class PostService {
         if (category != null && !category.isBlank() && !category.equalsIgnoreCase("ALL") && !category.equalsIgnoreCase("Tất cả")) {
             posts = posts.stream()
                     .filter(p -> p.getCategory() != null && p.getCategory().toLowerCase().contains(category.toLowerCase()))
+                    .collect(Collectors.toList());
+        }
+
+        if (placeId != null) {
+            posts = posts.stream()
+                    .filter(p -> p.getPlace() != null && placeId.equals(p.getPlace().getId()))
                     .collect(Collectors.toList());
         }
 
@@ -206,6 +227,11 @@ public class PostService {
             attachedItinerary = itineraryRepository.findById(request.getItineraryId()).orElse(null);
         }
 
+        Place attachedPlace = null;
+        if (request.getPlaceId() != null) {
+            attachedPlace = placeRepository.findById(request.getPlaceId()).orElse(null);
+        }
+
         Post sharedOriginalPost = null;
         if (request.getSharedPostId() != null) {
             sharedOriginalPost = postRepository.findById(request.getSharedPostId()).orElse(null);
@@ -216,6 +242,8 @@ public class PostService {
             if (sharedOriginalPost != null) {
                 String origAuthor = sharedOriginalPost.getAuthor() != null ? sharedOriginalPost.getAuthor().getFullName() : "thành viên";
                 title = "Chia sẻ bài viết của " + origAuthor;
+            } else if (attachedPlace != null) {
+                title = "Check-in tại " + attachedPlace.getName();
             } else {
                 title = request.getContent() != null && request.getContent().length() > 50
                         ? request.getContent().substring(0, 47) + "..."
@@ -235,6 +263,8 @@ public class PostService {
         if (imgList.isEmpty()) {
             if (attachedItinerary != null && attachedItinerary.getCoverImageUrl() != null && !attachedItinerary.getCoverImageUrl().isBlank()) {
                 imgList.add(attachedItinerary.getCoverImageUrl());
+            } else if (attachedPlace != null && attachedPlace.getCoverImageUrl() != null && !attachedPlace.getCoverImageUrl().isBlank()) {
+                imgList.add(attachedPlace.getCoverImageUrl());
             } else if (sharedOriginalPost != null && sharedOriginalPost.getFirstImage() != null && !sharedOriginalPost.getFirstImage().isBlank()) {
                 imgList.add(sharedOriginalPost.getFirstImage());
             }
@@ -258,17 +288,22 @@ public class PostService {
 
         String imagesStr = imgList.isEmpty() ? null : String.join(";;;", imgList);
 
+        String defaultLocation = attachedItinerary != null ? attachedItinerary.getDestination()
+                : (attachedPlace != null ? (attachedPlace.getCity() != null ? attachedPlace.getName() + ", " + attachedPlace.getCity() : attachedPlace.getName())
+                : (sharedOriginalPost != null ? sharedOriginalPost.getLocationTag() : "Việt Nam"));
+
         Post newPost = Post.builder()
                 .author(author)
                 .title(title)
                 .content(request.getContent() != null ? request.getContent() : "")
-                .locationTag(request.getLocationTag() != null && !request.getLocationTag().isBlank() ? request.getLocationTag() : (attachedItinerary != null ? attachedItinerary.getDestination() : (sharedOriginalPost != null ? sharedOriginalPost.getLocationTag() : "Việt Nam")))
+                .locationTag(request.getLocationTag() != null && !request.getLocationTag().isBlank() ? request.getLocationTag() : defaultLocation)
                 .images(imagesStr)
                 .videoUrl(request.getVideoUrl())
                 .visibility(request.getVisibility() != null && !request.getVisibility().isBlank() ? request.getVisibility() : "PUBLIC")
                 .category(postCategory)
                 .badgeText(aiResult.getBadgeText())
                 .itinerary(attachedItinerary)
+                .place(attachedPlace)
                 .sharedPost(sharedOriginalPost)
                 .likeCount(0)
                 .commentCount(0)
@@ -849,6 +884,15 @@ public class PostService {
         post.setAiFlagReason(aiResult.getFlagReason() != null ? aiResult.getFlagReason() : aiResult.getAiAnalysis());
         post.setBadgeText(aiResult.getBadgeText());
 
+        if (request.getPlaceId() != null) {
+            if (request.getPlaceId() <= 0) {
+                post.setPlace(null);
+            } else {
+                Place attachedPlace = placeRepository.findById(request.getPlaceId()).orElse(null);
+                post.setPlace(attachedPlace);
+            }
+        }
+
         Post saved = postRepository.save(post);
 
         // Audit log
@@ -1004,6 +1048,17 @@ public class PostService {
                 .itineraryBudget(itin != null && itin.getBudgetTotal() != null ? itin.getBudgetTotal().longValue() : null)
                 .itineraryPlacesCount(itinPlacesCount)
                 .itineraryIsAi(itin != null ? itin.getIsAiGenerated() : false)
+                // Attached Place Check-in
+                .placeId(p.getPlace() != null ? p.getPlace().getId() : null)
+                .placeName(p.getPlace() != null ? p.getPlace().getName() : null)
+                .placeAddress(p.getPlace() != null ? p.getPlace().getAddress() : null)
+                .placeCity(p.getPlace() != null ? p.getPlace().getCity() : null)
+                .placeCoverImageUrl(p.getPlace() != null ? sanitizeMediaUrl(p.getPlace().getCoverImageUrl()) : null)
+                .placeAverageRating(p.getPlace() != null && p.getPlace().getAverageRating() != null ? p.getPlace().getAverageRating().doubleValue() : null)
+                .placeReviewCount(p.getPlace() != null ? p.getPlace().getReviewCount() : null)
+                .placeCategoryName(p.getPlace() != null ? p.getPlace().getCategoryName() : null)
+                .placeTicketPrice(p.getPlace() != null ? p.getPlace().getTicketPrice() : null)
+                .placeOpenHours(p.getPlace() != null ? p.getPlace().getOpenHours() : null)
                 // Shared post
                 .sharedPostId(p.getSharedPost() != null ? p.getSharedPost().getId() : null)
                 .sharedPost(sharedPostDto)

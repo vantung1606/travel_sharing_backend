@@ -53,6 +53,18 @@ public class PostDto {
     private Integer itineraryPlacesCount;
     private Boolean itineraryIsAi;
 
+    // Attached Place (Check-in Location)
+    private Long placeId;
+    private String placeName;
+    private String placeAddress;
+    private String placeCity;
+    private String placeCoverImageUrl;
+    private Double placeAverageRating;
+    private Integer placeReviewCount;
+    private String placeCategoryName;
+    private java.math.BigDecimal placeTicketPrice;
+    private String placeOpenHours;
+
     // Shared / Repost Info
     private Long sharedPostId;
     private PostDto sharedPost;
