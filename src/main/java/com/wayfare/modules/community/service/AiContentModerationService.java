@@ -13,6 +13,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Service
@@ -20,6 +23,12 @@ public class AiContentModerationService {
 
     private final AiService aiService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
+    private final AtomicLong circuitTripTime = new AtomicLong(0);
+    private static final int MAX_CONSECUTIVE_FAILURES = 3;
+    private static final long CIRCUIT_RESET_TIMEOUT_MS = 60_000; // 60s cooldown
+    private static final long GEMINI_TIMEOUT_MS = 3500; // 3.5s timeout
 
     public AiContentModerationService(@Autowired(required = false) AiService aiService) {
         this.aiService = aiService;
@@ -136,16 +145,58 @@ public class AiContentModerationService {
     public ModerationResult moderate(String title, String content, String locationTag, String category, boolean hasAttachedItinerary, boolean isSharedPost) {
         log.info("Running AI Content Moderation for post: '{}', Category: '{}', isShared: {}", title, category, isSharedPost);
 
-        // 1. ƯU TIÊN HÀNG ĐẦU: Gọi Gemini AI API phân tích ngữ nghĩa, mức độ ảnh hưởng và tính chất lừa đảo
-        if (aiService != null && aiService.isApiKeyConfigured()) {
-            ModerationResult geminiResult = moderateWithGemini(title, content, locationTag, category);
-            if (geminiResult != null) {
-                return geminiResult;
+        // 1. ƯU TIÊN HÀNG ĐẦU: Gọi Gemini AI API với giới hạn thời gian (Timeout 3.5s) & Circuit Breaker chống nghẽn
+        if (aiService != null && aiService.isApiKeyConfigured() && isCircuitClosed()) {
+            try {
+                CompletableFuture<ModerationResult> future = CompletableFuture.supplyAsync(
+                        () -> moderateWithGemini(title, content, locationTag, category)
+                );
+                ModerationResult geminiResult = future.get(GEMINI_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                if (geminiResult != null) {
+                    recordSuccess();
+                    return geminiResult;
+                }
+            } catch (TimeoutException te) {
+                log.warn("Gemini AI moderation timed out (> {}ms). Tripping circuit breaker and falling back to Heuristic engine.", GEMINI_TIMEOUT_MS);
+                recordFailure();
+            } catch (Exception e) {
+                log.warn("Gemini AI moderation execution failed ({}). Falling back to Heuristic engine.", e.getMessage());
+                recordFailure();
             }
         }
 
         // 2. Dự phòng: Thuật toán Heuristic (phân biệt rạch ròi giữa đùa vui vô hại vs. đòi nợ / đe dọa)
         return moderateWithHeuristicFallback(title, content, locationTag, category, hasAttachedItinerary, isSharedPost);
+    }
+
+    private boolean isCircuitClosed() {
+        if (consecutiveFailures.get() < MAX_CONSECUTIVE_FAILURES) {
+            return true;
+        }
+        long elapsed = System.currentTimeMillis() - circuitTripTime.get();
+        if (elapsed > CIRCUIT_RESET_TIMEOUT_MS) {
+            log.info("Circuit breaker half-open: resetting consecutive failures to allow Gemini retry.");
+            consecutiveFailures.set(0);
+            return true;
+        }
+        log.warn("Gemini Circuit breaker is OPEN. Skipping remote call, defaulting to Heuristic instantly (0ms latency).");
+        return false;
+    }
+
+    private void recordSuccess() {
+        if (consecutiveFailures.get() > 0) {
+            consecutiveFailures.set(0);
+            log.info("Gemini moderation succeeded. Circuit breaker fully reset.");
+        }
+    }
+
+    private void recordFailure() {
+        int fails = consecutiveFailures.incrementAndGet();
+        if (fails >= MAX_CONSECUTIVE_FAILURES) {
+            circuitTripTime.set(System.currentTimeMillis());
+            log.warn("Gemini moderation failed {} times consecutively. Circuit breaker OPENED for {}s. Bypassing Gemini to prevent user lag.",
+                    fails, CIRCUIT_RESET_TIMEOUT_MS / 1000);
+        }
     }
 
     private ModerationResult moderateWithGemini(String title, String content, String locationTag, String category) {
