@@ -214,19 +214,33 @@ public class ItineraryService {
         Itinerary itinerary = itineraryRepository.findById(itineraryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
 
+        int targetDay = (dto.getDayNumber() != null && dto.getDayNumber() > 0) ? dto.getDayNumber() : 1;
+        int targetVisitOrder = (dto.getVisitOrder() != null && dto.getVisitOrder() > 0)
+                ? dto.getVisitOrder()
+                : itineraryDetailRepository.findByItineraryIdOrderByDayNumberAscVisitOrderAsc(itineraryId)
+                    .stream()
+                    .filter(d -> d.getDayNumber() != null && d.getDayNumber().equals(targetDay))
+                    .mapToInt(d -> d.getVisitOrder() != null ? d.getVisitOrder() : 0)
+                    .max()
+                    .orElse(0) + 1;
+
         ItineraryDetail detail = ItineraryDetail.builder()
                 .itinerary(itinerary)
                 .locationName(dto.getLocationName())
                 .locationAddress(dto.getLocationAddress())
                 .category(dto.getCategory())
-                .dayNumber(dto.getDayNumber() != null ? dto.getDayNumber() : 1)
-                .visitOrder(dto.getVisitOrder() != null ? dto.getVisitOrder() : 1)
+                .dayNumber(targetDay)
+                .visitOrder(targetVisitOrder)
                 .startTime(dto.getStartTime())
                 .estimatedCost(dto.getEstimatedCost())
                 .aiTip(dto.getAiTip())
                 .transitInfo(dto.getTransitInfo())
                 .note(dto.getNote())
                 .build();
+
+        if (dto.getPlaceId() != null) {
+            placeRepository.findById(dto.getPlaceId()).ifPresent(detail::setPlace);
+        }
 
         ItineraryDetail saved = itineraryDetailRepository.save(detail);
         return mapDetailToDto(saved);
