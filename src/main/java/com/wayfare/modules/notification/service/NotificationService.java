@@ -237,16 +237,26 @@ public class NotificationService {
 
     @Transactional
     public void notifyAdmins(String type, String message, String targetUrl) {
-        log.info("Sending admin-only notification: type={}, message={}", type, message);
+        notifyAdmins(type, message, targetUrl, null);
+    }
+
+    @Transactional
+    public void notifyAdmins(String type, String message, String targetUrl, User excludeUser) {
+        log.info("Sending admin-only notification: type={}, message={}, excludeUser={}",
+                type, message, excludeUser != null ? excludeUser.getEmail() : "none");
         List<User> admins = userRepository.searchUsers(null, null, "ROLE_ADMIN");
         if (admins.isEmpty()) {
             userRepository.findByEmail("admin@gmail.com").ifPresent(admins::add);
         }
 
         for (User admin : admins) {
-            sendNotification(admin, null, type != null ? type : "REPORT_ALERT", message, targetUrl != null ? targetUrl : "/admin/reports");
+            // Không gửi thông báo cho chính người vừa thực hiện thao tác
+            if (excludeUser != null && admin.getId() != null && admin.getId().equals(excludeUser.getId())) {
+                continue;
+            }
+            sendNotification(admin, excludeUser, type != null ? type : "REPORT_ALERT", message, targetUrl != null ? targetUrl : "/admin/reports");
         }
-        log.info("Successfully sent admin notification to {} admins.", admins.size());
+        log.info("Successfully sent admin notification to relevant admins.");
     }
 
     @Transactional

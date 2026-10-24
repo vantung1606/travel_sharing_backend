@@ -178,12 +178,13 @@ public class PlaceService {
                 aiModerationStatus = aiResult.getModerationStatus();
                 aiModerationNote = aiResult.getNote();
 
-                // Gửi thông báo đến toàn bộ Quản trị viên vào hàng đợi duyệt
+                // Gửi thông báo đến Quản trị viên vào hàng đợi duyệt (loại trừ chính người tạo nếu là Admin)
                 try {
                     notificationService.notifyAdmins(
                             "PLACE_MODERATION",
-                            "Địa điểm mới '" + request.getName() + "' cần thẩm định do AI từ chối: " + aiResult.getNote(),
-                            "/admin/places"
+                            "Địa điểm mới '" + request.getName() + "' cần thẩm định: " + aiResult.getNote(),
+                            "/admin/places",
+                            owner
                     );
                 } catch (Exception e) {
                     log.warn("Failed to notify admins for place moderation: {}", e.getMessage());
@@ -219,31 +220,6 @@ public class PlaceService {
         Place saved = placeRepository.save(place);
         log.info("Successfully created place ID: {} with status: {}, aiStatus: {} by user: {}",
                 saved.getId(), initialStatus, aiModerationStatus, userEmail);
-
-        // Gửi thông báo cho người đăng
-        if (owner != null) {
-            try {
-                if ("ACTIVE".equals(initialStatus)) {
-                    notificationService.sendNotification(
-                            owner,
-                            null,
-                            "PLACE_APPROVED",
-                            "Địa điểm '" + saved.getName() + "' đã được AI WanderAI thẩm định thành công và xuất hiện trên Wayfare!",
-                            "/places/" + saved.getId()
-                    );
-                } else {
-                    notificationService.sendNotification(
-                            owner,
-                            null,
-                            "PLACE_PENDING",
-                            "Địa điểm '" + saved.getName() + "' đang được chuyển tiếp tới Ban Quản Trị xem xét: " + aiModerationNote,
-                            null
-                    );
-                }
-            } catch (Exception e) {
-                log.warn("Failed to send place creation notification to owner: {}", e.getMessage());
-            }
-        }
 
         return toDto(saved);
     }
