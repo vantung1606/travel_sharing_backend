@@ -180,6 +180,56 @@ public class DataInitializer implements CommandLineRunner {
                 }
         );
 
+        // Seed Manager (Content Moderator): manager@gmail.com / manager123
+        userRepository.findByEmail("manager@gmail.com").ifPresentOrElse(
+                manager -> {
+                    boolean needSave = false;
+                    if (!passwordEncoder.matches("manager123", manager.getPassword())) {
+                        manager.setPassword(passwordEncoder.encode("manager123"));
+                        needSave = true;
+                        log.info(">>> SUCCESS: Restored password for manager@gmail.com to manager123");
+                    }
+                    if (manager.getStatus() == null || !"ACTIVE".equals(manager.getStatus())) {
+                        manager.setStatus("ACTIVE");
+                        needSave = true;
+                    }
+                    if (Boolean.TRUE.equals(manager.getIsLocked())) {
+                        manager.setIsLocked(false);
+                        needSave = true;
+                    }
+                    if (!Boolean.TRUE.equals(manager.getIsVerified())) {
+                        manager.setIsVerified(true);
+                        needSave = true;
+                    }
+                    if (manager.getRoles() == null || !manager.getRoles().contains(moderatorRole)) {
+                        Set<Role> roles = new java.util.HashSet<>(manager.getRoles() != null ? manager.getRoles() : Set.of());
+                        roles.add(moderatorRole);
+                        roles.add(userRole);
+                        manager.setRoles(roles);
+                        needSave = true;
+                    }
+                    if (needSave) {
+                        userRepository.save(manager);
+                    }
+                },
+                () -> {
+                    userRepository.save(User.builder()
+                            .email("manager@gmail.com")
+                            .password(passwordEncoder.encode("manager123"))
+                            .fullName("Kiểm Duyệt Viên (Manager)")
+                            .handle("@manager_wayfare")
+                            .avatarUrl("https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
+                            .bio("Kiểm duyệt viên hệ thống Wayfare Platform 🛡️")
+                            .status("ACTIVE")
+                            .isLocked(false)
+                            .isVerified(true)
+                            .tier("bronze")
+                            .roles(Set.of(moderatorRole, userRole))
+                            .build());
+                    log.info(">>> SUCCESS: Seeded Moderator Account -> Email: manager@gmail.com | Password: manager123");
+                }
+        );
+
         // Seed Hoàng Nam (Gold Member)
         if (!userRepository.existsByEmail("hoangnam@gmail.com")) {
             userRepository.save(User.builder()

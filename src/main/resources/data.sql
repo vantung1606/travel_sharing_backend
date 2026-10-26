@@ -1,7 +1,8 @@
 -- Seed Roles
 INSERT INTO roles (id, name, description) VALUES 
 (1, 'ROLE_USER', 'Người dùng thông thường'),
-(2, 'ROLE_ADMIN', 'Quản trị viên hệ thống')
+(2, 'ROLE_ADMIN', 'Quản trị viên hệ thống'),
+(3, 'ROLE_MODERATOR', 'Kiểm duyệt viên hệ thống')
 ON DUPLICATE KEY UPDATE name=VALUES(name);
 
 -- Seed Categories
