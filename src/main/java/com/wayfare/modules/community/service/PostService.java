@@ -19,7 +19,7 @@ import com.wayfare.repository.PostCommentRepository;
 import com.wayfare.repository.UserRepository;
 import com.wayfare.repository.ItineraryRepository;
 import com.wayfare.repository.ItineraryDetailRepository;
-import com.wayfare.repository.PostReportRepository;
+import com.wayfare.repository.ReportRepository;
 import com.wayfare.repository.PostBookmarkRepository;
 import com.wayfare.repository.UserFollowRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,7 +53,7 @@ public class PostService {
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
     private final AiContentModerationService aiContentModerationService;
-    private final PostReportRepository postReportRepository;
+    private final ReportRepository reportRepository;
     private final PostBookmarkRepository postBookmarkRepository;
     private final UserFollowRepository userFollowRepository;
 
@@ -67,7 +67,7 @@ public class PostService {
                        NotificationService notificationService,
                        ActivityLogService activityLogService,
                        AiContentModerationService aiContentModerationService,
-                       PostReportRepository postReportRepository,
+                       ReportRepository reportRepository,
                        PostBookmarkRepository postBookmarkRepository,
                        UserFollowRepository userFollowRepository) {
         this.postRepository = postRepository;
@@ -80,7 +80,7 @@ public class PostService {
         this.notificationService = notificationService;
         this.activityLogService = activityLogService;
         this.aiContentModerationService = aiContentModerationService;
-        this.postReportRepository = postReportRepository;
+        this.reportRepository = reportRepository;
         this.postBookmarkRepository = postBookmarkRepository;
         this.userFollowRepository = userFollowRepository;
     }
@@ -369,17 +369,19 @@ public class PostService {
         } else {
             activityLogService.recordLog(author, "AI_FLAG_POST", "AI gắn cờ bài viết vi phạm, chuyển hàng đợi Admin duyệt: '" + saved.getTitle() + "'", ip, ua);
 
-            // Save PostReport for Admin Escalation
+            // Save Report for Admin Escalation
             try {
-                com.wayfare.entity.PostReport report = com.wayfare.entity.PostReport.builder()
-                        .post(saved)
-                        .reporter(null)
-                        .category(aiResult.getCategory())
+                com.wayfare.entity.Report report = com.wayfare.entity.Report.builder()
+                        .targetType("POST")
+                        .targetId(saved.getId())
+                        .targetTitle(saved.getTitle())
+                        .reporter(author)
+                        .category(aiResult.getCategory() != null ? aiResult.getCategory() : "Nguy cơ an toàn & Pháp luật")
                         .reason(aiResult.getFlagReason())
                         .aiAnalysisSnippet("WanderAI Shield: Điểm an toàn " + aiResult.getSafetyScore() + "/100. Các vi phạm: " + String.join("; ", aiResult.getFlaggedViolations()))
                         .status("PENDING")
                         .build();
-                postReportRepository.save(report);
+                reportRepository.save(report);
             } catch (Exception e) {
                 log.warn("Failed to save automated post report: {}", e.getMessage());
             }
@@ -664,16 +666,18 @@ public class PostService {
                 ? request.getCategory().trim()
                 : (request.getReason() != null ? request.getReason() : "Báo cáo từ thành viên");
 
-        com.wayfare.entity.PostReport report = com.wayfare.entity.PostReport.builder()
-                .post(post)
+        com.wayfare.entity.Report report = com.wayfare.entity.Report.builder()
+                .targetType("POST")
+                .targetId(post.getId())
+                .targetTitle(post.getTitle())
                 .reporter(reporter)
                 .category(reportCategory)
                 .reason(fullReason)
+                .description(request.getDetails() != null ? request.getDetails().trim() : null)
                 .status("PENDING")
-                .createdAt(LocalDateTime.now())
                 .build();
 
-        postReportRepository.save(report);
+        reportRepository.save(report);
 
         int currentCount = post.getReportsCount() != null ? post.getReportsCount() : 0;
         post.setReportsCount(currentCount + 1);
@@ -957,7 +961,7 @@ public class PostService {
         postLikeRepository.deleteByPostId(postId);
         postBookmarkRepository.deleteByPostId(postId);
         postCommentRepository.deleteByPostId(postId);
-        postReportRepository.deleteByPostId(postId);
+        reportRepository.deleteByTargetTypeAndTargetId("POST", postId);
         postRepository.delete(post);
     }
 

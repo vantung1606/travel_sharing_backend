@@ -24,9 +24,12 @@ public class ReportDto {
     private String reason;
     private String description;
     private String evidenceImageUrl;
+    private String aiAnalysisSnippet;
     private String status;
     private String moderatorNotes;
     private String actionTaken;
+    private String resolvedByName;
+    private LocalDateTime resolvedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -6,7 +6,7 @@ import com.wayfare.modules.admin.dto.AdminPostDto;
 import com.wayfare.modules.admin.dto.AdminReportMetricsDto;
 import com.wayfare.entity.Post;
 import com.wayfare.entity.User;
-import com.wayfare.repository.PostReportRepository;
+import com.wayfare.repository.ReportRepository;
 import com.wayfare.repository.PostRepository;
 import com.wayfare.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 public class AdminReportService {
 
     private final PostRepository postRepository;
-    private final PostReportRepository postReportRepository;
+    private final ReportRepository reportRepository;
     private final com.wayfare.repository.PostLikeRepository postLikeRepository;
     private final com.wayfare.repository.PostBookmarkRepository postBookmarkRepository;
     private final com.wayfare.repository.PostCommentRepository postCommentRepository;
@@ -216,11 +216,11 @@ public class AdminReportService {
         Post saved = postRepository.save(post);
 
         // Update post reports
-        List<com.wayfare.entity.PostReport> reports = postReportRepository.findByPostId(postId);
-        for (com.wayfare.entity.PostReport r : reports) {
+        List<com.wayfare.entity.Report> reports = reportRepository.findByTargetTypeAndTargetId("POST", postId);
+        for (com.wayfare.entity.Report r : reports) {
             r.setStatus("DISMISSED");
             r.setModeratorNotes("Quản trị viên đã kiểm duyệt thủ công và phê duyệt xuất bản.");
-            postReportRepository.save(r);
+            reportRepository.save(r);
         }
 
         // Notify author
@@ -270,11 +270,11 @@ public class AdminReportService {
         Post saved = postRepository.save(post);
 
         // Update post reports status
-        List<com.wayfare.entity.PostReport> reports = postReportRepository.findByPostId(postId);
-        for (com.wayfare.entity.PostReport r : reports) {
+        List<com.wayfare.entity.Report> reports = reportRepository.findByTargetTypeAndTargetId("POST", postId);
+        for (com.wayfare.entity.Report r : reports) {
             r.setStatus("DISMISSED");
             r.setModeratorNotes("Báo cáo đã được bác bỏ sau khi kiểm duyệt nội dung hợp lệ.");
-            postReportRepository.save(r);
+            reportRepository.save(r);
         }
 
         // Notify author
@@ -320,11 +320,12 @@ public class AdminReportService {
         Post saved = postRepository.save(post);
 
         // Update post reports status so they are resolved
-        List<com.wayfare.entity.PostReport> reports = postReportRepository.findByPostId(postId);
-        for (com.wayfare.entity.PostReport r : reports) {
-            r.setStatus("RESOLVED_HIDDEN");
+        List<com.wayfare.entity.Report> reports = reportRepository.findByTargetTypeAndTargetId("POST", postId);
+        for (com.wayfare.entity.Report r : reports) {
+            r.setStatus("RESOLVED");
+            r.setActionTaken("HIDDEN");
             r.setModeratorNotes("Bài viết đã được Quản trị viên xử lý và tạm ẩn.");
-            postReportRepository.save(r);
+            reportRepository.save(r);
         }
 
         // Notify author
@@ -366,7 +367,7 @@ public class AdminReportService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bài viết với ID: " + postId));
 
-        List<com.wayfare.entity.PostReport> reports = postReportRepository.findByPostId(postId);
+        List<com.wayfare.entity.Report> reports = reportRepository.findByTargetTypeAndTargetId("POST", postId);
         boolean hasUserReports = reports != null && reports.stream().anyMatch(r ->
                 r.getReporter() != null && (post.getAuthor() == null || !r.getReporter().getId().equals(post.getAuthor().getId())));
 
@@ -500,7 +501,7 @@ public class AdminReportService {
         postLikeRepository.deleteByPostId(postId);
         postBookmarkRepository.deleteByPostId(postId);
         postCommentRepository.deleteByPostId(postId);
-        postReportRepository.deleteByPostId(postId);
+        reportRepository.deleteByTargetTypeAndTargetId("POST", postId);
         postRepository.deleteById(postId);
 
         // Record Audit Log
@@ -525,8 +526,8 @@ public class AdminReportService {
         }
 
         // Look up user reports for this post to provide actual reported category & reporter details
-        List<com.wayfare.entity.PostReport> reports = postReportRepository.findByPostId(post.getId());
-        com.wayfare.entity.PostReport latestReport = null;
+        List<com.wayfare.entity.Report> reports = reportRepository.findByTargetTypeAndTargetId("POST", post.getId());
+        com.wayfare.entity.Report latestReport = null;
         if (reports != null && !reports.isEmpty()) {
             latestReport = reports.stream()
                     .max(java.util.Comparator.comparing(r -> r.getId() != null ? r.getId() : 0L))
@@ -547,7 +548,7 @@ public class AdminReportService {
         }
 
         // An authentic community user report MUST have a reporter that is NOT the post author
-        com.wayfare.entity.PostReport authenticUserReport = null;
+        com.wayfare.entity.Report authenticUserReport = null;
         if (reports != null && !reports.isEmpty()) {
             authenticUserReport = reports.stream()
                     .filter(r -> r.getReporter() != null && (author == null || !r.getReporter().getId().equals(author.getId())))

@@ -30,7 +30,7 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.ItineraryMemberRepository itineraryMemberRepository;
     private final com.wayfare.repository.ItineraryExpenseRepository itineraryExpenseRepository;
     private final com.wayfare.repository.PostRepository postRepository;
-    private final com.wayfare.repository.PostReportRepository postReportRepository;
+    private final com.wayfare.repository.ReportRepository reportRepository;
     private final com.wayfare.repository.PostLikeRepository postLikeRepository;
     private final com.wayfare.repository.PostCommentRepository postCommentRepository;
     private final com.wayfare.repository.PlaceRepository placeRepository;
@@ -44,6 +44,27 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         log.info("Checking sample data initialization...");
+
+        // Safe migration: Copy legacy reports from system_reports into unified 'reports' table if table exists
+        try (java.sql.Connection conn = dataSource.getConnection()) {
+            java.sql.DatabaseMetaData meta = conn.getMetaData();
+            try (java.sql.ResultSet rs = meta.getTables(null, null, "system_reports", null)) {
+                if (rs.next()) {
+                    String copySql = "INSERT INTO reports (target_type, target_id, target_title, reporter_id, category, reason, description, evidence_image_url, status, moderator_notes, action_taken, created_at, updated_at) " +
+                            "SELECT sr.target_type, sr.target_id, sr.target_title, sr.reporter_id, sr.category, sr.reason, sr.description, sr.evidence_image_url, sr.status, sr.moderator_notes, sr.action_taken, sr.created_at, NOW() " +
+                            "FROM system_reports sr " +
+                            "WHERE NOT EXISTS (SELECT 1 FROM reports r WHERE r.target_type = sr.target_type AND r.target_id = sr.target_id AND r.reporter_id = sr.reporter_id)";
+                    try (java.sql.Statement stmt = conn.createStatement()) {
+                        int migrated = stmt.executeUpdate(copySql);
+                        if (migrated > 0) {
+                            log.info(">>> MIGRATION SUCCESS: Copied {} records from system_reports into unified 'reports' table", migrated);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Legacy reports table check note: {}", e.getMessage());
+        }
 
         // Ensure Roles exist — CHUẨN DUY NHẤT mọi môi trường (local == prod):
         // cả 3 vai trò của hệ thống phải có sẵn trong bảng roles; thiếu là tự seed bù
@@ -722,7 +743,7 @@ public class DataInitializer implements CommandLineRunner {
                         .filter(p -> ft.equals(p.getTitle()))
                         .findFirst()
                         .ifPresent(p -> {
-                            postReportRepository.deleteByPostId(p.getId());
+                            reportRepository.deleteByTargetTypeAndTargetId("POST", p.getId());
                             postRepository.delete(p);
                             log.info(">>> Cleaned fake sample report post from DB: '{}' (ID: {})", p.getTitle(), p.getId());
                         });
