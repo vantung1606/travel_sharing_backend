@@ -7,8 +7,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 
 @Entity
 @Table(name = "places")
@@ -88,15 +86,6 @@ public class Place {
 
     @Column(name = "ai_moderation_note", columnDefinition = "TEXT")
     private String aiModerationNote;
-
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-        name = "place_categories",
-        joinColumns = @JoinColumn(name = "place_id"),
-        inverseJoinColumns = @JoinColumn(name = "category_id")
-    )
-    @Builder.Default
-    private Set<Category> categories = new HashSet<>();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

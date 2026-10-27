@@ -45,9 +45,11 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) throws Exception {
         log.info("Checking sample data initialization...");
 
-        // Safe migration: Copy legacy reports from system_reports into unified 'reports' table if table exists
+        // Safe migration: Copy legacy reports from system_reports and post_reports into unified 'reports' table, then cleanup obsolete tables
         try (java.sql.Connection conn = dataSource.getConnection()) {
             java.sql.DatabaseMetaData meta = conn.getMetaData();
+
+            // 1. Migrate system_reports
             try (java.sql.ResultSet rs = meta.getTables(null, null, "system_reports", null)) {
                 if (rs.next()) {
                     String copySql = "INSERT INTO reports (target_type, target_id, target_title, reporter_id, category, reason, description, evidence_image_url, status, moderator_notes, action_taken, created_at, updated_at) " +
@@ -62,8 +64,37 @@ public class DataInitializer implements CommandLineRunner {
                     }
                 }
             }
+
+            // 2. Migrate post_reports
+            try (java.sql.ResultSet rs = meta.getTables(null, null, "post_reports", null)) {
+                if (rs.next()) {
+                    String copyPostSql = "INSERT INTO reports (target_type, target_id, target_title, reporter_id, category, reason, description, evidence_image_url, status, moderator_notes, action_taken, created_at, updated_at) " +
+                            "SELECT 'POST', pr.post_id, p.title, pr.reporter_id, pr.category, pr.reason, pr.reason, NULL, COALESCE(pr.status, 'PENDING'), pr.moderator_notes, NULL, pr.created_at, NOW() " +
+                            "FROM post_reports pr " +
+                            "LEFT JOIN posts p ON pr.post_id = p.id " +
+                            "WHERE NOT EXISTS (SELECT 1 FROM reports r WHERE r.target_type = 'POST' AND r.target_id = pr.post_id AND r.reporter_id = pr.reporter_id)";
+                    try (java.sql.Statement stmt = conn.createStatement()) {
+                        int migratedPosts = stmt.executeUpdate(copyPostSql);
+                        if (migratedPosts > 0) {
+                            log.info(">>> MIGRATION SUCCESS: Copied {} records from post_reports into unified 'reports' table", migratedPosts);
+                        }
+                    }
+                }
+            }
+
+            // 3. Auto-drop obsolete tables safely
+            try (java.sql.Statement dropStmt = conn.createStatement()) {
+                dropStmt.execute("SET FOREIGN_KEY_CHECKS = 0");
+                dropStmt.execute("DROP TABLE IF EXISTS chat_invitations");
+                dropStmt.execute("DROP TABLE IF EXISTS place_categories");
+                dropStmt.execute("DROP TABLE IF EXISTS categories");
+                dropStmt.execute("DROP TABLE IF EXISTS post_reports");
+                dropStmt.execute("DROP TABLE IF EXISTS system_reports");
+                dropStmt.execute("SET FOREIGN_KEY_CHECKS = 1");
+                log.info(">>> CLEANUP SUCCESS: Auto-dropped obsolete tables (chat_invitations, place_categories, categories, post_reports, system_reports)");
+            }
         } catch (Exception e) {
-            log.debug("Legacy reports table check note: {}", e.getMessage());
+            log.warn("Database schema cleanup note: {}", e.getMessage());
         }
 
         // Ensure Roles exist — CHUẨN DUY NHẤT mọi môi trường (local == prod):

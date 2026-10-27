@@ -34,35 +34,6 @@ CREATE TABLE IF NOT EXISTS `ai_chat_sessions` (
 
 
 
-CREATE TABLE IF NOT EXISTS `categories` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `description` varchar(255) DEFAULT NULL,
-  `icon` varchar(50) DEFAULT NULL,
-  `name` varchar(100) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `UK_t8o6pivur7nn124jehx7cygw5` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
-CREATE TABLE IF NOT EXISTS `chat_invitations` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `created_at` datetime(6) NOT NULL,
-  `status` varchar(20) NOT NULL,
-  `room_id` bigint NOT NULL,
-  `recipient_id` bigint NOT NULL,
-  `sender_id` bigint NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `FKkb9mlpbsxilnm08itbs80a80q` (`room_id`),
-  KEY `FK1wnn9cw2m7h5gdcgpsi038ds` (`recipient_id`),
-  KEY `FKbuy7u564djht6ekr4n7gwndkh` (`sender_id`),
-  CONSTRAINT `FK1wnn9cw2m7h5gdcgpsi038ds` FOREIGN KEY (`recipient_id`) REFERENCES `users` (`id`),
-  CONSTRAINT `FKbuy7u564djht6ekr4n7gwndkh` FOREIGN KEY (`sender_id`) REFERENCES `users` (`id`),
-  CONSTRAINT `FKkb9mlpbsxilnm08itbs80a80q` FOREIGN KEY (`room_id`) REFERENCES `chat_rooms` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
 CREATE TABLE IF NOT EXISTS `chat_members` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `joined_at` datetime(6) NOT NULL,
@@ -206,17 +177,6 @@ CREATE TABLE IF NOT EXISTS `notifications` (
 
 
 
-CREATE TABLE IF NOT EXISTS `place_categories` (
-  `place_id` bigint NOT NULL,
-  `category_id` bigint NOT NULL,
-  PRIMARY KEY (`place_id`,`category_id`),
-  KEY `FKa2rskjehyus82dvvk4sw8mwqe` (`category_id`),
-  CONSTRAINT `FKa2rskjehyus82dvvk4sw8mwqe` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`),
-  CONSTRAINT `FKihrq0bamh7bjyp408o6hnp19u` FOREIGN KEY (`place_id`) REFERENCES `places` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
 CREATE TABLE IF NOT EXISTS `place_images` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `caption` varchar(255) DEFAULT NULL,
@@ -310,22 +270,27 @@ CREATE TABLE IF NOT EXISTS `post_likes` (
 
 
 
-CREATE TABLE IF NOT EXISTS `post_reports` (
+CREATE TABLE IF NOT EXISTS `reports` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `ai_analysis_snippet` text,
-  `category` varchar(150) NOT NULL,
-  `created_at` datetime(6) NOT NULL,
+  `target_type` varchar(50) NOT NULL,
+  `target_id` bigint NOT NULL,
+  `target_title` varchar(255) DEFAULT NULL,
+  `reporter_id` bigint NOT NULL,
+  `category` varchar(100) NOT NULL,
+  `reason` varchar(255) NOT NULL,
+  `description` text,
+  `evidence_image_url` varchar(500) DEFAULT NULL,
+  `status` varchar(50) DEFAULT 'PENDING',
   `moderator_notes` text,
-  `reason` text NOT NULL,
-  `status` varchar(30) DEFAULT NULL,
-  `post_id` bigint NOT NULL,
-  `reporter_id` bigint DEFAULT NULL,
+  `action_taken` varchar(100) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `FK7ccpkj5jys037f9pq98l31ya2` (`post_id`),
-  KEY `FKqi5fmh45u32i63971en0rmrvo` (`reporter_id`),
-  CONSTRAINT `FK7ccpkj5jys037f9pq98l31ya2` FOREIGN KEY (`post_id`) REFERENCES `posts` (`id`),
-  CONSTRAINT `FKqi5fmh45u32i63971en0rmrvo` FOREIGN KEY (`reporter_id`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `idx_reports_target` (`target_type`, `target_id`),
+  KEY `idx_reports_status` (`status`),
+  KEY `FK_reports_reporter` (`reporter_id`),
+  CONSTRAINT `FK_reports_reporter` FOREIGN KEY (`reporter_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
