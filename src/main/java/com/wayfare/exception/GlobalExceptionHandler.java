@@ -17,7 +17,8 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(
+            MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach(error -> {
             String fieldName = ((FieldError) error).getField();
@@ -30,14 +31,16 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(
+            org.springframework.security.access.AccessDeniedException ex) {
         log.warn("Access Denied: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("Bạn không có quyền thực hiện hành động này"));
     }
 
     @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBadCredentialsException(org.springframework.security.authentication.BadCredentialsException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleBadCredentialsException(
+            org.springframework.security.authentication.BadCredentialsException ex) {
         log.warn("Bad credentials: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error("Email hoặc mật khẩu không chính xác!"));
@@ -51,7 +54,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
-    public ResponseEntity<ApiResponse<Void>> handleResponseStatusException(org.springframework.web.server.ResponseStatusException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatusException(
+            org.springframework.web.server.ResponseStatusException ex) {
         log.warn("Response Status Exception: {} - {}", ex.getStatusCode(), ex.getReason());
         return ResponseEntity.status(ex.getStatusCode())
                 .body(ApiResponse.error(ex.getReason() != null ? ex.getReason() : ex.getMessage()));
@@ -64,7 +68,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNoResourceFoundException(org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFoundException(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
         log.warn("Static resource not found: {}", ex.getResourcePath());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("Không tìm thấy tài nguyên: " + ex.getResourcePath()));
@@ -77,4 +82,3 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Lỗi: " + ex.getMessage()));
     }
 }
-
