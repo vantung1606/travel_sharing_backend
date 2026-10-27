@@ -19,6 +19,7 @@ public class ReviewDto {
     private Long authorId;
     private String authorName;
     private String authorHandle;
+    private String authorEmail;
     private String authorAvatar;
     private Integer rating;
     private String comment;

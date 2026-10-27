@@ -106,6 +106,16 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật hồ sơ cá nhân thành công!", updated));
     }
 
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @jakarta.validation.Valid @RequestBody com.wayfare.modules.user.dto.ChangePasswordRequest request,
+            Authentication authentication) {
+        String currentUserEmail = requireAuthEmail(authentication);
+        log.info("REST request to change password by authenticated user {}", currentUserEmail);
+        userFollowService.changePassword(currentUserEmail, request);
+        return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công! Vui lòng đăng nhập lại.", null));
+    }
+
     @GetMapping("/following")
     public ResponseEntity<ApiResponse<List<FollowUserDto>>> getMyFollowingList(
             Authentication authentication) {

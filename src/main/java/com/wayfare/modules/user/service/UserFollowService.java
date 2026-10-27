@@ -22,6 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.wayfare.modules.user.dto.ChangePasswordRequest;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -36,6 +39,7 @@ public class UserFollowService {
     private final ItineraryRepository itineraryRepository;
     private final NotificationService notificationService;
     private final PostService postService;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public Map<String, Object> toggleFollow(Long targetUserId, String currentUserEmail) {
@@ -242,7 +246,9 @@ public class UserFollowService {
                 .email(targetUser.getEmail())
                 .avatarUrl(targetUser.getAvatarUrl() != null ? targetUser.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                 .coverImageUrl(defaultCover)
-                .location("Việt Nam")
+                .location(targetUser.getAddress() != null && !targetUser.getAddress().isBlank() ? targetUser.getAddress() : "Việt Nam")
+                .address(targetUser.getAddress() != null ? targetUser.getAddress() : "")
+                .phoneNumber(targetUser.getPhoneNumber() != null ? targetUser.getPhoneNumber() : "")
                 .rank(rankTitle)
                 .tier(rawTier.toLowerCase())
                 .bio(targetUser.getBio() != null && !targetUser.getBio().isBlank() ? targetUser.getBio() : "")
@@ -291,6 +297,9 @@ public class UserFollowService {
         if (request.getPhoneNumber() != null) {
             targetUser.setPhoneNumber(request.getPhoneNumber().trim());
         }
+        if (request.getAddress() != null) {
+            targetUser.setAddress(request.getAddress().trim());
+        }
         if (request.getTravelStyle() != null && !request.getTravelStyle().trim().isEmpty()) {
             targetUser.setTravelStyle(request.getTravelStyle().trim());
         }
@@ -301,6 +310,31 @@ public class UserFollowService {
         userRepository.save(targetUser);
         log.info("Successfully updated profile for user ID {}", targetUser.getId());
         return getUserProfile(targetUser.getId(), targetUser.getEmail());
+    }
+
+    @Transactional
+    public void changePassword(String email, ChangePasswordRequest request) {
+        log.info("Processing password change request for user: {}", email);
+        User user = resolveUser(email);
+
+        if (request.getCurrentPassword() == null || !passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            log.warn("Password change failed: Current password mismatch for user: {}", email);
+            throw new IllegalArgumentException("Mật khẩu hiện tại không chính xác!");
+        }
+
+        if (request.getNewPassword() == null || !request.getNewPassword().equals(request.getConfirmPassword())) {
+            log.warn("Password change failed: Confirm password mismatch for user: {}", email);
+            throw new IllegalArgumentException("Mật khẩu xác nhận không trùng khớp!");
+        }
+
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            log.warn("Password change failed: New password same as old password for user: {}", email);
+            throw new IllegalArgumentException("Mật khẩu mới không được trùng với mật khẩu hiện tại!");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword().trim()));
+        userRepository.save(user);
+        log.info("Password successfully updated for user: {}", email);
     }
 
     public User resolveUser(String email) {

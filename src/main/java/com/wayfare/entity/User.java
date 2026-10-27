@@ -43,6 +43,9 @@ public class User {
     @Column(name = "phone_number", length = 20)
     private String phoneNumber;
 
+    @Column(length = 255)
+    private String address;
+
     @Builder.Default
     @Column(name = "is_verified", nullable = false)
     private Boolean isVerified = true;

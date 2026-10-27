@@ -121,6 +121,10 @@ public class ActivityLogService {
         }
     }
 
+    public void recordLog(User user, String action, String details) {
+        recordLog(user, action, details, "118.69.190.10", "Wayfare Web Client");
+    }
+
     public void recordLog(User user, String action, String details, String ipAddress, String userAgent) {
         try {
             String category = resolveCategory(action);

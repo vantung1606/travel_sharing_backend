@@ -51,6 +51,17 @@ public class ReviewController {
         return ResponseEntity.ok(ApiResponse.success("Gửi đánh giá thành công! Cảm ơn đóng góp của bạn.", review));
     }
 
+    @PutMapping("/reviews/{reviewId}")
+    public ResponseEntity<ApiResponse<ReviewDto>> updateReview(
+            @PathVariable Long reviewId,
+            @Valid @RequestBody com.wayfare.modules.place.dto.UpdateReviewRequest request,
+            Authentication authentication) {
+        String userEmail = requireAuthEmail(authentication);
+        log.info("REST request to update review ID: {} by user: {}", reviewId, userEmail);
+        ReviewDto review = reviewService.updateReview(reviewId, request, userEmail);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật đánh giá thành công!", review));
+    }
+
     @DeleteMapping("/reviews/{reviewId}")
     public ResponseEntity<ApiResponse<Void>> deleteReview(
             @PathVariable Long reviewId,

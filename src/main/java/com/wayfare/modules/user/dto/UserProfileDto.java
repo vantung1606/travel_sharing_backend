@@ -26,6 +26,8 @@ public class UserProfileDto {
     private Boolean isVerified;
     private String coverImageUrl;
     private String location;
+    private String address;
+    private String phoneNumber;
     private String rank;
     private String role; // "Quản trị viên" | "Phượt thủ tự do" | "Wanderer Gold"
     private String tier; // "bronze" | "silver" | "gold" | "diamond"

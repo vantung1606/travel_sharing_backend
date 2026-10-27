@@ -15,6 +15,7 @@ public class UpdateProfileRequest {
     private String bio;
     private String avatarUrl;
     private String phoneNumber;
+    private String address;
     private String travelStyle;
     private String budgetPreference;
 }

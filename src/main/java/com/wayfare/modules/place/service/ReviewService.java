@@ -67,6 +67,42 @@ public class ReviewService {
     }
 
     @Transactional
+    public ReviewDto updateReview(Long reviewId, com.wayfare.modules.place.dto.UpdateReviewRequest request, String userEmail) {
+        log.info("Request to update review ID: {} by user: {}", reviewId, userEmail);
+
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Đánh giá không tồn tại với ID: " + reviewId));
+
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+
+        boolean isAdmin = user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(r -> r.getName().equalsIgnoreCase("ROLE_ADMIN"));
+
+        boolean isAuthor = review.getAuthor() != null && review.getAuthor().getId().equals(user.getId());
+
+        if (!isAdmin && !isAuthor) {
+            throw new IllegalArgumentException("Bạn chỉ có quyền chỉnh sửa đánh giá do chính mình tạo ra!");
+        }
+
+        if (request.getRating() != null) {
+            review.setRating(request.getRating());
+        }
+        if (request.getComment() != null && !request.getComment().trim().isEmpty()) {
+            review.setComment(request.getComment().trim());
+        }
+
+        Review updated = reviewRepository.save(review);
+        log.info("Successfully updated review ID: {}", reviewId);
+
+        if (review.getPlace() != null) {
+            recalculatePlaceRating(review.getPlace());
+        }
+
+        return toDto(updated);
+    }
+
+    @Transactional
     public void deleteReview(Long reviewId, String userEmail) {
         log.info("Request to delete review ID: {} by user: {}", reviewId, userEmail);
 
@@ -158,6 +194,7 @@ public class ReviewService {
                 .authorId(author != null ? author.getId() : null)
                 .authorName(author != null ? author.getFullName() : "Du khách Wayfare")
                 .authorHandle(author != null ? author.getHandle() : "@traveler")
+                .authorEmail(author != null ? author.getEmail() : null)
                 .authorAvatar(author != null ? author.getAvatarUrl() : null)
                 .rating(review.getRating())
                 .comment(review.getComment())
