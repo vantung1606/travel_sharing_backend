@@ -32,6 +32,7 @@ public class PlaceService {
     private final ActivityLogService activityLogService;
     private final AiPlaceModerationService aiPlaceModerationService;
     private final NotificationService notificationService;
+    private final GeocodingService geocodingService;
 
     @Transactional(readOnly = true)
     public List<PlaceDto> getAllPlaces(String city, String category, String status, String keyword) {
@@ -192,13 +193,25 @@ public class PlaceService {
             }
         }
 
+        // Tự động tìm tọa độ GPS từ địa chỉ nếu chưa có tọa độ
+        BigDecimal lat = request.getLatitude();
+        BigDecimal lng = request.getLongitude();
+        if (lat == null || lng == null || lat.compareTo(BigDecimal.ZERO) == 0) {
+            GeocodingService.Coordinates coords = geocodingService.geocode(request.getAddress(), request.getCity());
+            if (coords != null) {
+                lat = coords.latitude();
+                lng = coords.longitude();
+                log.info("Auto-geocoded place '{}' at creation to lat: {}, lng: {}", request.getName(), lat, lng);
+            }
+        }
+
         Place place = Place.builder()
                 .name(request.getName().trim())
                 .description(request.getDescription())
                 .address(request.getAddress())
                 .city(request.getCity())
-                .latitude(request.getLatitude())
-                .longitude(request.getLongitude())
+                .latitude(lat)
+                .longitude(lng)
                 .ticketPrice(request.getTicketPrice() != null ? request.getTicketPrice() : BigDecimal.ZERO)
                 .priceRange(request.getPriceRange())
                 .openHours(request.getOpenHours())
@@ -244,8 +257,20 @@ public class PlaceService {
         place.setIsVerifiedHost(true);
         place.setAiModerationStatus("APPROVED_BY_ADMIN");
         place.setAiModerationNote("Được Ban Quản Trị phê duyệt chính thức.");
+
+        // BẮT BUỘC: Đảm bảo có tọa độ GPS trước khi xuất hiện trên bản đồ cho du khách
+        if (place.getLatitude() == null || place.getLongitude() == null || place.getLatitude().compareTo(BigDecimal.ZERO) == 0) {
+            GeocodingService.Coordinates coords = geocodingService.geocode(place.getAddress(), place.getCity());
+            if (coords != null) {
+                place.setLatitude(coords.latitude());
+                place.setLongitude(coords.longitude());
+                log.info("Auto-geocoded place ID {} upon approval to lat: {}, lng: {}", id, coords.latitude(), coords.longitude());
+            }
+        }
+
         Place saved = placeRepository.save(place);
-        log.info("Place ID: {} approved successfully and marked as verified host", id);
+        log.info("Place ID: {} approved successfully and marked as verified host with GPS ({}, {})",
+                id, saved.getLatitude(), saved.getLongitude());
 
         if (saved.getOwner() != null) {
             try {
@@ -261,6 +286,29 @@ public class PlaceService {
             }
         }
         return toDto(saved);
+    }
+
+    /**
+     * Tự động quét và đồng bộ tọa độ GPS cho toàn bộ địa điểm còn thiếu trong CSDL
+     */
+    @Transactional
+    public int geocodeAllMissingPlaces() {
+        log.info("Starting batch geocoding for all places missing GPS coordinates");
+        List<Place> allPlaces = placeRepository.findAll();
+        int fixedCount = 0;
+        for (Place p : allPlaces) {
+            if (p.getLatitude() == null || p.getLongitude() == null || p.getLatitude().compareTo(BigDecimal.ZERO) == 0) {
+                GeocodingService.Coordinates coords = geocodingService.geocode(p.getAddress(), p.getCity());
+                if (coords != null) {
+                    p.setLatitude(coords.latitude());
+                    p.setLongitude(coords.longitude());
+                    placeRepository.save(p);
+                    fixedCount++;
+                }
+            }
+        }
+        log.info("Batch geocoding completed: {} places updated with GPS coordinates", fixedCount);
+        return fixedCount;
     }
 
     @Transactional

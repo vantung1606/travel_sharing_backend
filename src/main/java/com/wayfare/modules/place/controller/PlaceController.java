@@ -92,6 +92,14 @@ public class PlaceController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
+    @PostMapping("/admin/geocode-missing")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> geocodeMissingPlaces() {
+        log.info("REST request to geocode all places missing GPS coordinates");
+        int count = placeService.geocodeAllMissingPlaces();
+        return ResponseEntity.ok(ApiResponse.success("Đã đồng bộ tọa độ GPS cho " + count + " địa điểm thành công!", java.util.Map.of("fixedCount", count)));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
     @PutMapping("/admin/{id}/approve")
     public ResponseEntity<ApiResponse<PlaceDto>> approvePlace(@PathVariable Long id) {
         log.info("REST request to approve place ID: {}", id);
