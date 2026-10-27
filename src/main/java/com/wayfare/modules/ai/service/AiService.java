@@ -22,7 +22,7 @@ public class AiService {
     @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiApiUrl;
 
-    @Value("${gemini.model:gemini-2.5-flash}")
+    @Value("${gemini.model:gemini-3.5-flash}")
     private String defaultModel;
 
     private final RestTemplate restTemplate = new RestTemplate();
@@ -52,8 +52,8 @@ public class AiService {
                 ? request.getModel().trim()
                 : defaultModel;
 
-        if (!targetModel.startsWith("gemini-") || targetModel.contains("3.8")) {
-            targetModel = defaultModel;
+        if (!targetModel.startsWith("gemini-") || targetModel.equals("gemini-2.5-flash") || targetModel.contains("3.8")) {
+            targetModel = "gemini-3.5-flash";
         }
 
         String apiKey = getEffectiveApiKey();
