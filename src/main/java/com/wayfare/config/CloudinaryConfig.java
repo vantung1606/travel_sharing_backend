@@ -37,7 +37,7 @@ public class CloudinaryConfig {
             log.info("Cloudinary storage successfully initialized with cloud_name: {}", cloudName);
             return new Cloudinary(config);
         } else {
-            log.info("Cloudinary credentials are not configured. FileUploadService will use local storage fallback.");
+            log.warn("Cloudinary credentials are not configured. Local disk storage is disabled to ensure all media is cloud-stored.");
             return null;
         }
     }

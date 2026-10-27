@@ -28,12 +28,12 @@ public class FileUploadController {
         log.info("REST request to check file storage service status");
         boolean isCloudinary = fileUploadService.isCloudinaryActive();
         Map<String, Object> status = new HashMap<>();
-        status.put("provider", isCloudinary ? "CLOUDINARY" : "LOCAL_DISK");
+        status.put("provider", isCloudinary ? "CLOUDINARY" : "NOT_CONFIGURED");
         status.put("isCloudinaryActive", isCloudinary);
         status.put("cdnEnabled", isCloudinary);
         status.put("description", isCloudinary
-                ? "Dịch vụ Cloudinary CDN đang hoạt động cho lưu trữ và phân phối đa phương tiện."
-                : "Hệ thống đang hoạt động ở chế độ lưu trữ cục bộ dự phòng (Local disk fallback).");
+                ? "Dịch vụ Cloudinary Cloud CDN đang hoạt động cho lưu trữ và phân phối đa phương tiện."
+                : "Cloudinary chưa được cấu hình. Hệ thống đã khóa lưu máy cục bộ để bảo đảm an toàn dữ liệu.");
 
         return ResponseEntity.ok(ApiResponse.success("Kiểm tra trạng thái lưu trữ thành công", status));
     }
