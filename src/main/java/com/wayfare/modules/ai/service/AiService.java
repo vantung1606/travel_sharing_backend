@@ -28,8 +28,23 @@ public class AiService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    public String getEffectiveApiKey() {
+        if (geminiApiKey != null && !geminiApiKey.trim().isBlank()) {
+            return geminiApiKey.trim();
+        }
+        String sysProp = System.getProperty("GEMINI_API_KEY");
+        if (sysProp != null && !sysProp.trim().isBlank()) {
+            return sysProp.trim();
+        }
+        String envVal = System.getenv("GEMINI_API_KEY");
+        if (envVal != null && !envVal.trim().isBlank()) {
+            return envVal.trim();
+        }
+        return "";
+    }
+
     public boolean isApiKeyConfigured() {
-        return geminiApiKey != null && !geminiApiKey.trim().isBlank();
+        return !getEffectiveApiKey().isBlank();
     }
 
     public AiGenerateResponse generateContent(AiGenerateRequest request) {
@@ -41,12 +56,14 @@ public class AiService {
             targetModel = defaultModel;
         }
 
-        if (geminiApiKey == null || geminiApiKey.isBlank()) {
+        String apiKey = getEffectiveApiKey();
+        if (apiKey.isBlank()) {
             log.warn("GEMINI_API_KEY is not configured on server. Activating intelligent AI fallback response.");
             return buildFallbackAiResponse(request, targetModel);
         }
 
-        log.info("Executing AI Content Generation with model: {}", targetModel);
+        log.info("Executing Live Gemini Generation with model: {}, prompt length: {}", 
+                targetModel, request.getPrompt() != null ? request.getPrompt().length() : 0);
 
         try {
             Map<String, Object> payload = new HashMap<>();
@@ -76,7 +93,7 @@ public class AiService {
             String url = String.format("%s/models/%s:generateContent?key=%s",
                     geminiApiUrl.replaceAll("/+$", ""),
                     targetModel,
-                    geminiApiKey
+                    apiKey
             );
 
             HttpHeaders headers = new HttpHeaders();
@@ -96,6 +113,7 @@ public class AiService {
                             .path("text")
                             .asText("");
 
+                    log.info("Gemini Live Generation succeeded. Response chars: {}", generatedText.length());
                     return AiGenerateResponse.builder()
                             .text(generatedText)
                             .model(targetModel)
@@ -105,8 +123,11 @@ public class AiService {
 
             log.warn("Gemini API returned unexpected response: {}. Falling back to smart generator.", response.getBody());
             return buildFallbackAiResponse(request, targetModel);
+        } catch (org.springframework.web.client.HttpStatusCodeException hse) {
+            log.error("Gemini API call failed with status {}: {}", hse.getStatusCode(), hse.getResponseBodyAsString());
+            return buildFallbackAiResponse(request, targetModel);
         } catch (Exception e) {
-            log.warn("Error communicating with Gemini API ({}). Activating intelligent fallback response.", e.getMessage());
+            log.error("Error communicating with Gemini API ({}). Activating fallback response.", e.getMessage(), e);
             return buildFallbackAiResponse(request, targetModel);
         }
     }
