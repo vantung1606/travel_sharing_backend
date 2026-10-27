@@ -52,6 +52,9 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET:}
   folder: ${CLOUDINARY_FOLDER:wayfare/media}
 
+google:
+  client-id: ${GOOGLE_CLIENT_ID:340055145050-thlfrv3nl1j1jcahh75n8inr8v5j4574.apps.googleusercontent.com}
+
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:}
 
