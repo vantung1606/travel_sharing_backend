@@ -8,6 +8,7 @@ import com.wayfare.modules.admin.service.ActivityLogService;
 import com.wayfare.modules.itinerary.dto.ItineraryExpenseDto;
 import com.wayfare.modules.itinerary.dto.AiTripGenerateRequest;
 import com.wayfare.modules.itinerary.dto.ItineraryDetailDto;
+import com.wayfare.modules.itinerary.dto.ReorderItineraryDetailRequest;
 
 import com.wayfare.entity.*;
 import com.wayfare.exception.ResourceNotFoundException;
@@ -369,6 +370,42 @@ public class ItineraryService {
         ItineraryDetail detail = itineraryDetailRepository.findById(detailId)
                 .orElseThrow(() -> new ResourceNotFoundException("Detail not found with id: " + detailId));
         itineraryDetailRepository.delete(detail);
+    }
+
+    @Transactional
+    public List<ItineraryDetailDto> reorderDetails(Long itineraryId, List<ReorderItineraryDetailRequest> items, String email) {
+        log.info("Reordering details for itinerary id: {} requested by: {}", itineraryId, email);
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
+
+        User user = getUserByEmail(email);
+        boolean isOwner = itinerary.getCreator() != null && itinerary.getCreator().getId().equals(user.getId());
+        boolean isAdmin = user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(r -> "ROLE_ADMIN".equalsIgnoreCase(r.getName()) || "ROLE_MODERATOR".equalsIgnoreCase(r.getName()));
+
+        if (!isOwner && !isAdmin) {
+            throw new org.springframework.security.access.AccessDeniedException("Bạn không có quyền sắp xếp lại lịch trình này!");
+        }
+
+        if (items != null && !items.isEmpty()) {
+            for (ReorderItineraryDetailRequest item : items) {
+                if (item.getDetailId() == null) continue;
+                itineraryDetailRepository.findById(item.getDetailId()).ifPresent(detail -> {
+                    if (detail.getItinerary() != null && detail.getItinerary().getId().equals(itineraryId)) {
+                        if (item.getVisitOrder() != null) {
+                            detail.setVisitOrder(item.getVisitOrder());
+                        }
+                        if (item.getDayNumber() != null) {
+                            detail.setDayNumber(item.getDayNumber());
+                        }
+                        itineraryDetailRepository.save(detail);
+                    }
+                });
+            }
+        }
+
+        List<ItineraryDetail> updatedList = itineraryDetailRepository.findByItineraryOrderByDayNumberAscVisitOrderAsc(itinerary);
+        return updatedList.stream().map(this::mapDetailToDto).collect(Collectors.toList());
     }
 
     @Transactional

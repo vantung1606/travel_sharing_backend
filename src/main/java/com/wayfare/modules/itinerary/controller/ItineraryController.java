@@ -151,6 +151,25 @@ public class ItineraryController {
         return ResponseEntity.ok(ApiResponse.success("Đã xóa điểm dừng khỏi lịch trình", null));
     }
 
+    @PutMapping("/{id}/details/reorder")
+    public ResponseEntity<ApiResponse<List<ItineraryDetailDto>>> reorderDetails(
+            @PathVariable Long id,
+            @RequestBody List<ReorderItineraryDetailRequest> request,
+            Authentication authentication) {
+        String email = requireAuthEmail(authentication);
+        log.info("REST request to reorder details for itinerary id: {} by: {}", id, email);
+        List<ItineraryDetailDto> reordered = itineraryService.reorderDetails(id, request, email);
+        return ResponseEntity.ok(ApiResponse.success("Đã sắp xếp lại thứ tự điểm dừng chân!", reordered));
+    }
+
+    @PostMapping("/{id}/details/reorder")
+    public ResponseEntity<ApiResponse<List<ItineraryDetailDto>>> reorderDetailsPost(
+            @PathVariable Long id,
+            @RequestBody List<ReorderItineraryDetailRequest> request,
+            Authentication authentication) {
+        return reorderDetails(id, request, authentication);
+    }
+
     @PostMapping("/{id}/members")
     public ResponseEntity<ApiResponse<ItineraryMemberDto>> addMember(
             @PathVariable Long id,
