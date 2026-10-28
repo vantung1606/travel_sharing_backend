@@ -94,8 +94,10 @@ public class DataInitializer implements CommandLineRunner {
                 dropStmt.execute("SET FOREIGN_KEY_CHECKS = 1");
                 try {
                     dropStmt.executeUpdate("UPDATE itineraries SET is_public = true WHERE is_public IS NULL");
+                    dropStmt.executeUpdate("UPDATE itineraries SET group_type = 'Cá nhân' WHERE group_type IS NULL");
+                    dropStmt.executeUpdate("UPDATE itineraries SET travel_style = 'Nghỉ dưỡng & Khám phá' WHERE travel_style IS NULL");
                 } catch (Exception ignored) {}
-                log.info(">>> CLEANUP SUCCESS: Auto-dropped obsolete tables and verified itineraries is_public column");
+                log.info(">>> CLEANUP SUCCESS: Auto-dropped obsolete tables and verified itineraries schema columns");
             }
         } catch (Exception e) {
             log.warn("Database schema cleanup note: {}", e.getMessage());

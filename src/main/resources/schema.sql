@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS `itineraries` (
   `end_date` date DEFAULT NULL,
   `is_ai_generated` bit(1) NOT NULL,
   `is_public` bit(1) NOT NULL DEFAULT b'1',
+  `group_type` varchar(50) DEFAULT 'Cá nhân',
+  `travel_style` varchar(100) DEFAULT 'Nghỉ dưỡng & Khám phá',
   `start_date` date DEFAULT NULL,
   `status` varchar(30) DEFAULT NULL,
   `title` varchar(200) NOT NULL,

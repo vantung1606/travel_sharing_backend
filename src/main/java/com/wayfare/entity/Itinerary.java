@@ -59,6 +59,9 @@ public class Itinerary {
     @Column(name = "group_type", length = 50)
     private String groupType; // Cá nhân, Cặp đôi, Bạn bè, Gia đình
 
+    @Column(name = "travel_style", length = 100)
+    private String travelStyle; // Nghỉ dưỡng, Phượt / Khám phá, Ẩm thực, Văn hóa & Lịch sử, Sinh thái, Check-in sống ảo
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -150,6 +150,7 @@ public class ItineraryService {
                 .isPublic(request.getIsPublic() != null ? request.getIsPublic() : true)
                 .status(request.getStatus() != null ? request.getStatus() : "ACTIVE")
                 .groupType(request.getGroupType() != null ? request.getGroupType() : "Cá nhân")
+                .travelStyle(request.getTravelStyle() != null ? request.getTravelStyle() : "Nghỉ dưỡng & Khám phá")
                 .build();
 
         Itinerary saved = itineraryRepository.save(itinerary);
@@ -213,17 +214,38 @@ public class ItineraryService {
         Itinerary itinerary = itineraryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + id));
 
-        if (request.getTitle() != null) itinerary.setTitle(request.getTitle());
-        if (request.getDestination() != null) itinerary.setDestination(request.getDestination());
+        User user = getUserByEmail(email);
+        boolean isOwner = itinerary.getCreator() != null && itinerary.getCreator().getId().equals(user.getId());
+        boolean isAdmin = user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(r -> "ROLE_ADMIN".equalsIgnoreCase(r.getName()) || "ROLE_MODERATOR".equalsIgnoreCase(r.getName()));
+
+        if (!isOwner && !isAdmin) {
+            throw new org.springframework.security.access.AccessDeniedException("Bạn không có quyền chỉnh sửa lịch trình này!");
+        }
+
+        if (request.getTitle() != null && !request.getTitle().isBlank()) itinerary.setTitle(request.getTitle().trim());
+        if (request.getDestination() != null && !request.getDestination().isBlank()) itinerary.setDestination(request.getDestination().trim());
         if (request.getStartDate() != null) itinerary.setStartDate(request.getStartDate());
         if (request.getEndDate() != null) itinerary.setEndDate(request.getEndDate());
         if (request.getBudgetTotal() != null) itinerary.setBudgetTotal(request.getBudgetTotal());
         if (request.getCoverImageUrl() != null) itinerary.setCoverImageUrl(request.getCoverImageUrl());
         if (request.getStatus() != null) itinerary.setStatus(request.getStatus());
         if (request.getGroupType() != null) itinerary.setGroupType(request.getGroupType());
+        if (request.getTravelStyle() != null) itinerary.setTravelStyle(request.getTravelStyle());
         if (request.getIsPublic() != null) itinerary.setIsPublic(request.getIsPublic());
 
         Itinerary saved = itineraryRepository.save(itinerary);
+        try {
+            activityLogService.recordLog(
+                    user,
+                    "UPDATE_ITINERARY",
+                    "Cập nhật thông tin lịch trình: '" + saved.getTitle() + "' (" + saved.getDestination() + ")",
+                    "127.0.0.1",
+                    "Web/App Client"
+            );
+        } catch (Exception e) {
+            log.warn("Non-critical error logging itinerary update: {}", e.getMessage());
+        }
         log.info("Successfully updated itinerary id: {}", saved.getId());
         return getItineraryById(saved.getId(), email);
     }
@@ -462,6 +484,7 @@ public class ItineraryService {
                 .isPublic(i.getIsPublic() != null ? i.getIsPublic() : true)
                 .status(i.getStatus())
                 .groupType(i.getGroupType() != null ? i.getGroupType() : "Cá nhân")
+                .travelStyle(i.getTravelStyle() != null ? i.getTravelStyle() : "Nghỉ dưỡng & Khám phá")
                 .createdAt(i.getCreatedAt())
                 .updatedAt(i.getUpdatedAt())
                 .build();
@@ -541,6 +564,8 @@ public class ItineraryService {
                 .isAiGenerated(source.getIsAiGenerated())
                 .isPublic(source.getIsPublic() != null ? source.getIsPublic() : true)
                 .status("ACTIVE")
+                .groupType(source.getGroupType())
+                .travelStyle(source.getTravelStyle())
                 .build();
 
         Itinerary saved = itineraryRepository.save(cloned);
@@ -656,6 +681,8 @@ public class ItineraryService {
                 .coverImageUrl(coverImage)
                 .isAiGenerated(true)
                 .status("ACTIVE")
+                .groupType("Cá nhân")
+                .travelStyle(styleLabel)
                 .build();
 
         Itinerary saved = itineraryRepository.save(itinerary);

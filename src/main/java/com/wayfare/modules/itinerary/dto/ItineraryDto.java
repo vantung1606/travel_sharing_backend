@@ -32,6 +32,7 @@ public class ItineraryDto {
     private Boolean isPublic = true;
     private String status;
     private String groupType;
+    private String travelStyle;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
