@@ -737,4 +737,18 @@ public class ChatService {
 
         return mapToRoomDto(room, currentUser);
     }
+
+    @Transactional(readOnly = true)
+    public long getTotalUnreadCount(User user) {
+        if (user == null || user.getId() == null) return 0;
+        List<ChatMember> memberships = chatMemberRepository.findByUserId(user.getId());
+        long total = 0;
+        for (ChatMember member : memberships) {
+            if (member.getChatRoom() != null && member.getChatRoom().getId() != null) {
+                long unread = chatMessageRepository.countUnreadMessages(member.getChatRoom().getId(), member.getLastReadMessageId());
+                total += unread;
+            }
+        }
+        return total;
+    }
 }

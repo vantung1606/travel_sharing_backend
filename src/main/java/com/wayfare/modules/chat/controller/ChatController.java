@@ -38,6 +38,16 @@ public class ChatController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phòng chat thành công", rooms));
     }
 
+    @GetMapping("/unread-count")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getTotalUnreadCount(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            return ResponseEntity.ok(ApiResponse.success("Chưa đăng nhập", java.util.Map.of("unreadCount", 0L)));
+        }
+        User user = chatService.resolveUser(authentication.getName());
+        long totalUnread = chatService.getTotalUnreadCount(user);
+        return ResponseEntity.ok(ApiResponse.success("Lấy tổng số tin nhắn chưa đọc thành công", java.util.Map.of("unreadCount", totalUnread)));
+    }
+
     @GetMapping("/available-users")
     public ResponseEntity<ApiResponse<List<ChatMemberDto>>> getAvailableUsers(
             @RequestParam(required = false) String keyword,
