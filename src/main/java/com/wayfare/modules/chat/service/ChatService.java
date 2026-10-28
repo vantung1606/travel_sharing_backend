@@ -104,15 +104,33 @@ public class ChatService {
 
         List<ChatMessage> messages = chatMessageRepository.findByChatRoomIdOrderByCreatedAtAsc(roomId);
 
-        // Cập nhật mốc tin nhắn đã đọc gần nhất
+        // Cập nhật mốc tin nhắn đã đọc gần nhất cho currentUser
         if (!messages.isEmpty()) {
             ChatMessage latest = messages.get(messages.size() - 1);
             member.setLastReadMessageId(latest.getId());
             chatMemberRepository.save(member);
         }
 
+        // Lấy mốc đọc lớn nhất của các thành viên khác trong phòng
+        List<ChatMember> otherMembers = chatMemberRepository.findByChatRoomId(roomId).stream()
+                .filter(m -> !m.getUser().getId().equals(currentUser.getId()))
+                .collect(Collectors.toList());
+        Long maxOtherLastReadId = otherMembers.stream()
+                .map(ChatMember::getLastReadMessageId)
+                .filter(Objects::nonNull)
+                .max(Long::compareTo)
+                .orElse(0L);
+
         return messages.stream()
-                .map(m -> mapToMessageDto(m, currentUser))
+                .map(m -> {
+                    ChatMessageDto dto = mapToMessageDto(m, currentUser);
+                    if (Boolean.TRUE.equals(dto.getIsMe())) {
+                        dto.setIsRead(m.getId() <= maxOtherLastReadId);
+                    } else {
+                        dto.setIsRead(true);
+                    }
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -155,10 +173,12 @@ public class ChatService {
         chatMemberRepository.save(member);
 
         ChatMessageDto dto = mapToMessageDto(saved, currentUser);
+        dto.setIsRead(false);
 
         // Phát sóng thời gian thực qua WebSocket STOMP tới tất cả thành viên trong phòng (DTO trung lập không thiên vị người gửi)
         try {
             ChatMessageDto broadcastDto = mapToMessageDto(saved, null);
+            broadcastDto.setIsRead(false);
             messagingTemplate.convertAndSend("/topic/room." + roomId, broadcastDto);
             log.info("Broadcasted chat message {} to /topic/room.{}", saved.getId(), roomId);
         } catch (Exception e) {
@@ -369,6 +389,7 @@ public class ChatService {
                 .isOnline(isUserOnline(m.getUser()))
                 .statusText(formatLastActiveStatus(m.getUser()))
                 .lastActiveAt(m.getUser().getLastLoginAt())
+                .lastReadMessageId(m.getLastReadMessageId())
                 .build()
         ).collect(Collectors.toList());
 
@@ -601,6 +622,7 @@ public class ChatService {
                         .isOnline(isUserOnline(m.getUser()))
                         .statusText(formatLastActiveStatus(m.getUser()))
                         .lastActiveAt(m.getUser().getLastLoginAt())
+                        .lastReadMessageId(m.getLastReadMessageId())
                         .build()
                 )
                 .collect(Collectors.toList());
@@ -750,5 +772,52 @@ public class ChatService {
             }
         }
         return total;
+    }
+
+    @Transactional
+    public Long markRoomAsRead(Long roomId, User currentUser) {
+        log.info("User {} marking room {} as read", currentUser.getEmail(), roomId);
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Phòng chat không tồn tại: " + roomId));
+
+        ChatMember member = chatMemberRepository.findByChatRoomIdAndUserId(roomId, currentUser.getId())
+                .orElseGet(() -> {
+                    ChatMember newMember = ChatMember.builder()
+                            .chatRoom(room)
+                            .user(currentUser)
+                            .role("MEMBER")
+                            .build();
+                    return chatMemberRepository.save(newMember);
+                });
+
+        List<ChatMessage> messages = chatMessageRepository.findByChatRoomIdOrderByCreatedAtAsc(roomId);
+        if (messages.isEmpty()) {
+            return 0L;
+        }
+
+        ChatMessage latest = messages.get(messages.size() - 1);
+        Long latestId = latest.getId();
+        if (member.getLastReadMessageId() == null || member.getLastReadMessageId() < latestId) {
+            member.setLastReadMessageId(latestId);
+            chatMemberRepository.save(member);
+            log.info("Updated lastReadMessageId for user {} in room {} to {}", currentUser.getEmail(), roomId, latestId);
+        }
+
+        // Phát sóng sự kiện đã đọc qua WebSocket /topic/room.{roomId}/read
+        try {
+            Map<String, Object> receipt = Map.of(
+                    "roomId", roomId,
+                    "userId", currentUser.getId(),
+                    "email", currentUser.getEmail(),
+                    "userName", currentUser.getFullName() != null ? currentUser.getFullName() : currentUser.getEmail(),
+                    "lastReadMessageId", latestId
+            );
+            messagingTemplate.convertAndSend("/topic/room." + roomId + "/read", receipt);
+            log.info("Broadcasted read receipt for room {} to /topic/room.{}/read", roomId, roomId);
+        } catch (Exception e) {
+            log.warn("Failed to broadcast read receipt for room {}: {}", roomId, e.getMessage());
+        }
+
+        return latestId;
     }
 }

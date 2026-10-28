@@ -78,6 +78,19 @@ public class ChatController {
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử tin nhắn thành công", messages));
     }
 
+    @PostMapping("/rooms/{roomId}/read")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> markRoomAsRead(
+            @PathVariable Long roomId,
+            Authentication authentication) {
+        User user = resolveUser(authentication);
+        log.info("REST request to mark room {} as read by: {}", roomId, user.getEmail());
+        Long latestId = chatService.markRoomAsRead(roomId, user);
+        return ResponseEntity.ok(ApiResponse.success("Đánh dấu đã đọc thành công", java.util.Map.of(
+                "roomId", roomId,
+                "lastReadMessageId", latestId
+        )));
+    }
+
     @PostMapping("/rooms/{roomId}/messages")
     public ResponseEntity<ApiResponse<ChatMessageDto>> sendMessage(
             @PathVariable Long roomId,

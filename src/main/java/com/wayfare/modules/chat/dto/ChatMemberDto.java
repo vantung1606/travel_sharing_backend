@@ -22,4 +22,5 @@ public class ChatMemberDto {
     private Boolean isOnline;
     private String statusText;
     private LocalDateTime lastActiveAt;
+    private Long lastReadMessageId;
 }

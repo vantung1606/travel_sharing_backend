@@ -24,4 +24,5 @@ public class ChatMessageDto {
     private String time;
     private LocalDateTime createdAt;
     private Boolean isMe;
+    private Boolean isRead;
 }
