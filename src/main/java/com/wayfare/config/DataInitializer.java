@@ -34,6 +34,7 @@ public class DataInitializer implements CommandLineRunner {
     private final com.wayfare.repository.PostLikeRepository postLikeRepository;
     private final com.wayfare.repository.PostCommentRepository postCommentRepository;
     private final com.wayfare.repository.PlaceRepository placeRepository;
+    private final com.wayfare.repository.PlaceImageRepository placeImageRepository;
     private final com.wayfare.repository.ReviewRepository reviewRepository;
     private final com.wayfare.repository.UserFollowRepository userFollowRepository;
     private final com.wayfare.repository.ProvinceRepository provinceRepository;
@@ -759,6 +760,86 @@ public class DataInitializer implements CommandLineRunner {
                     placeRepository.saveAll(touchedPlaces);
                     log.info(">>> SUCCESS: Seeded {} reviews & recalculated ratings for {} places — số hiển thị giờ trung thực với bảng reviews", newReviews.size(), touchedPlaces.size());
                 }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // Seed ALBUM ẢNH CHO BẢNG PLACE_IMAGES (Task 2.1 - Idempotent):
+        // Nếu bảng place_images còn trống, gieo 3-5 ảnh chất lượng cao
+        // từ coverImageUrl + ảnh bộ sưu tập theo chủ đề địa điểm (Biển, Núi, Di sản, Cafe...)
+        // để kích hoạt tính năng Album ảnh trên Web và Mobile.
+        // ══════════════════════════════════════════════════════════════════
+        if (placeImageRepository.count() == 0 && !allPlaces.isEmpty()) {
+            log.info("Auto-seeding place photo galleries for {} places into place_images table...", allPlaces.size());
+            List<com.wayfare.entity.PlaceImage> galleryImages = new java.util.ArrayList<>();
+
+            String[] beachPool = {
+                "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1512100356356-de1b84283e18?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=1200&q=80"
+            };
+            String[] mountainPool = {
+                "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1200&q=80"
+            };
+            String[] heritagePool = {
+                "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=1200&q=80"
+            };
+            String[] cafePool = {
+                "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1498804103079-a6351b050096?auto=format&fit=crop&w=1200&q=80",
+                "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1200&q=80"
+            };
+
+            for (com.wayfare.entity.Place p : allPlaces) {
+                // 1. Ảnh chính (Cover image)
+                if (p.getCoverImageUrl() != null && !p.getCoverImageUrl().isBlank()) {
+                    galleryImages.add(com.wayfare.entity.PlaceImage.builder()
+                            .place(p)
+                            .imageUrl(p.getCoverImageUrl())
+                            .isPrimary(true)
+                            .caption(p.getName() + " - Toàn cảnh")
+                            .build());
+                }
+
+                // 2. Chọn pool theo danh mục địa điểm
+                String cat = p.getCategoryName() != null ? p.getCategoryName() : "";
+                String[] pool;
+                if (cat.contains("Biển") || cat.contains("Đảo")) {
+                    pool = beachPool;
+                } else if (cat.contains("Núi") || cat.contains("Săn Mây") || cat.contains("Rừng")) {
+                    pool = mountainPool;
+                } else if (cat.contains("Cafe") || cat.contains("Ẩm thực")) {
+                    pool = cafePool;
+                } else {
+                    pool = heritagePool;
+                }
+
+                // Thêm 2-3 ảnh bộ sưu tập
+                long seed = p.getId() != null ? p.getId() : 1L;
+                int imgCount = 3;
+                for (int i = 0; i < imgCount; i++) {
+                    String photo = pool[(int) ((seed + i) % pool.length)];
+                    galleryImages.add(com.wayfare.entity.PlaceImage.builder()
+                            .place(p)
+                            .imageUrl(photo)
+                            .isPrimary(false)
+                            .caption(p.getName() + " - Góc trải nghiệm #" + (i + 1))
+                            .build());
+                }
+            }
+
+            if (!galleryImages.isEmpty()) {
+                placeImageRepository.saveAll(galleryImages);
+                log.info(">>> SUCCESS: Seeded {} gallery photos across {} places into place_images table!",
+                        galleryImages.size(), allPlaces.size());
             }
         }
 

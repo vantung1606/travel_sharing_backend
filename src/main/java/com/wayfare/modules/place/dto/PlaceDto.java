@@ -24,6 +24,8 @@ public class PlaceDto {
     private BigDecimal averageRating;
     private Integer reviewCount;
     private String coverImageUrl;
+    @Builder.Default
+    private java.util.List<String> images = new java.util.ArrayList<>();
 
     // Business & Local Host details
     private Long ownerId;

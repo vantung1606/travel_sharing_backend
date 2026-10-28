@@ -23,6 +23,7 @@ public class CreatePlaceRequest {
     private String categoryName;
     private String amenities;
     private String coverImageUrl;
+    private java.util.List<String> images;
     private String status;
 
     public CreatePlaceRequest() {
@@ -138,5 +139,13 @@ public class CreatePlaceRequest {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public java.util.List<String> getImages() {
+        return images;
+    }
+
+    public void setImages(java.util.List<String> images) {
+        this.images = images;
     }
 }

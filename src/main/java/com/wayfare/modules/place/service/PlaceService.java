@@ -18,8 +18,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.wayfare.entity.PlaceImage;
+import com.wayfare.repository.PlaceImageRepository;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +32,7 @@ import java.util.stream.Collectors;
 public class PlaceService {
 
     private final PlaceRepository placeRepository;
+    private final PlaceImageRepository placeImageRepository;
     private final UserRepository userRepository;
     private final ActivityLogService activityLogService;
     private final AiPlaceModerationService aiPlaceModerationService;
@@ -231,6 +236,19 @@ public class PlaceService {
                 .build();
 
         Place saved = placeRepository.save(place);
+        if (request.getImages() != null && !request.getImages().isEmpty()) {
+            for (String imgUrl : request.getImages()) {
+                if (imgUrl != null && !imgUrl.isBlank()) {
+                    PlaceImage pi = PlaceImage.builder()
+                            .place(saved)
+                            .imageUrl(imgUrl.trim())
+                            .isPrimary(false)
+                            .build();
+                    placeImageRepository.save(pi);
+                    saved.getImages().add(pi);
+                }
+            }
+        }
         log.info("Successfully created place ID: {} with status: {}, aiStatus: {} by user: {}",
                 saved.getId(), initialStatus, aiModerationStatus, userEmail);
 
@@ -380,6 +398,18 @@ public class PlaceService {
         if (place == null) return null;
 
         User owner = place.getOwner();
+        List<String> imageUrls = new ArrayList<>();
+        if (place.getImages() != null && !place.getImages().isEmpty()) {
+            for (PlaceImage pi : place.getImages()) {
+                if (pi != null && pi.getImageUrl() != null && !pi.getImageUrl().isBlank()) {
+                    imageUrls.add(pi.getImageUrl().trim());
+                }
+            }
+        }
+        if (imageUrls.isEmpty() && place.getCoverImageUrl() != null && !place.getCoverImageUrl().isBlank()) {
+            imageUrls.add(place.getCoverImageUrl().trim());
+        }
+
         return PlaceDto.builder()
                 .id(place.getId())
                 .name(place.getName())
@@ -392,6 +422,7 @@ public class PlaceService {
                 .averageRating(place.getAverageRating())
                 .reviewCount(place.getReviewCount())
                 .coverImageUrl(place.getCoverImageUrl())
+                .images(imageUrls)
                 .phoneNumber(place.getPhoneNumber())
                 .openHours(place.getOpenHours())
                 .priceRange(place.getPriceRange())
