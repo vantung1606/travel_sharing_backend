@@ -28,6 +28,12 @@ public class AdminStatsDto {
     private long totalComments;
     private double averagePlaceRating;
 
+    // ---- Reports & Moderation ----
+    private long totalReports;
+    private long pendingReports;
+    private long resolvedReports;
+    private long dismissedReports;
+
     // ---- Monthly chart data (last 6 months) ----
     private List<MonthlyStats> userGrowth;
     private List<MonthlyStats> postGrowth;

@@ -4,6 +4,7 @@ import com.wayfare.modules.admin.dto.AdminStatsDto;
 import com.wayfare.repository.ItineraryRepository;
 import com.wayfare.repository.PlaceRepository;
 import com.wayfare.repository.PostRepository;
+import com.wayfare.repository.ReportRepository;
 import com.wayfare.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ public class AdminStatsService {
     private final PostRepository postRepository;
     private final PlaceRepository placeRepository;
     private final ItineraryRepository itineraryRepository;
+    private final ReportRepository reportRepository;
 
     public AdminStatsDto getSystemStats() {
         log.info("Fetching admin system statistics");
@@ -49,6 +51,12 @@ public class AdminStatsService {
         Long totalLikes = postRepository.sumAllLikes();
         Long totalComments = postRepository.sumAllComments();
         Double averageRating = placeRepository.findOverallAverageRating();
+
+        // ---- Reports & Moderation ----
+        long totalReports = reportRepository.count();
+        long pendingReports = reportRepository.countByStatus("PENDING");
+        long resolvedReports = reportRepository.countByStatus("RESOLVED");
+        long dismissedReports = reportRepository.countByStatus("DISMISSED");
 
         // ---- Monthly growth (last 6 months) ----
         List<AdminStatsDto.MonthlyStats> userGrowth = buildMonthlyStats(
@@ -77,8 +85,8 @@ public class AdminStatsService {
                         .build())
                 .toList();
 
-        log.info("Admin stats: {} users, {} posts, {} places, {} itineraries",
-                totalUsers, totalPosts, totalPlaces, totalItineraries);
+        log.info("Admin stats: {} users, {} posts, {} places, {} itineraries, {} total reports ({} pending)",
+                totalUsers, totalPosts, totalPlaces, totalItineraries, totalReports, pendingReports);
 
         return AdminStatsDto.builder()
                 .totalUsers(totalUsers)
@@ -92,6 +100,10 @@ public class AdminStatsService {
                 .totalLikes(totalLikes != null ? totalLikes : 0)
                 .totalComments(totalComments != null ? totalComments : 0)
                 .averagePlaceRating(averageRating != null ? averageRating : 0.0)
+                .totalReports(totalReports)
+                .pendingReports(pendingReports)
+                .resolvedReports(resolvedReports)
+                .dismissedReports(dismissedReports)
                 .userGrowth(userGrowth)
                 .postGrowth(postGrowth)
                 .topDestinations(topDestinations)
