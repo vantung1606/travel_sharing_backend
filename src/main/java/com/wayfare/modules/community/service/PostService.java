@@ -10,6 +10,7 @@ import com.wayfare.modules.community.dto.ReportPostRequest;
 import com.wayfare.modules.admin.service.ActivityLogService;
 import com.wayfare.modules.community.dto.CreatePostRequest;
 import com.wayfare.modules.community.dto.CreateCommentRequest;
+import com.wayfare.modules.community.dto.PostLikerDto;
 
 import com.wayfare.entity.*;
 import com.wayfare.repository.PlaceRepository;
@@ -461,6 +462,50 @@ public class PostService {
 
         int accurateLikeCount = (int) postLikeRepository.countByPostId(postId);
         return Map.of("isLiked", isLiked, "likeCount", accurateLikeCount);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PostLikerDto> getPostLikers(Long postId, String currentUserEmail) {
+        log.info("Fetching likers for post {}: viewer={}", postId, currentUserEmail);
+        if (!postRepository.existsById(postId)) {
+            throw new ResourceNotFoundException("Bài viết không tồn tại với ID: " + postId);
+        }
+
+        User viewer = null;
+        if (currentUserEmail != null && !currentUserEmail.isBlank()) {
+            viewer = userRepository.findByEmail(currentUserEmail).orElse(null);
+        }
+
+        List<PostLike> likes = postLikeRepository.findByPostIdWithUserOrderByCreatedAtDesc(postId);
+        final User currentViewer = viewer;
+
+        return likes.stream().map(like -> {
+            User u = like.getUser();
+            boolean isFollowing = false;
+            boolean isMe = false;
+            if (currentViewer != null) {
+                isMe = currentViewer.getId().equals(u.getId());
+                if (!isMe) {
+                    isFollowing = userFollowRepository.existsByFollowerIdAndFollowingId(currentViewer.getId(), u.getId());
+                }
+            }
+
+            String roleName = (u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN")))
+                    ? "Quản trị viên"
+                    : "Thành viên";
+
+            return PostLikerDto.builder()
+                    .id(u.getId())
+                    .fullName(u.getFullName())
+                    .handle(u.getHandle() != null ? u.getHandle() : ("@" + (u.getEmail() != null ? u.getEmail().split("@")[0] : "user")))
+                    .avatarUrl(u.getAvatarUrl())
+                    .bio(u.getBio())
+                    .role(roleName)
+                    .isFollowing(isFollowing)
+                    .isMe(isMe)
+                    .likedAt(like.getCreatedAt())
+                    .build();
+        }).collect(Collectors.toList());
     }
 
     @Transactional

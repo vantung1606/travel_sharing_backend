@@ -140,6 +140,18 @@ public class PostController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật lượt thích thành công", result));
     }
 
+    @GetMapping("/{id}/likes")
+    public ResponseEntity<ApiResponse<List<PostLikerDto>>> getPostLikers(
+            @PathVariable Long id,
+            Authentication authentication) {
+        String email = (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal()))
+                ? authentication.getName()
+                : null;
+        log.info("REST request to get likers for post {}: viewer={}", id, email);
+        List<PostLikerDto> likers = postService.getPostLikers(id, email);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách người thích thành công", likers));
+    }
+
     @PostMapping("/{id}/bookmark")
     public ResponseEntity<ApiResponse<Map<String, Object>>> toggleBookmark(
             @PathVariable Long id,
