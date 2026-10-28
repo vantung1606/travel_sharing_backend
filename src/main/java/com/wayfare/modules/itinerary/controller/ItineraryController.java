@@ -49,9 +49,12 @@ public class ItineraryController {
     }
 
     @GetMapping("/all")
-    public ResponseEntity<ApiResponse<List<ItineraryDto>>> getAllItineraries() {
-        log.info("REST request to get all system itineraries");
-        List<ItineraryDto> list = itineraryService.getAllItineraries();
+    public ResponseEntity<ApiResponse<List<ItineraryDto>>> getAllItineraries(
+            @RequestParam(required = false) Boolean isPublic,
+            Authentication authentication) {
+        String viewerEmail = extractViewerEmail(authentication);
+        log.info("REST request to get system itineraries (isPublic={}, viewer={})", isPublic, viewerEmail);
+        List<ItineraryDto> list = itineraryService.getAllItineraries(isPublic, viewerEmail);
         return ResponseEntity.ok(ApiResponse.success("Lấy toàn bộ lịch trình hệ thống thành công", list));
     }
 
@@ -84,6 +87,26 @@ public class ItineraryController {
         log.info("REST request to update itinerary id: {} by: {}", id, email);
         ItineraryDto updated = itineraryService.updateItinerary(id, request, email);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật lịch trình thành công!", updated));
+    }
+
+    @PutMapping("/{id}/visibility")
+    public ResponseEntity<ApiResponse<ItineraryDto>> toggleVisibility(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, Object> body,
+            Authentication authentication) {
+        String email = requireAuthEmail(authentication);
+        Boolean isPublic = null;
+        if (body != null && body.containsKey("isPublic") && body.get("isPublic") != null) {
+            isPublic = Boolean.valueOf(body.get("isPublic").toString());
+        }
+        log.info("REST request to toggle visibility for itinerary id: {} to: {} by: {}", id, isPublic, email);
+        ItineraryDto updated = itineraryService.toggleVisibility(id, isPublic, email);
+        return ResponseEntity.ok(ApiResponse.success(
+                Boolean.TRUE.equals(updated.getIsPublic())
+                        ? "Lịch trình đã được chuyển sang chế độ CÔNG KHAI thành công!"
+                        : "Lịch trình đã được chuyển sang chế độ RIÊNG TƯ thành công!",
+                updated
+        ));
     }
 
     @DeleteMapping("/{id}")

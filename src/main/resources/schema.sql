@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS `itineraries` (
   `destination` varchar(150) NOT NULL,
   `end_date` date DEFAULT NULL,
   `is_ai_generated` bit(1) NOT NULL,
+  `is_public` bit(1) NOT NULL DEFAULT b'1',
   `start_date` date DEFAULT NULL,
   `status` varchar(30) DEFAULT NULL,
   `title` varchar(200) NOT NULL,

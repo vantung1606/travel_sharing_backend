@@ -28,6 +28,8 @@ public class ItineraryDto {
     private BigDecimal budgetTotal;
     private String coverImageUrl;
     private Boolean isAiGenerated;
+    @Builder.Default
+    private Boolean isPublic = true;
     private String status;
     private String groupType;
     private LocalDateTime createdAt;

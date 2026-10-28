@@ -65,8 +65,43 @@ public class ItineraryService {
 
     @Transactional(readOnly = true)
     public List<ItineraryDto> getAllItineraries() {
-        log.info("Fetching all itineraries across system for admin dashboard");
-        List<Itinerary> list = itineraryRepository.findAllWithCreator();
+        return getAllItineraries(null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ItineraryDto> getAllItineraries(Boolean isPublicOnly, String viewerEmail) {
+        log.info("Fetching itineraries: isPublicOnly={}, viewerEmail={}", isPublicOnly, viewerEmail);
+
+        if (Boolean.TRUE.equals(isPublicOnly)) {
+            return itineraryRepository.findPublicWithCreator().stream()
+                    .map(this::mapToSummaryDto)
+                    .collect(Collectors.toList());
+        }
+
+        boolean isAdmin = false;
+        if (viewerEmail != null && !viewerEmail.isBlank()) {
+            User user = userRepository.findByEmail(viewerEmail.trim()).orElse(null);
+            if (user != null && user.getRoles() != null && user.getRoles().stream()
+                    .anyMatch(r -> "ROLE_ADMIN".equalsIgnoreCase(r.getName()) || "ROLE_MODERATOR".equalsIgnoreCase(r.getName()))) {
+                isAdmin = true;
+            }
+        }
+
+        List<Itinerary> list;
+        if (isAdmin) {
+            list = itineraryRepository.findAllWithCreator();
+        } else if (viewerEmail != null && !viewerEmail.isBlank()) {
+            List<Itinerary> publicList = itineraryRepository.findPublicWithCreator();
+            List<Itinerary> myList = itineraryRepository.findByCreatorEmailOrderByCreatedAtDesc(viewerEmail.trim());
+            java.util.LinkedHashMap<Long, Itinerary> map = new java.util.LinkedHashMap<>();
+            for (Itinerary it : myList) map.put(it.getId(), it);
+            for (Itinerary it : publicList) map.putIfAbsent(it.getId(), it);
+            list = new ArrayList<>(map.values());
+            list.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
+        } else {
+            list = itineraryRepository.findPublicWithCreator();
+        }
+
         return list.stream().map(this::mapToSummaryDto).collect(Collectors.toList());
     }
 
@@ -112,6 +147,7 @@ public class ItineraryService {
                 .budgetTotal(request.getBudgetTotal() != null ? request.getBudgetTotal() : BigDecimal.valueOf(5000000))
                 .coverImageUrl(request.getCoverImageUrl())
                 .isAiGenerated(Boolean.TRUE.equals(request.getIsAiGenerated()))
+                .isPublic(request.getIsPublic() != null ? request.getIsPublic() : true)
                 .status(request.getStatus() != null ? request.getStatus() : "ACTIVE")
                 .groupType(request.getGroupType() != null ? request.getGroupType() : "Cá nhân")
                 .build();
@@ -185,9 +221,47 @@ public class ItineraryService {
         if (request.getCoverImageUrl() != null) itinerary.setCoverImageUrl(request.getCoverImageUrl());
         if (request.getStatus() != null) itinerary.setStatus(request.getStatus());
         if (request.getGroupType() != null) itinerary.setGroupType(request.getGroupType());
+        if (request.getIsPublic() != null) itinerary.setIsPublic(request.getIsPublic());
 
         Itinerary saved = itineraryRepository.save(itinerary);
         log.info("Successfully updated itinerary id: {}", saved.getId());
+        return getItineraryById(saved.getId(), email);
+    }
+
+    @Transactional
+    public ItineraryDto toggleVisibility(Long id, Boolean isPublic, String email) {
+        log.info("Toggling visibility for itinerary id: {} to {} by user: {}", id, isPublic, email);
+        Itinerary itinerary = itineraryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lịch trình với id: " + id));
+
+        User user = getUserByEmail(email);
+        boolean isOwner = itinerary.getCreator() != null && itinerary.getCreator().getId().equals(user.getId());
+        boolean isAdmin = user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(r -> "ROLE_ADMIN".equalsIgnoreCase(r.getName()) || "ROLE_MODERATOR".equalsIgnoreCase(r.getName()));
+
+        if (!isOwner && !isAdmin) {
+            throw new org.springframework.security.access.AccessDeniedException("Bạn không có quyền thay đổi trạng thái công khai của lịch trình này!");
+        }
+
+        if (isPublic != null) {
+            itinerary.setIsPublic(isPublic);
+        } else {
+            itinerary.setIsPublic(!Boolean.TRUE.equals(itinerary.getIsPublic()));
+        }
+
+        Itinerary saved = itineraryRepository.save(itinerary);
+        try {
+            activityLogService.recordLog(
+                    user,
+                    "ITINERARY_VISIBILITY_CHANGE",
+                    "Chuyển chế độ lịch trình '" + saved.getTitle() + "' sang: " + (Boolean.TRUE.equals(saved.getIsPublic()) ? "CÔNG KHAI" : "RIÊNG TƯ"),
+                    "127.0.0.1",
+                    "Web/App Client"
+            );
+        } catch (Exception ex) {
+            log.warn("Non-critical activity log error: {}", ex.getMessage());
+        }
+
         return getItineraryById(saved.getId(), email);
     }
 
@@ -385,6 +459,7 @@ public class ItineraryService {
                 .budgetTotal(i.getBudgetTotal())
                 .coverImageUrl(i.getCoverImageUrl())
                 .isAiGenerated(i.getIsAiGenerated())
+                .isPublic(i.getIsPublic() != null ? i.getIsPublic() : true)
                 .status(i.getStatus())
                 .groupType(i.getGroupType() != null ? i.getGroupType() : "Cá nhân")
                 .createdAt(i.getCreatedAt())
@@ -464,6 +539,7 @@ public class ItineraryService {
                 .budgetTotal(source.getBudgetTotal())
                 .coverImageUrl(source.getCoverImageUrl())
                 .isAiGenerated(source.getIsAiGenerated())
+                .isPublic(source.getIsPublic() != null ? source.getIsPublic() : true)
                 .status("ACTIVE")
                 .build();
 

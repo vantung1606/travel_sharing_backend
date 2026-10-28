@@ -49,6 +49,10 @@ public class Itinerary {
     private Boolean isAiGenerated = false;
 
     @Builder.Default
+    @Column(name = "is_public", nullable = false)
+    private Boolean isPublic = true;
+
+    @Builder.Default
     @Column(length = 30)
     private String status = "ACTIVE"; // DRAFT, ACTIVE, COMPLETED, CANCELLED
 
