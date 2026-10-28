@@ -4,6 +4,7 @@ import com.wayfare.modules.admin.service.ActivityLogService;
 import com.wayfare.common.dto.PagedResponse;
 import com.wayfare.modules.place.dto.CreatePlaceRequest;
 import com.wayfare.modules.place.dto.PlaceDto;
+import com.wayfare.modules.place.dto.UpdatePlaceRequest;
 import com.wayfare.entity.Place;
 import com.wayfare.entity.User;
 import com.wayfare.exception.ResourceNotFoundException;
@@ -364,6 +365,111 @@ public class PlaceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với ID: " + id));
         place.setStatus(status);
         return toDto(placeRepository.save(place));
+    }
+
+    @Transactional
+    public PlaceDto updatePlaceByAdmin(Long id, UpdatePlaceRequest request, String adminEmail) {
+        log.info("Admin {} updating place ID: {}", adminEmail, id);
+        Place place = placeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với ID: " + id));
+
+        if (request.getName() != null && !request.getName().isBlank()) {
+            place.setName(request.getName().trim());
+        }
+        if (request.getDescription() != null) {
+            place.setDescription(request.getDescription().trim());
+        }
+        if (request.getAddress() != null && !request.getAddress().isBlank()) {
+            place.setAddress(request.getAddress().trim());
+        }
+        if (request.getCity() != null && !request.getCity().isBlank()) {
+            place.setCity(request.getCity().trim());
+        }
+        if (request.getLatitude() != null) {
+            place.setLatitude(request.getLatitude());
+        }
+        if (request.getLongitude() != null) {
+            place.setLongitude(request.getLongitude());
+        } else if (place.getLatitude() == null || place.getLongitude() == null) {
+            try {
+                GeocodingService.Coordinates coords = geocodingService.geocode(place.getAddress(), place.getCity());
+                if (coords != null) {
+                    place.setLatitude(coords.latitude());
+                    place.setLongitude(coords.longitude());
+                }
+            } catch (Exception e) {
+                log.warn("Auto-geocoding failed during place update: {}", e.getMessage());
+            }
+        }
+
+        if (request.getTicketPrice() != null) {
+            place.setTicketPrice(request.getTicketPrice());
+        }
+        if (request.getPriceRange() != null) {
+            place.setPriceRange(request.getPriceRange().trim());
+        }
+        if (request.getOpenHours() != null) {
+            place.setOpenHours(request.getOpenHours().trim());
+        }
+        if (request.getPhoneNumber() != null) {
+            place.setPhoneNumber(request.getPhoneNumber().trim());
+        }
+        if (request.getCategoryName() != null) {
+            place.setCategoryName(request.getCategoryName().trim());
+        }
+        if (request.getAmenities() != null) {
+            place.setAmenities(request.getAmenities().trim());
+        }
+        if (request.getCoverImageUrl() != null && !request.getCoverImageUrl().isBlank()) {
+            place.setCoverImageUrl(request.getCoverImageUrl().trim());
+        }
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            place.setStatus(request.getStatus().trim());
+        }
+        if (request.getIsVerifiedHost() != null) {
+            place.setIsVerifiedHost(request.getIsVerifiedHost());
+        }
+
+        // Cập nhật danh sách ảnh chi tiết (nếu request gửi lên mảng images)
+        if (request.getImages() != null) {
+            placeImageRepository.deleteByPlaceId(id);
+            List<PlaceImage> newImages = new java.util.ArrayList<>();
+            boolean hasPrimary = false;
+            for (int i = 0; i < request.getImages().size(); i++) {
+                String imgUrl = request.getImages().get(i);
+                if (imgUrl != null && !imgUrl.isBlank()) {
+                    boolean isPrimary = !hasPrimary;
+                    hasPrimary = true;
+                    newImages.add(PlaceImage.builder()
+                            .place(place)
+                            .imageUrl(imgUrl.trim())
+                            .isPrimary(isPrimary)
+                            .caption(place.getName() + " #" + (i + 1))
+                            .build());
+                }
+            }
+            if (!newImages.isEmpty()) {
+                placeImageRepository.saveAll(newImages);
+            }
+        }
+
+        Place saved = placeRepository.save(place);
+
+        // Ghi nhận Audit Activity Log
+        try {
+            activityLogService.recordLog(
+                    saved.getOwner(),
+                    "PLACE_UPDATE",
+                    "Admin " + adminEmail + " đã cập nhật thông tin địa điểm: " + saved.getName() + " (#" + id + ")",
+                    "127.0.0.1",
+                    "Admin Portal"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to log activity for place update: {}", e.getMessage());
+        }
+
+        log.info("Place ID {} updated successfully by admin {}", id, adminEmail);
+        return toDto(saved);
     }
 
     @Transactional

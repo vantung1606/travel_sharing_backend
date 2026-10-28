@@ -133,6 +133,18 @@ public class PlaceController {
                 verified ? "Đã cấp badge Xác thực cho địa điểm!" : "Đã gỡ badge Xác thực của địa điểm!", updated));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
+    @PutMapping({"/admin/{id}", "/{id}"})
+    public ResponseEntity<ApiResponse<PlaceDto>> updatePlace(
+            @PathVariable Long id,
+            @Valid @RequestBody com.wayfare.modules.place.dto.UpdatePlaceRequest request,
+            Authentication authentication) {
+        String adminEmail = authentication != null ? authentication.getName() : "ADMIN";
+        log.info("REST request to update place ID {} by {}", id, adminEmail);
+        PlaceDto updated = placeService.updatePlaceByAdmin(id, request, adminEmail);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin địa điểm thành công!", updated));
+    }
+
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}/status")
     public ResponseEntity<ApiResponse<PlaceDto>> updatePlaceStatus(
