@@ -25,7 +25,8 @@ public class CommentDto {
     private String replyToUserHandle;
     @Builder.Default
     private java.util.List<CommentDto> replies = new java.util.ArrayList<>();
-    private LocalDateTime createdAt;
+    @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", timezone = "Asia/Ho_Chi_Minh")
+    private java.time.ZonedDateTime createdAt;
     private String timeAgo;
 }
 

@@ -308,6 +308,7 @@ public class PostService {
                 .status(initialStatus)
                 .aiSafetyScore(aiResult.getSafetyScore())
                 .aiFlagReason(aiResult.getFlagReason() != null ? aiResult.getFlagReason() : aiResult.getAiAnalysis())
+                .createdAt(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build();
 
         Post saved = postRepository.save(newPost);
@@ -1074,7 +1075,7 @@ public class PostService {
                 .aiSafetyScore(p.getAiSafetyScore())
                 .aiFlagReason(p.getAiFlagReason())
                 .badgeText(p.getBadgeText())
-                .createdAt(p.getCreatedAt())
+                .createdAt(p.getCreatedAt() != null ? p.getCreatedAt().atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")) : null)
                 .timeAgo(formatTimeAgo(p.getCreatedAt()))
                 .authorId(p.getAuthor() != null ? p.getAuthor().getId() : null)
                 .authorName(p.getAuthor() != null ? p.getAuthor().getFullName() : "Du khách Wayfare")
@@ -1163,14 +1164,15 @@ public class PostService {
                 .replyToUserName(c.getReplyToUser() != null ? c.getReplyToUser().getFullName() : null)
                 .replyToUserHandle(c.getReplyToUser() != null ? c.getReplyToUser().getHandle() : null)
                 .replies(new ArrayList<>())
-                .createdAt(c.getCreatedAt())
+                .createdAt(c.getCreatedAt() != null ? c.getCreatedAt().atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")) : null)
                 .timeAgo(formatTimeAgo(c.getCreatedAt()))
                 .build();
     }
 
     private String formatTimeAgo(LocalDateTime dateTime) {
         if (dateTime == null) return "Vừa xong";
-        Duration diff = Duration.between(dateTime, LocalDateTime.now());
+        Duration diff = Duration.between(dateTime, LocalDateTime.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
+        if (diff.isNegative()) return "Vừa xong";
         long seconds = Math.max(0, diff.getSeconds());
         if (seconds < 60) return "Vừa xong";
         if (seconds < 3600) return (seconds / 60) + " phút trước";
