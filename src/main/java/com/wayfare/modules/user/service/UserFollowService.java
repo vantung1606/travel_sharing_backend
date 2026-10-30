@@ -220,7 +220,11 @@ public class UserFollowService {
                         .build())
                 .collect(Collectors.toList());
 
-        String rawTier = targetUser.getTier() != null ? targetUser.getTier() : "bronze";
+        boolean isAdmin = targetUser.getRoles() != null && targetUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"));
+        String rawTier = targetUser.getTier() != null && !targetUser.getTier().isBlank() ? targetUser.getTier() : "bronze";
+        if (isAdmin) {
+            rawTier = "diamond";
+        }
         String rankTitle;
         if ("diamond".equalsIgnoreCase(rawTier)) {
             rankTitle = "Huyền Thoại Kim Cương";
@@ -232,9 +236,10 @@ public class UserFollowService {
             rankTitle = "Tân Thủ Khám Phá";
         }
 
-        String roleStr = targetUser.getRoles() != null && targetUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"))
-                ? "Quản trị viên"
-                : "Thành viên";
+        String roleStr = isAdmin ? "Quản trị viên" : "Thành viên";
+        List<String> roleList = targetUser.getRoles() != null
+                ? targetUser.getRoles().stream().map(com.wayfare.entity.Role::getName).collect(Collectors.toList())
+                : List.of("ROLE_USER");
 
         String defaultCover = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80";
         String defaultBio = "Đam mê khám phá thiên nhiên & trải nghiệm ẩm thực du lịch độc lạ cùng AI 🌍 ✈️";
@@ -256,6 +261,7 @@ public class UserFollowService {
                 .budgetPreference(targetUser.getBudgetPreference() != null ? targetUser.getBudgetPreference() : "Linh hoạt")
                 .isVerified(Boolean.TRUE.equals(targetUser.getIsVerified()))
                 .role(roleStr)
+                .roles(roleList)
                 .followersCount(followersCount)
                 .followingCount(followingCount)
                 .postsCount(postDtos.size())

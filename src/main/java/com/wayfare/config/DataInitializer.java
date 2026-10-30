@@ -96,8 +96,10 @@ public class DataInitializer implements CommandLineRunner {
                     dropStmt.executeUpdate("UPDATE itineraries SET is_public = true WHERE is_public IS NULL");
                     dropStmt.executeUpdate("UPDATE itineraries SET group_type = 'Cá nhân' WHERE group_type IS NULL");
                     dropStmt.executeUpdate("UPDATE itineraries SET travel_style = 'Nghỉ dưỡng & Khám phá' WHERE travel_style IS NULL");
+                    dropStmt.executeUpdate("UPDATE users SET tier = 'bronze' WHERE tier IS NULL OR TRIM(tier) = ''");
+                    dropStmt.executeUpdate("UPDATE users u JOIN user_roles ur ON u.id = ur.user_id JOIN roles r ON ur.role_id = r.id SET u.tier = 'diamond' WHERE r.name = 'ROLE_ADMIN'");
                 } catch (Exception ignored) {}
-                log.info(">>> CLEANUP SUCCESS: Auto-dropped obsolete tables and verified itineraries schema columns");
+                log.info(">>> CLEANUP SUCCESS: Auto-dropped obsolete tables, updated itineraries and synchronized user tiers (diamond for admin, bronze for default)");
             }
         } catch (Exception e) {
             log.warn("Database schema cleanup note: {}", e.getMessage());
@@ -161,6 +163,10 @@ public class DataInitializer implements CommandLineRunner {
                         roles.add(adminRole);
                         roles.add(userRole);
                         existingAdmin.setRoles(roles);
+                        needSave = true;
+                    }
+                    if (!"diamond".equalsIgnoreCase(existingAdmin.getTier())) {
+                        existingAdmin.setTier("diamond");
                         needSave = true;
                     }
                     return needSave ? userRepository.save(existingAdmin) : existingAdmin;
