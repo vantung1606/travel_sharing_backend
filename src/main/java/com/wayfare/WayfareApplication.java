@@ -15,6 +15,13 @@ import java.io.IOException;
 @EnableScheduling
 public class WayfareApplication {
 
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        // Thiết lập múi giờ mặc định cho toàn bộ ứng dụng là giờ Việt Nam (UTC+7)
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+        System.out.println("[WayfareApplication] TimeZone initialized to Asia/Ho_Chi_Minh: " + java.time.LocalDateTime.now());
+    }
+
     public static void main(String[] args) {
         loadDotEnv();
         SpringApplication.run(WayfareApplication.class, args);
