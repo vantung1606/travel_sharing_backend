@@ -261,14 +261,8 @@ public class PostService {
             imgList.add(request.getImageUrl().trim());
         }
 
-        if (imgList.isEmpty()) {
-            if (attachedItinerary != null && attachedItinerary.getCoverImageUrl() != null && !attachedItinerary.getCoverImageUrl().isBlank()) {
-                imgList.add(attachedItinerary.getCoverImageUrl());
-            } else if (attachedPlace != null && attachedPlace.getCoverImageUrl() != null && !attachedPlace.getCoverImageUrl().isBlank()) {
-                imgList.add(attachedPlace.getCoverImageUrl());
-            } else if (sharedOriginalPost != null && sharedOriginalPost.getFirstImage() != null && !sharedOriginalPost.getFirstImage().isBlank()) {
-                imgList.add(sharedOriginalPost.getFirstImage());
-            }
+        if (imgList.isEmpty() && sharedOriginalPost != null && sharedOriginalPost.getFirstImage() != null && !sharedOriginalPost.getFirstImage().isBlank()) {
+            imgList.add(sharedOriginalPost.getFirstImage());
         }
 
         // 1. Run WanderAI Content Moderation & Safety Inspection
