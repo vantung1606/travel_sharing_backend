@@ -1177,12 +1177,12 @@ public class PostService {
     private String formatTimeAgo(LocalDateTime dateTime) {
         if (dateTime == null) return "Vừa xong";
         Duration diff = Duration.between(dateTime, LocalDateTime.now());
-        long seconds = diff.getSeconds();
+        long seconds = Math.max(0, diff.getSeconds());
         if (seconds < 60) return "Vừa xong";
         if (seconds < 3600) return (seconds / 60) + " phút trước";
-        if (seconds < 86400) return (seconds / 3600) + " giờ trước";
-        if (seconds < 86400 * 2) return "Hôm qua";
-        return (seconds / 86400) + " ngày trước";
+        long hours = seconds / 3600;
+        if (hours < 23) return hours + " giờ trước";
+        return dateTime.format(DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy"));
     }
 
     /**
