@@ -139,6 +139,20 @@ public class ItineraryService {
 
         User creator = getUserByEmail(creatorEmail);
 
+        String generatedTourCode = request.getTourCode();
+        if (generatedTourCode == null || generatedTourCode.isBlank()) {
+            String destPrefix = "WAY";
+            if (request.getDestination() != null && !request.getDestination().isBlank()) {
+                String cleanDest = java.text.Normalizer.normalize(request.getDestination(), java.text.Normalizer.Form.NFD)
+                        .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                        .toUpperCase().replaceAll("[^A-Z]", "");
+                if (cleanDest.length() >= 2) {
+                    destPrefix = "WAY-" + cleanDest.substring(0, Math.min(3, cleanDest.length()));
+                }
+            }
+            generatedTourCode = destPrefix + "-" + (System.currentTimeMillis() % 100000);
+        }
+
         Itinerary itinerary = Itinerary.builder()
                 .creator(creator)
                 .title(request.getTitle() != null ? request.getTitle() : "Chuyến đi mới")
@@ -152,6 +166,22 @@ public class ItineraryService {
                 .status(request.getStatus() != null ? request.getStatus() : "ACTIVE")
                 .groupType(request.getGroupType() != null ? request.getGroupType() : "Cá nhân")
                 .travelStyle(request.getTravelStyle() != null ? request.getTravelStyle() : "Nghỉ dưỡng & Khám phá")
+                // 15 Tiêu chí Tour chuẩn lữ hành
+                .tourCode(generatedTourCode)
+                .departureLocation(request.getDepartureLocation() != null ? request.getDepartureLocation() : "Hà Nội / TP.HCM")
+                .endingLocation(request.getEndingLocation() != null ? request.getEndingLocation() : request.getDestination())
+                .targetAudience(request.getTargetAudience() != null ? request.getTargetAudience() : "Đa dạng đối tượng (Gia đình, Thanh niên, Bạn bè)")
+                .maxGroupSize(request.getMaxGroupSize() != null ? request.getMaxGroupSize() : 15)
+                .transportation(request.getTransportation() != null ? request.getTransportation() : "Ô tô du lịch đời mới / Máy bay")
+                .mealPlan(request.getMealPlan())
+                .accommodationInfo(request.getAccommodationInfo())
+                .tourGuideInfo(request.getTourGuideInfo() != null ? request.getTourGuideInfo() : "Hướng dẫn viên kinh nghiệm, vui vẻ, thuyết minh và chăm sóc đoàn suốt tuyến")
+                .childPrice(request.getChildPrice())
+                .singleRoomSurcharge(request.getSingleRoomSurcharge())
+                .servicesIncluded(request.getServicesIncluded())
+                .servicesExcluded(request.getServicesExcluded())
+                .cancellationPolicy(request.getCancellationPolicy())
+                .packingNotes(request.getPackingNotes())
                 .build();
 
         Itinerary saved = itineraryRepository.save(itinerary);
@@ -234,6 +264,23 @@ public class ItineraryService {
         if (request.getGroupType() != null) itinerary.setGroupType(request.getGroupType());
         if (request.getTravelStyle() != null) itinerary.setTravelStyle(request.getTravelStyle());
         if (request.getIsPublic() != null) itinerary.setIsPublic(request.getIsPublic());
+
+        // 15 Tiêu chí Tour chuẩn lữ hành
+        if (request.getTourCode() != null && !request.getTourCode().isBlank()) itinerary.setTourCode(request.getTourCode().trim());
+        if (request.getDepartureLocation() != null) itinerary.setDepartureLocation(request.getDepartureLocation().trim());
+        if (request.getEndingLocation() != null) itinerary.setEndingLocation(request.getEndingLocation().trim());
+        if (request.getTargetAudience() != null) itinerary.setTargetAudience(request.getTargetAudience().trim());
+        if (request.getMaxGroupSize() != null) itinerary.setMaxGroupSize(request.getMaxGroupSize());
+        if (request.getTransportation() != null) itinerary.setTransportation(request.getTransportation().trim());
+        if (request.getMealPlan() != null) itinerary.setMealPlan(request.getMealPlan());
+        if (request.getAccommodationInfo() != null) itinerary.setAccommodationInfo(request.getAccommodationInfo());
+        if (request.getTourGuideInfo() != null) itinerary.setTourGuideInfo(request.getTourGuideInfo());
+        if (request.getChildPrice() != null) itinerary.setChildPrice(request.getChildPrice());
+        if (request.getSingleRoomSurcharge() != null) itinerary.setSingleRoomSurcharge(request.getSingleRoomSurcharge());
+        if (request.getServicesIncluded() != null) itinerary.setServicesIncluded(request.getServicesIncluded());
+        if (request.getServicesExcluded() != null) itinerary.setServicesExcluded(request.getServicesExcluded());
+        if (request.getCancellationPolicy() != null) itinerary.setCancellationPolicy(request.getCancellationPolicy());
+        if (request.getPackingNotes() != null) itinerary.setPackingNotes(request.getPackingNotes());
 
         Itinerary saved = itineraryRepository.save(itinerary);
         try {
@@ -522,6 +569,22 @@ public class ItineraryService {
                 .status(i.getStatus())
                 .groupType(i.getGroupType() != null ? i.getGroupType() : "Cá nhân")
                 .travelStyle(i.getTravelStyle() != null ? i.getTravelStyle() : "Nghỉ dưỡng & Khám phá")
+                // 15 Tiêu chí Tour chuẩn lữ hành
+                .tourCode(i.getTourCode())
+                .departureLocation(i.getDepartureLocation())
+                .endingLocation(i.getEndingLocation())
+                .targetAudience(i.getTargetAudience())
+                .maxGroupSize(i.getMaxGroupSize())
+                .transportation(i.getTransportation())
+                .mealPlan(i.getMealPlan())
+                .accommodationInfo(i.getAccommodationInfo())
+                .tourGuideInfo(i.getTourGuideInfo())
+                .childPrice(i.getChildPrice())
+                .singleRoomSurcharge(i.getSingleRoomSurcharge())
+                .servicesIncluded(i.getServicesIncluded())
+                .servicesExcluded(i.getServicesExcluded())
+                .cancellationPolicy(i.getCancellationPolicy())
+                .packingNotes(i.getPackingNotes())
                 .createdAt(i.getCreatedAt())
                 .updatedAt(i.getUpdatedAt())
                 .build();
@@ -603,6 +666,22 @@ public class ItineraryService {
                 .status("ACTIVE")
                 .groupType(source.getGroupType())
                 .travelStyle(source.getTravelStyle())
+                // 15 Tiêu chí Tour chuẩn lữ hành
+                .tourCode(source.getTourCode() != null ? "CLONE-" + source.getTourCode() : "CLONE-" + (System.currentTimeMillis() % 100000))
+                .departureLocation(source.getDepartureLocation())
+                .endingLocation(source.getEndingLocation())
+                .targetAudience(source.getTargetAudience())
+                .maxGroupSize(source.getMaxGroupSize())
+                .transportation(source.getTransportation())
+                .mealPlan(source.getMealPlan())
+                .accommodationInfo(source.getAccommodationInfo())
+                .tourGuideInfo(source.getTourGuideInfo())
+                .childPrice(source.getChildPrice())
+                .singleRoomSurcharge(source.getSingleRoomSurcharge())
+                .servicesIncluded(source.getServicesIncluded())
+                .servicesExcluded(source.getServicesExcluded())
+                .cancellationPolicy(source.getCancellationPolicy())
+                .packingNotes(source.getPackingNotes())
                 .build();
 
         Itinerary saved = itineraryRepository.save(cloned);
