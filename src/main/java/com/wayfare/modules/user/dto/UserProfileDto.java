@@ -32,6 +32,7 @@ public class UserProfileDto {
     private String role; // "Quản trị viên" | "Phượt thủ tự do" | "Wanderer Gold"
     private String tier; // "bronze" | "silver" | "gold" | "diamond"
     private List<String> roles; // ["ROLE_ADMIN", "ROLE_USER"]
+    private java.util.Set<String> permissions; // Effective RBAC permissions
 
     private Long followersCount;
     private Long followingCount;

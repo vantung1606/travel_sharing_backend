@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
+    private final org.springframework.beans.factory.ObjectProvider<com.wayfare.modules.admin.service.PermissionService> permissionServiceProvider;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -35,9 +36,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String email = tokenProvider.getEmailFromToken(jwt);
                 List<String> roles = tokenProvider.getRolesFromToken(jwt);
 
-                List<SimpleGrantedAuthority> authorities = roles != null
-                        ? roles.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList())
-                        : List.of(new SimpleGrantedAuthority("ROLE_USER"));
+                List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+                if (roles != null && !roles.isEmpty()) {
+                    roles.forEach(r -> authorities.add(new SimpleGrantedAuthority(r)));
+                } else {
+                    authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                }
+
+                com.wayfare.modules.admin.service.PermissionService permService = permissionServiceProvider.getIfAvailable();
+                if (permService != null) {
+                    java.util.Set<String> perms = permService.getEffectivePermissionCodesByEmail(email);
+                    if (perms != null) {
+                        perms.forEach(p -> authorities.add(new SimpleGrantedAuthority(p)));
+                    }
+                }
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(email, null, authorities);

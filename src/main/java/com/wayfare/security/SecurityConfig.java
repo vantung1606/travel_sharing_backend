@@ -48,7 +48,7 @@ public class SecurityConfig {
                 // Public root, healthcheck, actuator, error and static resources
                 .requestMatchers("/", "/health", "/api/health", "/actuator/**", "/error", "/favicon.ico").permitAll()
                 // Public auth, static files, websockets, realtime sse streams and ai proxy
-                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
                 .requestMatchers("/ws/**", "/uploads/**", "/api/realtime/**", "/api/ai/**", "/api/upload/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/home/**").permitAll()
                 // Public read-only endpoints for visitors

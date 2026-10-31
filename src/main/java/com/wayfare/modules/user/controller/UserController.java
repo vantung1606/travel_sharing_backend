@@ -22,9 +22,11 @@ import java.util.Map;
 public class UserController {
 
     private final UserFollowService userFollowService;
+    private final com.wayfare.modules.admin.service.PermissionService permissionService;
 
-    public UserController(UserFollowService userFollowService) {
+    public UserController(UserFollowService userFollowService, com.wayfare.modules.admin.service.PermissionService permissionService) {
         this.userFollowService = userFollowService;
+        this.permissionService = permissionService;
     }
 
     private String extractViewerEmail(Authentication authentication) {
@@ -93,6 +95,9 @@ public class UserController {
         log.info("REST request to get profile of current user by email {}", currentUserEmail);
         com.wayfare.entity.User current = userFollowService.resolveUser(currentUserEmail);
         UserProfileDto profile = userFollowService.getUserProfile(current.getId(), currentUserEmail);
+        if (permissionService != null) {
+            profile.setPermissions(permissionService.getEffectivePermissionCodesByEmail(currentUserEmail));
+        }
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin người dùng thành công", profile));
     }
 
