@@ -42,6 +42,10 @@ public class PlaceDto {
     private String aiModerationStatus;
     private String aiModerationNote;
 
+    private Boolean isFeatured;
+    private Integer featuredOrder;
+    private String featuredBadge;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -538,6 +538,9 @@ public class PlaceService {
                 .isVerifiedHost(place.getIsVerifiedHost() != null ? place.getIsVerifiedHost() : false)
                 .aiModerationStatus(place.getAiModerationStatus() != null ? place.getAiModerationStatus() : "APPROVED_BY_AI")
                 .aiModerationNote(place.getAiModerationNote())
+                .isFeatured(place.getIsFeatured() != null ? place.getIsFeatured() : false)
+                .featuredOrder(place.getFeaturedOrder() != null ? place.getFeaturedOrder() : 0)
+                .featuredBadge(place.getFeaturedBadge())
                 .ownerId(owner != null ? owner.getId() : null)
                 .ownerName(owner != null ? owner.getFullName() : null)
                 .ownerHandle(owner != null ? owner.getHandle() : null)
@@ -545,6 +548,38 @@ public class PlaceService {
                 .createdAt(place.getCreatedAt())
                 .updatedAt(place.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Lấy danh sách các điểm đến nổi bật (Featured Places) đang hoạt động
+     */
+    @Transactional(readOnly = true)
+    public List<PlaceDto> getFeaturedPlaces() {
+        return placeRepository.findFeaturedPlaces().stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Cập nhật trạng thái Ghim Nổi Bật / Chiến dịch Mùa cho điểm đến (Admin/Moderator)
+     */
+    @Transactional
+    public PlaceDto updateFeaturedStatus(Long id, Boolean isFeatured, Integer featuredOrder, String featuredBadge) {
+        Place place = placeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với ID: " + id));
+
+        place.setIsFeatured(isFeatured != null ? isFeatured : false);
+        if (featuredOrder != null) {
+            place.setFeaturedOrder(featuredOrder);
+        }
+        if (featuredBadge != null) {
+            place.setFeaturedBadge(featuredBadge.trim().isBlank() ? null : featuredBadge.trim());
+        }
+
+        Place saved = placeRepository.save(place);
+        log.info("Cập nhật ghim nổi bật cho địa điểm ID={}: isFeatured={}, order={}, badge={}", 
+                id, place.getIsFeatured(), place.getFeaturedOrder(), place.getFeaturedBadge());
+        return toDto(saved);
     }
 }
 

@@ -27,6 +27,9 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     @Query("SELECT p FROM Place p LEFT JOIN FETCH p.owner WHERE p.status = :status ORDER BY p.createdAt DESC")
     List<Place> findByStatus(@org.springframework.data.repository.query.Param("status") String status);
 
+    @Query("SELECT p FROM Place p LEFT JOIN FETCH p.owner WHERE p.isFeatured = true AND p.status = 'ACTIVE' ORDER BY p.featuredOrder ASC, p.createdAt DESC")
+    List<Place> findFeaturedPlaces();
+
     List<Place> findByOwnerIdOrderByCreatedAtDesc(Long ownerId);
 
     @Query("SELECT DISTINCT p FROM Place p LEFT JOIN FETCH p.owner WHERE " +

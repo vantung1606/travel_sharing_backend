@@ -58,6 +58,13 @@ public class PlaceController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm thành công", places));
     }
 
+    @GetMapping("/featured")
+    public ResponseEntity<ApiResponse<List<PlaceDto>>> getFeaturedPlaces() {
+        log.info("REST request to get active featured places");
+        List<PlaceDto> list = placeService.getFeaturedPlaces();
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách điểm đến nổi bật thành công", list));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<PlaceDto>> getPlaceById(@PathVariable Long id) {
         log.info("REST request to get place detail: id={}", id);
@@ -143,6 +150,21 @@ public class PlaceController {
         log.info("REST request to update place ID {} by {}", id, adminEmail);
         PlaceDto updated = placeService.updatePlaceByAdmin(id, request, adminEmail);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin địa điểm thành công!", updated));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
+    @PutMapping("/admin/{id}/featured")
+    public ResponseEntity<ApiResponse<PlaceDto>> updateFeaturedStatus(
+            @PathVariable Long id,
+            @RequestBody com.wayfare.modules.place.dto.UpdateFeaturedPlaceRequest request) {
+        log.info("REST request to update featured status for place ID {}: isFeatured={}", id, request.getIsFeatured());
+        PlaceDto updated = placeService.updateFeaturedStatus(
+                id,
+                request.getIsFeatured(),
+                request.getFeaturedOrder(),
+                request.getFeaturedBadge()
+        );
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái nổi bật cho địa điểm thành công!", updated));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

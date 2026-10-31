@@ -142,4 +142,14 @@ public class NotificationController {
                 "recipientCount", count
         ));
     }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/broadcast/history")
+    public ResponseEntity<List<com.wayfare.modules.admin.dto.AuditLogDto>> getBroadcastHistory() {
+        log.info("REST request to get broadcast notifications history");
+        List<com.wayfare.modules.admin.dto.AuditLogDto> all = activityLogService.searchLogs(
+                null, null, "BROADCAST_NOTIFICATION", null, 0, 50
+        ).getContent();
+        return ResponseEntity.ok(all);
+    }
 }

@@ -22,6 +22,7 @@ import java.util.Map;
 public class PublicSiteConfigController {
 
     private final ThemeService themeService;
+    private final com.wayfare.modules.admin.service.MaintenanceService maintenanceService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -36,10 +37,13 @@ public class PublicSiteConfigController {
             Map<String, Object> configMap = objectMapper.readValue(published.getConfigJson(), Map.class);
             configMap.put("version", published.getVersionNo());
             configMap.put("publishedAt", published.getPublishedAt());
+            configMap.put("maintenance", maintenanceService.getMaintenanceStatus());
             return ResponseEntity.ok(ApiResponse.success("Lấy cấu hình giao diện thành công", configMap));
         } catch (Exception e) {
             log.error("Lỗi khi parse theme config JSON: {}", e.getMessage());
-            return ResponseEntity.ok(ApiResponse.success("Dùng giao diện mặc định", Map.of()));
+            return ResponseEntity.ok(ApiResponse.success("Dùng giao diện mặc định", Map.of(
+                    "maintenance", maintenanceService.getMaintenanceStatus()
+            )));
         }
     }
 }

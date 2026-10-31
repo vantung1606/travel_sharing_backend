@@ -89,6 +89,17 @@ public class Place {
     @Column(name = "ai_moderation_note", columnDefinition = "TEXT")
     private String aiModerationNote;
 
+    @Builder.Default
+    @Column(name = "is_featured")
+    private Boolean isFeatured = false;
+
+    @Builder.Default
+    @Column(name = "featured_order")
+    private Integer featuredOrder = 0;
+
+    @Column(name = "featured_badge", length = 50)
+    private String featuredBadge;
+
     @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<PlaceImage> images = new ArrayList<>();
