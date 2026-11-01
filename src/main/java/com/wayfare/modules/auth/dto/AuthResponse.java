@@ -21,5 +21,5 @@ public class AuthResponse {
     private String avatar;
     private String tier;
     private Set<String> roles;
+    private Set<String> permissions;
 }
-

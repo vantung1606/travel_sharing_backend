@@ -33,6 +33,20 @@ public class AuthService {
     private final ActivityLogService activityLogService;
     private final com.wayfare.security.JwtTokenProvider tokenProvider;
     private final GoogleOAuthService googleOAuthService;
+    private final org.springframework.beans.factory.ObjectProvider<com.wayfare.modules.admin.service.PermissionService> permissionServiceProvider;
+
+    private Set<String> resolvePermissions(String email) {
+        if (email == null || email.isBlank()) return Set.of();
+        try {
+            com.wayfare.modules.admin.service.PermissionService permService = permissionServiceProvider.getIfAvailable();
+            if (permService != null) {
+                return permService.getEffectivePermissionCodesByEmail(email);
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch effective permissions for {}: {}", email, e.getMessage());
+        }
+        return Set.of();
+    }
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -92,6 +106,7 @@ public class AuthService {
                 .avatar(savedUser.getAvatarUrl())
                 .tier(savedUser.getTier() != null ? savedUser.getTier() : "bronze")
                 .roles(savedUser.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .permissions(resolvePermissions(savedUser.getEmail()))
                 .build();
     }
 
@@ -134,6 +149,7 @@ public class AuthService {
                 .avatar(user.getAvatarUrl() != null ? user.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                 .tier(user.getTier() != null ? user.getTier() : "bronze")
                 .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .permissions(resolvePermissions(user.getEmail()))
                 .build();
     }
 
@@ -246,6 +262,7 @@ public class AuthService {
                 .avatar(user.getAvatarUrl() != null ? user.getAvatarUrl() : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80")
                 .tier(user.getTier() != null ? user.getTier() : "bronze")
                 .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .permissions(resolvePermissions(user.getEmail()))
                 .build();
     }
 }
