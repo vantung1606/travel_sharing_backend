@@ -47,8 +47,8 @@ public class ThemeService {
         "siteTitle": "Wayfare",
         "tagline": "Hành trình khám phá du lịch Việt Nam theo cách riêng",
         "metaDescription": "Nền tảng chia sẻ lịch trình du lịch, khám phá địa điểm và kết nối cộng đồng phượt thủ hàng đầu Việt Nam.",
-        "logoUrl": "/images/brand-logo.png",
-        "logoWhiteUrl": "/images/brand-logo-white.png",
+        "logoUrl": "/wayfare-logo.png",
+        "logoWhiteUrl": "/wayfare-logo-white.png",
         "faviconUrl": "/favicon.ico",
         "heroBgUrl": "",
         "loginBgUrl": "",
@@ -232,3 +232,4 @@ public class ThemeService {
         return saved;
     }
 }
+
