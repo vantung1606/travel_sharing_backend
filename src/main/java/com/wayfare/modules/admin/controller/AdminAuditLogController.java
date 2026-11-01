@@ -19,7 +19,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/audit-logs")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'AUDIT_VIEW')")
 @Slf4j
 public class AdminAuditLogController {
 
@@ -55,6 +55,7 @@ public class AdminAuditLogController {
     }
 
     @GetMapping("/download")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<byte[]> downloadAuditLogFile(
             @RequestParam(required = false, defaultValue = "ALL") String category
     ) {
@@ -73,5 +74,3 @@ public class AdminAuditLogController {
         }
     }
 }
-
-

@@ -21,7 +21,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'USERS_VIEW')")
 @Slf4j
 public class AdminUserController {
 
@@ -47,7 +47,6 @@ public class AdminUserController {
             @RequestParam(value = "all", required = false, defaultValue = "false") boolean includeAll) {
         log.info("REST request to get users page: keyword='{}', role='{}', status='{}', page={}, size={}",
                 keyword, role, status, page, size);
-        // includeAll=true: giữ nguyên bộ khi API cũ cần cả danh sách không phân trang
         Pageable pageable = includeAll
                 ? Pageable.unpaged()
                 : PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, size)), Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -70,6 +69,7 @@ public class AdminUserController {
     }
 
     @PutMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserDto>> toggleUserStatus(
             @PathVariable Long id,
             @RequestParam(value = "adminEmail", required = false) String adminEmail,
@@ -82,6 +82,7 @@ public class AdminUserController {
     }
 
     @PutMapping("/{id}/role")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserDto>> updateUserRole(
             @PathVariable Long id,
             @RequestBody Map<String, String> payload,
@@ -95,6 +96,7 @@ public class AdminUserController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserDto>> createUser(
             @RequestBody RegisterRequest request,
             @RequestParam(value = "role", required = false, defaultValue = "ROLE_USER") String role) {
@@ -104,10 +106,10 @@ public class AdminUserController {
     }
 
     /**
-     * Cấp / gỡ badge Xác thực cho người dùng (trước đây cờ này chỉ set trong
-     * DataInitializer — không có quy trình quản trị).
+     * Cấp / gỡ badge Xác thực cho người dùng (chỉ ADMIN)
      */
     @PutMapping("/{id}/verified")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserDto>> setUserVerified(
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> payload,
@@ -121,10 +123,10 @@ public class AdminUserController {
     }
 
     /**
-     * Đặt lại mật khẩu: trả về mật khẩu tạm MỘT LẦN — admin tự gửi cho người
-     * dùng (không có đường email). Ghi audit log và notification cho user.
+     * Đặt lại mật khẩu (chỉ ADMIN)
      */
     @PutMapping("/{id}/reset-password")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> resetPassword(
             @PathVariable Long id,
             Authentication authentication) {

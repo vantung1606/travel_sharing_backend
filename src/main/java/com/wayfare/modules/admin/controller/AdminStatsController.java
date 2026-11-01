@@ -19,15 +19,13 @@ public class AdminStatsController {
     /**
      * GET /api/admin/stats
      * Returns aggregated system statistics for the Admin dashboard.
-     * Requires ADMIN role.
+     * Accessible by both ADMIN and MODERATOR.
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseEntity<AdminStatsDto> getSystemStats() {
-        log.info("Admin requested system statistics");
+        log.info("Staff member requested system statistics");
         AdminStatsDto stats = adminStatsService.getSystemStats();
         return ResponseEntity.ok(stats);
     }
 }
-
-
