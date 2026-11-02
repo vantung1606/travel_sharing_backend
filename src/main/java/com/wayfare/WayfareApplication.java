@@ -23,6 +23,9 @@ public class WayfareApplication {
     }
 
     public static void main(String[] args) {
+        // Cấu hình múi giờ Việt Nam (UTC+7 / Asia/Ho_Chi_Minh) cho toàn bộ JVM trước khi Spring khởi chạy
+        System.setProperty("user.timezone", "Asia/Ho_Chi_Minh");
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
         loadDotEnv();
         SpringApplication.run(WayfareApplication.class, args);
     }

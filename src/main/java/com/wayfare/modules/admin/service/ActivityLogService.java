@@ -46,6 +46,7 @@ public class ActivityLogService {
     private static final String SECURITY_LOG_FILE = "logs/wayfare-security.log";
     private static final String ACTIVITY_LOG_FILE = "logs/wayfare-activity.log";
     private static final String SYSTEM_LOG_FILE = "logs/wayfare-system.log";
+    public static final java.time.ZoneId VIETNAM_ZONE = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     private final AtomicLong idGenerator = new AtomicLong(1);
@@ -131,7 +132,7 @@ public class ActivityLogService {
             String primaryRole = resolvePrimaryRole(user);
             String sanitizedIp = (ipAddress != null && !ipAddress.isBlank() && !ipAddress.equals("127.0.0.1") && !ipAddress.equals("0:0:0:0:0:0:0:1")) ? ipAddress : "118.69.190.10";
             String sanitizedUa = (userAgent != null && !userAgent.isBlank() && !userAgent.equals("Internal System") && !userAgent.equals("Web Client")) ? userAgent : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = LocalDateTime.now(VIETNAM_ZONE);
 
             // 1. Persist directly to MySQL Database (Single Source of Truth)
             Long recordId = null;
@@ -296,7 +297,7 @@ public class ActivityLogService {
     public Map<String, Object> getAuditStats() {
         try {
             long totalLogs = auditLogRepository.count();
-            LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
+            LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(VIETNAM_ZONE), LocalTime.MIN);
             long logsToday = auditLogRepository.countByCreatedAtAfter(startOfToday);
 
             long authCount = auditLogRepository.countByCategoryIgnoreCase("AUTH");
