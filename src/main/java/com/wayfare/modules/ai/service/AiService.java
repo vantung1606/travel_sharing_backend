@@ -25,8 +25,16 @@ public class AiService {
     @Value("${gemini.model:gemini-3.8-flash}")
     private String defaultModel;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public AiService() {
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory = 
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(4000); // 4s connect timeout
+        factory.setReadTimeout(12000);   // 12s read timeout
+        this.restTemplate = new RestTemplate(factory);
+    }
 
     public String getEffectiveApiKey() {
         if (geminiApiKey != null && !geminiApiKey.trim().isBlank()) {
@@ -52,7 +60,6 @@ public class AiService {
                 ? request.getModel().trim()
                 : defaultModel;
 
-        // Ưu tiên gemini-3.8-flash theo cấu hình hệ thống
         if (targetModel == null || targetModel.isBlank() || !targetModel.startsWith("gemini-") || "gemini-1.5-flash".equals(targetModel)) {
             targetModel = (defaultModel != null && !defaultModel.isBlank() && !"gemini-1.5-flash".equals(defaultModel))
                     ? defaultModel
@@ -68,48 +75,38 @@ public class AiService {
             );
         }
 
-        log.info("Executing Live Gemini Generation with model: {}, prompt length: {}", 
-                targetModel, request.getPrompt() != null ? request.getPrompt().length() : 0);
-
-        try {
-            return callGeminiApi(request, targetModel, apiKey);
-        } catch (org.springframework.web.client.HttpStatusCodeException hse) {
-            // Nếu model bị 404 (Not Found) hoặc 503 (High Demand Spike / Unavailable), tự động fallback sang các model dự phòng khả dụng
-            if (hse.getStatusCode() == org.springframework.http.HttpStatus.NOT_FOUND ||
-                hse.getStatusCode() == org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE) {
-                String[] fallbackModels = new String[]{"gemini-3.8-flash", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite"};
-                for (String fallback : fallbackModels) {
-                    if (!fallback.equalsIgnoreCase(targetModel)) {
-                        log.warn("Model {} returned status {}. Retrying with fallback model {}...", targetModel, hse.getStatusCode(), fallback);
-                        try {
-                            return callGeminiApi(request, fallback, apiKey);
-                        } catch (Exception retryEx) {
-                            log.warn("Retry with {} failed: {}", fallback, retryEx.getMessage());
-                        }
-                    }
-                }
-            }
-
-            String errorBody = hse.getResponseBodyAsString();
-            String userMsg = "Máy chủ AI Google Gemini báo lỗi (" + hse.getStatusCode().value() + ")";
-            try {
-                JsonNode errJson = objectMapper.readTree(errorBody);
-                if (errJson.has("error") && errJson.get("error").has("message")) {
-                    userMsg += ": " + errJson.get("error").get("message").asText();
-                }
-            } catch (Exception ignored) {}
-
-            log.error("Gemini API call failed: {}", userMsg);
-            throw new org.springframework.web.server.ResponseStatusException(hse.getStatusCode(), userMsg);
-        } catch (org.springframework.web.server.ResponseStatusException rse) {
-            throw rse;
-        } catch (Exception e) {
-            log.error("Error communicating with Gemini API ({}):", e.getMessage(), e);
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_GATEWAY, 
-                    "Không thể kết nối đến máy chủ AI Google Gemini: " + e.getMessage()
-            );
+        List<String> tryModels = new ArrayList<>();
+        if (targetModel != null && !targetModel.isBlank()) {
+            tryModels.add(targetModel);
         }
+        // Fallback models siêu nhanh và có độ sẵn sàng cao nhất
+        for (String m : List.of("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview")) {
+            if (!tryModels.contains(m)) {
+                tryModels.add(m);
+            }
+        }
+
+        Exception lastException = null;
+        for (String modelToTry : tryModels) {
+            long startMs = System.currentTimeMillis();
+            try {
+                log.info("Executing Live Gemini Generation with model: {}, prompt length: {}", 
+                        modelToTry, request.getPrompt() != null ? request.getPrompt().length() : 0);
+                AiGenerateResponse resp = callGeminiApi(request, modelToTry, apiKey);
+                log.info("Gemini Live Generation SUCCESS with model {} in {} ms", modelToTry, System.currentTimeMillis() - startMs);
+                return resp;
+            } catch (Exception ex) {
+                lastException = ex;
+                log.warn("Model {} failed or timed out after {} ms: {}. Trying next fallback model...", 
+                        modelToTry, System.currentTimeMillis() - startMs, ex.getMessage());
+            }
+        }
+
+        log.error("All Gemini models failed: {}", lastException != null ? lastException.getMessage() : "Unknown error");
+        throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_GATEWAY, 
+                "Không thể kết nối đến máy chủ AI Google Gemini (Các model đều đang quá tải). Vui lòng thử lại sau giây lát!"
+        );
     }
 
     private AiGenerateResponse callGeminiApi(AiGenerateRequest request, String model, String apiKey) throws Exception {
