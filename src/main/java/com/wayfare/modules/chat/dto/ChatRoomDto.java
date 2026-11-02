@@ -28,4 +28,5 @@ public class ChatRoomDto {
     private Boolean isOnline;
     private String statusText;
     private LocalDateTime lastActiveAt;
+    private Boolean isPinned;
 }

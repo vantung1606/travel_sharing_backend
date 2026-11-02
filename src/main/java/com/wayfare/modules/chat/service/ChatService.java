@@ -10,10 +10,15 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.wayfare.modules.ai.dto.AiGenerateRequest;
+import com.wayfare.modules.ai.dto.AiGenerateResponse;
+import com.wayfare.modules.ai.service.AiService;
+
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +33,12 @@ public class ChatService {
     private final ItineraryRepository itineraryRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final com.wayfare.modules.notification.service.NotificationService notificationService;
+    private final AiService aiService;
+
+    public static final String AI_ASSISTANT_EMAIL = "assistant@wayfare.com";
+    public static final String AI_ASSISTANT_NAME = "Trợ lý Wayfare";
+    public static final String AI_ASSISTANT_HANDLE = "wayfare_assistant";
+    public static final String AI_ASSISTANT_AVATAR = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=80";
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -49,8 +60,65 @@ public class ChatService {
     }
 
     @Transactional
+    public User getOrCreateAiAssistantUser() {
+        return userRepository.findByEmail(AI_ASSISTANT_EMAIL)
+                .orElseGet(() -> {
+                    User bot = User.builder()
+                            .email(AI_ASSISTANT_EMAIL)
+                            .password("NO_PASSWORD_BOT_ACCOUNT")
+                            .fullName(AI_ASSISTANT_NAME)
+                            .handle(AI_ASSISTANT_HANDLE)
+                            .avatarUrl(AI_ASSISTANT_AVATAR)
+                            .bio("Trợ lý du lịch ảo WanderAI luôn sẵn sàng hỗ trợ bạn 24/7.")
+                            .isVerified(true)
+                            .status("ACTIVE")
+                            .isLocked(false)
+                            .tier("diamond")
+                            .travelStyle("Thông thái & Nhiệt tình")
+                            .budgetPreference("Linh hoạt")
+                            .build();
+                    log.info("Initialized system AI Assistant user: {}", AI_ASSISTANT_EMAIL);
+                    return userRepository.save(bot);
+                });
+    }
+
+    @Transactional
+    public ChatRoom getOrCreateAiAssistantRoom(User currentUser) {
+        User assistant = getOrCreateAiAssistantUser();
+        List<ChatRoom> existing = chatRoomRepository.findDirectRoomBetweenUsers(currentUser.getId(), assistant.getId());
+        if (!existing.isEmpty()) {
+            return existing.get(0);
+        }
+
+        ChatRoom aiRoom = ChatRoom.builder()
+                .name(AI_ASSISTANT_NAME)
+                .type("DIRECT")
+                .creator(assistant)
+                .build();
+        ChatRoom savedRoom = chatRoomRepository.save(aiRoom);
+
+        ChatMember m1 = ChatMember.builder().chatRoom(savedRoom).user(currentUser).role("MEMBER").build();
+        ChatMember m2 = ChatMember.builder().chatRoom(savedRoom).user(assistant).role("OWNER").build();
+        chatMemberRepository.saveAll(List.of(m1, m2));
+
+        ChatMessage welcome = ChatMessage.builder()
+                .chatRoom(savedRoom)
+                .sender(assistant)
+                .content("Xin chào " + (currentUser.getFullName() != null ? currentUser.getFullName() : "bạn") + "! 🌟\n\nMình là Trợ lý Wayfare. Bạn có thể hỏi mình bất cứ điều gì về gợi ý điểm đến, lịch trình du lịch, món ngon đặc sản hay thời tiết nhé!")
+                .messageType("TEXT")
+                .build();
+        chatMessageRepository.save(welcome);
+        log.info("Initialized pinned AI Assistant room #{} for user {}", savedRoom.getId(), currentUser.getEmail());
+        return savedRoom;
+    }
+
+    @Transactional
     public List<ChatRoomDto> getUserRooms(User currentUser) {
         log.info("Fetching chat rooms for user: {} (id={})", currentUser.getEmail(), currentUser.getId());
+
+        // Đảm bảo mọi tài khoản (mới hoặc cũ) đều có phòng Trợ lý Wayfare
+        ChatRoom aiRoom = getOrCreateAiAssistantRoom(currentUser);
+
         List<ChatRoom> rooms = chatRoomRepository.findRoomsByUserId(currentUser.getId());
 
         // Lọc trùng lặp tuyệt đối đối với phòng DIRECT:
@@ -80,8 +148,23 @@ public class ChatService {
             }
         }
 
+        // Đảm bảo aiRoom luôn có mặt trong resultRooms
+        if (resultRooms.stream().noneMatch(r -> r.getId().equals(aiRoom.getId()))) {
+            resultRooms.add(0, aiRoom);
+        }
+
+        // Sắp xếp: Phòng Trợ lý Wayfare (isPinned/AI) LUÔN ĐỨNG ĐẦU TIÊN (Index 0), sau đó theo updatedAt desc
         return resultRooms.stream()
                 .map(room -> mapToRoomDto(room, currentUser))
+                .sorted((r1, r2) -> {
+                    boolean p1 = Boolean.TRUE.equals(r1.getIsPinned()) || "AI".equalsIgnoreCase(r1.getType());
+                    boolean p2 = Boolean.TRUE.equals(r2.getIsPinned()) || "AI".equalsIgnoreCase(r2.getType());
+                    if (p1 && !p2) return -1;
+                    if (!p1 && p2) return 1;
+                    LocalDateTime t1 = r1.getUpdatedAt() != null ? r1.getUpdatedAt() : LocalDateTime.MIN;
+                    LocalDateTime t2 = r2.getUpdatedAt() != null ? r2.getUpdatedAt() : LocalDateTime.MIN;
+                    return t2.compareTo(t1);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -217,7 +300,66 @@ public class ChatService {
             log.warn("Failed to dispatch chat notifications to room members: {}", e.getMessage());
         }
 
+        // Tự động kích hoạt phản hồi thông minh nếu gửi vào phòng Trợ lý Wayfare
+        boolean isAiAssistantRoom = "AI".equalsIgnoreCase(room.getType()) ||
+                chatMemberRepository.findByChatRoomId(roomId).stream()
+                        .anyMatch(cm -> cm.getUser() != null && AI_ASSISTANT_EMAIL.equalsIgnoreCase(cm.getUser().getEmail()));
+
+        if (isAiAssistantRoom && "TEXT".equalsIgnoreCase(msgType)) {
+            triggerAiAssistantReply(room, currentUser, request.getContent().trim());
+        }
+
         return dto;
+    }
+
+    private void triggerAiAssistantReply(ChatRoom room, User user, String userQuestion) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                User assistant = getOrCreateAiAssistantUser();
+                String replyText;
+                if (aiService != null && aiService.isApiKeyConfigured()) {
+                    AiGenerateRequest aiReq = AiGenerateRequest.builder()
+                            .model("gemini-3.5-flash-lite")
+                            .systemPrompt("""
+                                    Bạn là Trợ lý Wayfare - Trợ lý du lịch ảo thông minh và thân thiện của mạng xã hội du lịch Wayfare (Việt Nam).
+                                    Nhiệm vụ của bạn:
+                                    1. Tư vấn điểm đến, ẩm thực đặc sản vùng miền, gợi ý lịch trình, thời tiết và kinh nghiệm du lịch thực tế.
+                                    2. Trả lời súc tích, tự nhiên, truyền cảm hứng và nhiệt tình bằng tiếng Việt, chèn emoji sinh động.
+                                    3. Nếu người dùng hỏi điều không liên quan đến du lịch/đời sống, hãy trả lời vui vẻ và khéo léo kết nối sang chủ đề du lịch.
+                                    """)
+                            .prompt(userQuestion)
+                            .temperature(0.7)
+                            .maxTokens(1500)
+                            .build();
+
+                    AiGenerateResponse aiRes = aiService.generateContent(aiReq);
+                    replyText = (aiRes != null && aiRes.getText() != null && !aiRes.getText().isBlank())
+                            ? aiRes.getText().trim()
+                            : "Mình đã nhận được câu hỏi từ bạn. Bạn có thể cho mình biết rõ hơn về điểm đến hoặc ngân sách dự kiến không?";
+                } else {
+                    replyText = "Cảm ơn bạn đã nhắn tin cho Trợ lý Wayfare! Hiện tại kết nối AI đang được bảo trì, bạn thử lại sau ít phút nhé.";
+                }
+
+                ChatMessage botMsg = ChatMessage.builder()
+                        .chatRoom(room)
+                        .sender(assistant)
+                        .content(replyText)
+                        .messageType("TEXT")
+                        .build();
+                ChatMessage savedBotMsg = chatMessageRepository.save(botMsg);
+
+                room.setUpdatedAt(LocalDateTime.now());
+                chatRoomRepository.save(room);
+
+                // Broadcast tin nhắn của Trợ lý AI qua WebSocket tới cả Web và Mobile
+                ChatMessageDto botDto = mapToMessageDto(savedBotMsg, null);
+                botDto.setIsRead(false);
+                messagingTemplate.convertAndSend("/topic/room." + room.getId(), botDto);
+                log.info("AI Assistant reply saved and broadcasted to room {}", room.getId());
+            } catch (Exception e) {
+                log.error("Failed to generate AI Assistant reply for room {}: {}", room.getId(), e.getMessage());
+            }
+        });
     }
 
     @Transactional
@@ -329,6 +471,7 @@ public class ChatService {
         Boolean roomIsOnline = false;
         String roomStatusText = "Ngoại tuyến";
         LocalDateTime roomLastActiveAt = null;
+        boolean isAiAssistant = false;
 
         if ("DIRECT".equalsIgnoreCase(room.getType())) {
             // Hiển thị tên, avatar và trạng thái hoạt động thực tế của người đối diện
@@ -339,15 +482,23 @@ public class ChatService {
 
             if (other.isPresent()) {
                 User otherUser = other.get();
-                displayName = otherUser.getFullName() != null ? otherUser.getFullName() : otherUser.getEmail();
-                if (otherUser.getAvatarUrl() != null && !otherUser.getAvatarUrl().isBlank()) {
-                    displayAvatar = otherUser.getAvatarUrl();
+                if (AI_ASSISTANT_EMAIL.equalsIgnoreCase(otherUser.getEmail())) {
+                    isAiAssistant = true;
+                    displayName = AI_ASSISTANT_NAME;
+                    displayAvatar = AI_ASSISTANT_AVATAR;
+                    roomIsOnline = true;
+                    roomStatusText = "Trợ lý AI • Luôn trực tuyến";
                 } else {
-                    displayAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
+                    displayName = otherUser.getFullName() != null ? otherUser.getFullName() : otherUser.getEmail();
+                    if (otherUser.getAvatarUrl() != null && !otherUser.getAvatarUrl().isBlank()) {
+                        displayAvatar = otherUser.getAvatarUrl();
+                    } else {
+                        displayAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
+                    }
+                    roomIsOnline = isUserOnline(otherUser);
+                    roomStatusText = formatLastActiveStatus(otherUser);
+                    roomLastActiveAt = otherUser.getLastLoginAt();
                 }
-                roomIsOnline = isUserOnline(otherUser);
-                roomStatusText = formatLastActiveStatus(otherUser);
-                roomLastActiveAt = otherUser.getLastLoginAt();
             }
         } else {
             // Nhóm trò chuyện: roomIsOnline = true nếu có ít nhất 1 thành viên khác đang online
@@ -396,7 +547,7 @@ public class ChatService {
         return ChatRoomDto.builder()
                 .id(room.getId())
                 .name(displayName)
-                .type(room.getType())
+                .type(isAiAssistant ? "AI" : room.getType())
                 .itineraryId(room.getItinerary() != null ? room.getItinerary().getId() : null)
                 .itineraryTitle(room.getItinerary() != null ? room.getItinerary().getTitle() : null)
                 .membersCount(members.size())
@@ -409,6 +560,7 @@ public class ChatService {
                 .isOnline(roomIsOnline)
                 .statusText(roomStatusText)
                 .lastActiveAt(roomLastActiveAt)
+                .isPinned(isAiAssistant)
                 .build();
     }
 
