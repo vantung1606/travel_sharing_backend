@@ -25,6 +25,7 @@ public class ItineraryDto {
     private String destination;
     private LocalDate startDate;
     private LocalDate endDate;
+    private Integer durationDays;
     private BigDecimal budgetTotal;
     private String coverImageUrl;
     private Boolean isAiGenerated;

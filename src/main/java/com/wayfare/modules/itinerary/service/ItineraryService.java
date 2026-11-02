@@ -505,6 +505,22 @@ public class ItineraryService {
     // --- Private Mappers & Helpers ---
 
     private ItineraryDto mapToSummaryDto(Itinerary i) {
+        int durationDays = 1;
+        if (i.getStartDate() != null && i.getEndDate() != null && !i.getEndDate().isBefore(i.getStartDate())) {
+            durationDays = (int) java.time.temporal.ChronoUnit.DAYS.between(i.getStartDate(), i.getEndDate()) + 1;
+        }
+        if (i.getTitle() != null) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)\\s*(?:N|n|ngày|ngay)").matcher(i.getTitle());
+            if (m.find()) {
+                try {
+                    int parsed = Integer.parseInt(m.group(1));
+                    if (parsed > 0 && parsed <= 60) {
+                        durationDays = parsed;
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
         return ItineraryDto.builder()
                 .id(i.getId())
                 .creatorId(i.getCreator() != null ? i.getCreator().getId() : null)
@@ -515,6 +531,7 @@ public class ItineraryService {
                 .destination(i.getDestination())
                 .startDate(i.getStartDate())
                 .endDate(i.getEndDate())
+                .durationDays(durationDays)
                 .budgetTotal(i.getBudgetTotal())
                 .coverImageUrl(i.getCoverImageUrl())
                 .isAiGenerated(i.getIsAiGenerated())
