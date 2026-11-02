@@ -215,7 +215,7 @@ public class NotificationService {
                     .actorName(actor != null ? (actor.getFullName() != null ? actor.getFullName() : actor.getEmail()) : "Quản trị viên")
                     .actorAvatar(actor != null ? actor.getAvatarUrl() : null)
                     .isRead(false)
-                    .createdAt(java.time.LocalDateTime.now())
+                    .createdAt(java.time.LocalDateTime.now(com.wayfare.common.util.VietnamTimeUtils.VIETNAM_ZONE))
                     .build();
             messagingTemplate.convertAndSend("/topic/notifications.broadcast", broadcastDto);
             log.info("Dispatched broadcast notification via WebSocket to /topic/notifications.broadcast");
@@ -296,7 +296,7 @@ public class NotificationService {
                 .message(entity.getMessage())
                 .targetUrl(entity.getTargetUrl())
                 .isRead(entity.getIsRead())
-                .time(entity.getCreatedAt() != null ? entity.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) : "Vừa xong")
+                .time(com.wayfare.common.util.VietnamTimeUtils.formatTimeAgo(entity.getCreatedAt()))
                 .createdAt(entity.getCreatedAt())
                 .build();
     }

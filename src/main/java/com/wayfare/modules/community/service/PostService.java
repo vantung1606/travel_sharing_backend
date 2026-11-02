@@ -1075,8 +1075,9 @@ public class PostService {
                 .aiSafetyScore(p.getAiSafetyScore())
                 .aiFlagReason(p.getAiFlagReason())
                 .badgeText(p.getBadgeText())
-                .createdAt(p.getCreatedAt() != null ? p.getCreatedAt().atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")) : null)
-                .timeAgo(formatTimeAgo(p.getCreatedAt()))
+                .createdAt(com.wayfare.common.util.VietnamTimeUtils.toVietnamZonedDateTime(p.getCreatedAt()))
+                .timeAgo(com.wayfare.common.util.VietnamTimeUtils.formatTimeAgo(p.getCreatedAt()))
+                .formattedDate(com.wayfare.common.util.VietnamTimeUtils.format24hNoSeconds(p.getCreatedAt()))
                 .authorId(p.getAuthor() != null ? p.getAuthor().getId() : null)
                 .authorName(p.getAuthor() != null ? p.getAuthor().getFullName() : "Du khách Wayfare")
                 .authorEmail(p.getAuthor() != null ? p.getAuthor().getEmail() : null)
@@ -1164,21 +1165,13 @@ public class PostService {
                 .replyToUserName(c.getReplyToUser() != null ? c.getReplyToUser().getFullName() : null)
                 .replyToUserHandle(c.getReplyToUser() != null ? c.getReplyToUser().getHandle() : null)
                 .replies(new ArrayList<>())
-                .createdAt(c.getCreatedAt() != null ? c.getCreatedAt().atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")) : null)
-                .timeAgo(formatTimeAgo(c.getCreatedAt()))
+                .createdAt(com.wayfare.common.util.VietnamTimeUtils.toVietnamZonedDateTime(c.getCreatedAt()))
+                .timeAgo(com.wayfare.common.util.VietnamTimeUtils.formatTimeAgo(c.getCreatedAt()))
                 .build();
     }
 
     private String formatTimeAgo(LocalDateTime dateTime) {
-        if (dateTime == null) return "Vừa xong";
-        Duration diff = Duration.between(dateTime, LocalDateTime.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
-        if (diff.isNegative()) return "Vừa xong";
-        long seconds = Math.max(0, diff.getSeconds());
-        if (seconds < 60) return "Vừa xong";
-        if (seconds < 3600) return (seconds / 60) + " phút trước";
-        long hours = seconds / 3600;
-        if (hours < 23) return hours + " giờ trước";
-        return dateTime.format(DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy"));
+        return com.wayfare.common.util.VietnamTimeUtils.formatTimeAgo(dateTime);
     }
 
     /**
