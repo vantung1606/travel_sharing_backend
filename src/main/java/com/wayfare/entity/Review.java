@@ -7,7 +7,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "reviews")
+@Table(name = "reviews", uniqueConstraints = {
+    @UniqueConstraint(name = "uk_review_place_user", columnNames = {"place_id", "user_id"})
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -38,6 +40,7 @@ public class Review {
      * vào điểm trung bình/số lượt của địa điểm (mặc định false; giá trị NULL
      * từ bản dữ liệu cũ được xử lý như false).
      */
+    @Builder.Default
     @Column(name = "is_hidden")
     private Boolean isHidden = false;
 

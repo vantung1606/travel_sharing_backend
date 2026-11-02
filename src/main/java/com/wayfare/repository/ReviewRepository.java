@@ -50,4 +50,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     @Query("SELECT COUNT(r) FROM Review r WHERE r.isHidden IS NULL OR r.isHidden = false")
     long countByIsHiddenFalseOrNull();
+
+    /** Kiểm tra xem tài khoản người dùng đã từng đánh giá địa điểm này chưa */
+    boolean existsByPlaceIdAndAuthorId(Long placeId, Long authorId);
+
+    /** Lấy đánh giá của một người dùng cụ thể tại địa điểm này */
+    java.util.Optional<Review> findByPlaceIdAndAuthorId(Long placeId, Long authorId);
 }

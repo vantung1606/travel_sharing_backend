@@ -50,6 +50,13 @@ public class ReviewService {
         User author = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại với email: " + userEmail));
 
+        // Mỗi tài khoản chỉ được đánh giá 1 lần duy nhất cho mỗi địa điểm
+        boolean alreadyReviewed = reviewRepository.existsByPlaceIdAndAuthorId(placeId, author.getId());
+        if (alreadyReviewed) {
+            log.warn("User '{}' (ID: {}) already reviewed place ID: {}. Rejecting duplicate review.", userEmail, author.getId(), placeId);
+            throw new IllegalArgumentException("Mỗi tài khoản chỉ được đánh giá 1 lần duy nhất cho mỗi địa điểm. Bạn có thể chỉnh sửa đánh giá hiện có của mình.");
+        }
+
         Review review = Review.builder()
                 .place(place)
                 .author(author)
