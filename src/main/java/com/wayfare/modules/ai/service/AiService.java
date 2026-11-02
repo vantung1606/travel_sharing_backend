@@ -22,7 +22,7 @@ public class AiService {
     @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiApiUrl;
 
-    @Value("${gemini.model:gemini-3.5-flash}")
+    @Value("${gemini.model:gemini-3.8-flash}")
     private String defaultModel;
 
     private final RestTemplate restTemplate = new RestTemplate();
@@ -74,12 +74,13 @@ public class AiService {
         try {
             return callGeminiApi(request, targetModel, apiKey);
         } catch (org.springframework.web.client.HttpStatusCodeException hse) {
-            // Nếu model bị 404 Not Found, tự động fallback sang các model dự phòng tương thích
-            if (hse.getStatusCode() == org.springframework.http.HttpStatus.NOT_FOUND) {
-                String[] fallbackModels = new String[]{"gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash"};
+            // Nếu model bị 404 (Not Found) hoặc 503 (High Demand Spike / Unavailable), tự động fallback sang các model dự phòng khả dụng
+            if (hse.getStatusCode() == org.springframework.http.HttpStatus.NOT_FOUND ||
+                hse.getStatusCode() == org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE) {
+                String[] fallbackModels = new String[]{"gemini-3.8-flash", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite"};
                 for (String fallback : fallbackModels) {
                     if (!fallback.equalsIgnoreCase(targetModel)) {
-                        log.warn("Model {} not found (404) on Gemini API. Retrying with fallback model {}...", targetModel, fallback);
+                        log.warn("Model {} returned status {}. Retrying with fallback model {}...", targetModel, hse.getStatusCode(), fallback);
                         try {
                             return callGeminiApi(request, fallback, apiKey);
                         } catch (Exception retryEx) {
