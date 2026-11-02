@@ -52,9 +52,11 @@ public class AiService {
                 ? request.getModel().trim()
                 : defaultModel;
 
-        // Chuẩn hóa sang model chính thức của Google Gemini (mặc định gemini-1.5-flash)
-        if (!targetModel.startsWith("gemini-") || targetModel.contains("3.5") || targetModel.contains("3.8") || targetModel.equals("gemini-2.5-flash")) {
-            targetModel = "gemini-1.5-flash";
+        // Ưu tiên gemini-3.8-flash theo cấu hình hệ thống
+        if (targetModel == null || targetModel.isBlank() || !targetModel.startsWith("gemini-") || "gemini-1.5-flash".equals(targetModel)) {
+            targetModel = (defaultModel != null && !defaultModel.isBlank() && !"gemini-1.5-flash".equals(defaultModel))
+                    ? defaultModel
+                    : "gemini-3.8-flash";
         }
 
         String apiKey = getEffectiveApiKey();
@@ -72,13 +74,18 @@ public class AiService {
         try {
             return callGeminiApi(request, targetModel, apiKey);
         } catch (org.springframework.web.client.HttpStatusCodeException hse) {
-            // Nếu model bị 404 Not Found và không phải gemini-1.5-flash, thử chuyển sang gemini-1.5-flash một lần
-            if (hse.getStatusCode() == org.springframework.http.HttpStatus.NOT_FOUND && !"gemini-1.5-flash".equals(targetModel)) {
-                log.warn("Model {} not found on Gemini API. Retrying with gemini-1.5-flash...", targetModel);
-                try {
-                    return callGeminiApi(request, "gemini-1.5-flash", apiKey);
-                } catch (Exception retryEx) {
-                    log.error("Retry with gemini-1.5-flash also failed: {}", retryEx.getMessage());
+            // Nếu model bị 404 Not Found, tự động fallback sang các model dự phòng tương thích
+            if (hse.getStatusCode() == org.springframework.http.HttpStatus.NOT_FOUND) {
+                String[] fallbackModels = new String[]{"gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash"};
+                for (String fallback : fallbackModels) {
+                    if (!fallback.equalsIgnoreCase(targetModel)) {
+                        log.warn("Model {} not found (404) on Gemini API. Retrying with fallback model {}...", targetModel, fallback);
+                        try {
+                            return callGeminiApi(request, fallback, apiKey);
+                        } catch (Exception retryEx) {
+                            log.warn("Retry with {} failed: {}", fallback, retryEx.getMessage());
+                        }
+                    }
                 }
             }
 
