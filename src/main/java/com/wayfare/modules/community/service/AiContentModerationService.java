@@ -28,7 +28,7 @@ public class AiContentModerationService {
     private final AtomicLong circuitTripTime = new AtomicLong(0);
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
     private static final long CIRCUIT_RESET_TIMEOUT_MS = 60_000; // 60s cooldown
-    private static final long GEMINI_TIMEOUT_MS = 3500; // 3.5s timeout
+    private static final long GEMINI_TIMEOUT_MS = 6000; // 6s timeout (gemini-3.5-flash-lite typically takes ~1.1-1.5s)
 
     public AiContentModerationService(@Autowired(required = false) AiService aiService) {
         this.aiService = aiService;
@@ -215,6 +215,7 @@ public class AiContentModerationService {
             );
 
             AiGenerateRequest request = AiGenerateRequest.builder()
+                    .model("gemini-3.5-flash-lite")
                     .systemPrompt(GEMINI_MODERATION_SKILL)
                     .prompt(userPrompt)
                     .temperature(0.1)
@@ -231,7 +232,7 @@ public class AiContentModerationService {
 
                 JsonNode root = objectMapper.readTree(jsonText);
                 if (!root.has("approved")) {
-                    log.warn("Gemini response missing 'approved' key: {}. Falling back to heuristic.", jsonText);
+                    log.warn("[AI Moderation] Gemini response missing 'approved' key: {}. Falling back to heuristic.", jsonText);
                     return null;
                 }
 
@@ -248,8 +249,8 @@ public class AiContentModerationService {
                         : (approved ? null : "Bài viết có dấu hiệu vi phạm an toàn, cần Admin kiểm duyệt.");
                 String analysis = root.path("analysis").asText("");
 
-                log.info("Gemini AI Content Moderation Successful -> Approved: {}, Score: {}/100, Analysis: {}",
-                        approved, score, analysis);
+                log.info("[AI Moderation] Google Gemini API (gemini-3.5-flash-lite) evaluated post '{}' -> Approved: {}, Score: {}/100, Category: '{}', Analysis: '{}'",
+                        title, approved, score, cat, analysis);
 
                 return ModerationResult.builder()
                         .isApproved(approved)
