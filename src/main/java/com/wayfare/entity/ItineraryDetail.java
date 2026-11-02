@@ -33,6 +33,9 @@ public class ItineraryDetail {
     @Column(name = "day_number", nullable = false)
     private Integer dayNumber; // Day 1, Day 2...
 
+    @Column(name = "day_title", length = 150)
+    private String dayTitle; // e.g. "Khám phá trung tâm", "Săn mây đỉnh núi"
+
     @Column(name = "visit_order", nullable = false)
     private Integer visitOrder; // Order inside the day
 

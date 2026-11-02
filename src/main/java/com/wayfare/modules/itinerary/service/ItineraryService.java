@@ -173,6 +173,7 @@ public class ItineraryService {
                         .locationAddress(d.getLocationAddress())
                         .category(d.getCategory())
                         .dayNumber(d.getDayNumber() != null ? d.getDayNumber() : 1)
+                        .dayTitle(d.getDayTitle())
                         .visitOrder(d.getVisitOrder() != null ? d.getVisitOrder() : 1)
                         .startTime(d.getStartTime())
                         .estimatedCost(d.getEstimatedCost())
@@ -327,6 +328,7 @@ public class ItineraryService {
                 .locationAddress(dto.getLocationAddress())
                 .category(dto.getCategory())
                 .dayNumber(targetDay)
+                .dayTitle(dto.getDayTitle())
                 .visitOrder(targetVisitOrder)
                 .startTime(dto.getStartTime())
                 .estimatedCost(dto.getEstimatedCost())
@@ -353,6 +355,7 @@ public class ItineraryService {
         if (dto.getLocationAddress() != null) detail.setLocationAddress(dto.getLocationAddress());
         if (dto.getCategory() != null) detail.setCategory(dto.getCategory());
         if (dto.getDayNumber() != null) detail.setDayNumber(dto.getDayNumber());
+        if (dto.getDayTitle() != null) detail.setDayTitle(dto.getDayTitle());
         if (dto.getVisitOrder() != null) detail.setVisitOrder(dto.getVisitOrder());
         if (dto.getStartTime() != null) detail.setStartTime(dto.getStartTime());
         if (dto.getEstimatedCost() != null) detail.setEstimatedCost(dto.getEstimatedCost());
@@ -553,6 +556,7 @@ public class ItineraryService {
                 .locationAddress(d.getLocationAddress())
                 .category(d.getCategory())
                 .dayNumber(d.getDayNumber())
+                .dayTitle(d.getDayTitle())
                 .visitOrder(d.getVisitOrder())
                 .startTime(d.getStartTime())
                 .estimatedCost(d.getEstimatedCost())

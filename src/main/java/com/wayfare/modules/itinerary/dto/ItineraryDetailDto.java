@@ -20,6 +20,7 @@ public class ItineraryDetailDto {
     private String locationAddress;
     private String category;
     private Integer dayNumber;
+    private String dayTitle;
     private Integer visitOrder;
     @com.fasterxml.jackson.annotation.JsonFormat(pattern = "HH:mm[:ss]")
     private LocalTime startTime;
