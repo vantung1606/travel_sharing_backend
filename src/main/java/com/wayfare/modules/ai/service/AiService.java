@@ -52,84 +52,118 @@ public class AiService {
                 ? request.getModel().trim()
                 : defaultModel;
 
-        if (!targetModel.startsWith("gemini-") || targetModel.equals("gemini-2.5-flash") || targetModel.contains("3.8")) {
-            targetModel = "gemini-3.5-flash";
+        // Chuẩn hóa sang model chính thức của Google Gemini (mặc định gemini-1.5-flash)
+        if (!targetModel.startsWith("gemini-") || targetModel.contains("3.5") || targetModel.contains("3.8") || targetModel.equals("gemini-2.5-flash")) {
+            targetModel = "gemini-1.5-flash";
         }
 
         String apiKey = getEffectiveApiKey();
         if (apiKey.isBlank()) {
-            log.warn("GEMINI_API_KEY is not configured on server. Activating intelligent AI fallback response.");
-            return buildFallbackAiResponse(request, targetModel);
+            log.error("GEMINI_API_KEY is not configured on server.");
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, 
+                    "Máy chủ chưa được cấu hình GEMINI_API_KEY. Vui lòng thiết lập khóa API Google Gemini để sử dụng tính năng tạo lịch trình AI!"
+            );
         }
 
         log.info("Executing Live Gemini Generation with model: {}, prompt length: {}", 
                 targetModel, request.getPrompt() != null ? request.getPrompt().length() : 0);
 
         try {
-            Map<String, Object> payload = new HashMap<>();
-
-            // Contents
-            Map<String, Object> userContent = Map.of(
-                    "parts", List.of(Map.of("text", request.getPrompt()))
-            );
-            payload.put("contents", List.of(userContent));
-
-            // Generation Config
-            Map<String, Object> genConfig = new HashMap<>();
-            genConfig.put("temperature", request.getTemperature() != null ? request.getTemperature() : 0.3);
-            genConfig.put("maxOutputTokens", request.getMaxTokens() != null ? request.getMaxTokens() : 8192);
-            if (request.getResponseMimeType() != null && !request.getResponseMimeType().isBlank()) {
-                genConfig.put("responseMimeType", request.getResponseMimeType());
-            }
-            payload.put("generationConfig", genConfig);
-
-            // System Instruction
-            if (request.getSystemPrompt() != null && !request.getSystemPrompt().isBlank()) {
-                payload.put("systemInstruction", Map.of(
-                        "parts", List.of(Map.of("text", request.getSystemPrompt()))
-                ));
-            }
-
-            String url = String.format("%s/models/%s:generateContent?key=%s",
-                    geminiApiUrl.replaceAll("/+$", ""),
-                    targetModel,
-                    apiKey
-            );
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                JsonNode root = objectMapper.readTree(response.getBody());
-                JsonNode candidates = root.path("candidates");
-                if (candidates.isArray() && !candidates.isEmpty()) {
-                    String generatedText = candidates.get(0)
-                            .path("content")
-                            .path("parts")
-                            .get(0)
-                            .path("text")
-                            .asText("");
-
-                    log.info("Gemini Live Generation succeeded. Response chars: {}", generatedText.length());
-                    return AiGenerateResponse.builder()
-                            .text(generatedText)
-                            .model(targetModel)
-                            .build();
+            return callGeminiApi(request, targetModel, apiKey);
+        } catch (org.springframework.web.client.HttpStatusCodeException hse) {
+            // Nếu model bị 404 Not Found và không phải gemini-1.5-flash, thử chuyển sang gemini-1.5-flash một lần
+            if (hse.getStatusCode() == org.springframework.http.HttpStatus.NOT_FOUND && !"gemini-1.5-flash".equals(targetModel)) {
+                log.warn("Model {} not found on Gemini API. Retrying with gemini-1.5-flash...", targetModel);
+                try {
+                    return callGeminiApi(request, "gemini-1.5-flash", apiKey);
+                } catch (Exception retryEx) {
+                    log.error("Retry with gemini-1.5-flash also failed: {}", retryEx.getMessage());
                 }
             }
 
-            log.warn("Gemini API returned unexpected response: {}. Falling back to smart generator.", response.getBody());
-            return buildFallbackAiResponse(request, targetModel);
-        } catch (org.springframework.web.client.HttpStatusCodeException hse) {
-            log.error("Gemini API call failed with status {}: {}", hse.getStatusCode(), hse.getResponseBodyAsString());
-            return buildFallbackAiResponse(request, targetModel);
+            String errorBody = hse.getResponseBodyAsString();
+            String userMsg = "Máy chủ AI Google Gemini báo lỗi (" + hse.getStatusCode().value() + ")";
+            try {
+                JsonNode errJson = objectMapper.readTree(errorBody);
+                if (errJson.has("error") && errJson.get("error").has("message")) {
+                    userMsg += ": " + errJson.get("error").get("message").asText();
+                }
+            } catch (Exception ignored) {}
+
+            log.error("Gemini API call failed: {}", userMsg);
+            throw new org.springframework.web.server.ResponseStatusException(hse.getStatusCode(), userMsg);
+        } catch (org.springframework.web.server.ResponseStatusException rse) {
+            throw rse;
         } catch (Exception e) {
-            log.error("Error communicating with Gemini API ({}). Activating fallback response.", e.getMessage(), e);
-            return buildFallbackAiResponse(request, targetModel);
+            log.error("Error communicating with Gemini API ({}):", e.getMessage(), e);
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_GATEWAY, 
+                    "Không thể kết nối đến máy chủ AI Google Gemini: " + e.getMessage()
+            );
         }
+    }
+
+    private AiGenerateResponse callGeminiApi(AiGenerateRequest request, String model, String apiKey) throws Exception {
+        Map<String, Object> payload = new HashMap<>();
+
+        // Contents
+        Map<String, Object> userContent = Map.of(
+                "parts", List.of(Map.of("text", request.getPrompt()))
+        );
+        payload.put("contents", List.of(userContent));
+
+        // Generation Config
+        Map<String, Object> genConfig = new HashMap<>();
+        genConfig.put("temperature", request.getTemperature() != null ? request.getTemperature() : 0.3);
+        genConfig.put("maxOutputTokens", request.getMaxTokens() != null ? request.getMaxTokens() : 8192);
+        if (request.getResponseMimeType() != null && !request.getResponseMimeType().isBlank()) {
+            genConfig.put("responseMimeType", request.getResponseMimeType());
+        }
+        payload.put("generationConfig", genConfig);
+
+        // System Instruction
+        if (request.getSystemPrompt() != null && !request.getSystemPrompt().isBlank()) {
+            payload.put("systemInstruction", Map.of(
+                    "parts", List.of(Map.of("text", request.getSystemPrompt()))
+            ));
+        }
+
+        String url = String.format("%s/models/%s:generateContent?key=%s",
+                geminiApiUrl.replaceAll("/+$", ""),
+                model,
+                apiKey
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+        ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+
+        if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode candidates = root.path("candidates");
+            if (candidates.isArray() && !candidates.isEmpty()) {
+                String generatedText = candidates.get(0)
+                        .path("content")
+                        .path("parts")
+                        .get(0)
+                        .path("text")
+                        .asText("");
+
+                log.info("Gemini Live Generation succeeded with model {}. Response chars: {}", model, generatedText.length());
+                return AiGenerateResponse.builder()
+                        .text(generatedText)
+                        .model(model)
+                        .build();
+            }
+        }
+
+        throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_GATEWAY, 
+                "Google Gemini không trả về dữ liệu nội dung hợp lệ."
+        );
     }
 
     private AiGenerateResponse buildFallbackAiResponse(AiGenerateRequest request, String model) {
