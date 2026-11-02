@@ -540,6 +540,15 @@ public class AdminReportService {
         Integer authorTrustScore = 80;
         String authorAccountAge = "Thành viên";
 
+        boolean isAuthorAdmin = author != null && author.getRoles() != null && author.getRoles().stream()
+                .anyMatch(r -> r.getName() != null && r.getName().toUpperCase().contains("ADMIN"));
+        String authorTier = author != null && author.getTier() != null && !author.getTier().isBlank()
+                ? author.getTier().toLowerCase() : "bronze";
+        if (isAuthorAdmin) {
+            authorTier = "diamond";
+        }
+        String authorRole = isAuthorAdmin ? "Quản trị viên" : "Thành viên";
+
         if (author != null) {
             if (author.getCreatedAt() != null) {
                 long years = Duration.between(author.getCreatedAt(), LocalDateTime.now()).toDays() / 365;
@@ -572,14 +581,27 @@ public class AdminReportService {
         Long reporterId = null;
         String reporterName = null;
         String reporterEmail = null;
+        String reporterTier = null;
+        String reporterRole = null;
         LocalDateTime latestReportedAt = null;
         String reportReasonText;
         String effectiveCategory;
 
         if (isUserReported && authenticUserReport != null) {
-            reporterId = authenticUserReport.getReporter().getId();
-            reporterName = authenticUserReport.getReporter().getFullName();
-            reporterEmail = authenticUserReport.getReporter().getEmail();
+            User reporter = authenticUserReport.getReporter();
+            if (reporter != null) {
+                reporterId = reporter.getId();
+                reporterName = reporter.getFullName();
+                reporterEmail = reporter.getEmail();
+                boolean isReporterAdmin = reporter.getRoles() != null && reporter.getRoles().stream()
+                        .anyMatch(r -> r.getName() != null && r.getName().toUpperCase().contains("ADMIN"));
+                reporterTier = reporter.getTier() != null && !reporter.getTier().isBlank()
+                        ? reporter.getTier().toLowerCase() : "bronze";
+                if (isReporterAdmin) {
+                    reporterTier = "diamond";
+                }
+                reporterRole = isReporterAdmin ? "Quản trị viên" : "Thành viên";
+            }
             latestReportedAt = authenticUserReport.getCreatedAt() != null ? authenticUserReport.getCreatedAt() : post.getUpdatedAt();
             reportReasonText = (authenticUserReport.getReason() != null && !authenticUserReport.getReason().isBlank())
                     ? authenticUserReport.getReason()
@@ -592,6 +614,8 @@ public class AdminReportService {
             reporterId = null;
             reporterName = null;
             reporterEmail = null;
+            reporterTier = null;
+            reporterRole = null;
             latestReportedAt = null;
             reportReasonText = post.getAiFlagReason() != null ? post.getAiFlagReason() : (post.getReportReason() != null ? post.getReportReason() : "Nội dung do hệ thống AI tạm giữ để Quản trị viên xem xét.");
             effectiveCategory = post.getCategory() != null ? post.getCategory() : "Kiểm duyệt AI";
@@ -658,11 +682,15 @@ public class AdminReportService {
                 .authorName(authorName)
                 .authorHandle(authorHandle)
                 .authorAvatar(sanitizeMediaUrl(authorAvatar))
+                .authorTier(authorTier)
+                .authorRole(authorRole)
                 .authorTrustScore(authorTrustScore)
                 .authorAccountAge(authorAccountAge)
                 .reporterId(reporterId)
                 .reporterName(reporterName)
                 .reporterEmail(reporterEmail)
+                .reporterTier(reporterTier)
+                .reporterRole(reporterRole)
                 .latestReportedAt(latestReportedAt)
                 .build();
     }

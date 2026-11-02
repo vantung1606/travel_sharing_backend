@@ -21,6 +21,8 @@ public class ReviewDto {
     private String authorHandle;
     private String authorEmail;
     private String authorAvatar;
+    private String authorTier;
+    private String authorRole;
     private Integer rating;
     private String comment;
     /** true = đang bị kiểm duyệt ẩn (chỉ Admin/Moderator thấy qua trang kiểm duyệt). */

@@ -186,6 +186,15 @@ public class ReviewService {
         User author = review.getAuthor();
         Place place = review.getPlace();
 
+        boolean isAuthorAdmin = author != null && author.getRoles() != null && author.getRoles().stream()
+                .anyMatch(r -> r.getName() != null && r.getName().toUpperCase().contains("ADMIN"));
+        String authorTier = author != null && author.getTier() != null && !author.getTier().isBlank()
+                ? author.getTier().toLowerCase() : "bronze";
+        if (isAuthorAdmin) {
+            authorTier = "diamond";
+        }
+        String authorRole = isAuthorAdmin ? "Quản trị viên" : "Thành viên";
+
         return ReviewDto.builder()
                 .id(review.getId())
                 .placeId(place != null ? place.getId() : null)
@@ -196,6 +205,8 @@ public class ReviewService {
                 .authorHandle(author != null ? author.getHandle() : "@traveler")
                 .authorEmail(author != null ? author.getEmail() : null)
                 .authorAvatar(author != null ? author.getAvatarUrl() : null)
+                .authorTier(authorTier)
+                .authorRole(authorRole)
                 .rating(review.getRating())
                 .comment(review.getComment())
                 .isHidden(Boolean.TRUE.equals(review.getIsHidden()))

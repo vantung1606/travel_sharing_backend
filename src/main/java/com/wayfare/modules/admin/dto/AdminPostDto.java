@@ -40,6 +40,8 @@ public class AdminPostDto {
     private String authorName;
     private String authorHandle;
     private String authorAvatar;
+    private String authorTier;
+    private String authorRole;
     private Integer authorTrustScore;
     private String authorAccountAge;
 
@@ -47,6 +49,8 @@ public class AdminPostDto {
     private Long reporterId;
     private String reporterName;
     private String reporterEmail;
+    private String reporterTier;
+    private String reporterRole;
     private LocalDateTime latestReportedAt;
 }
 
