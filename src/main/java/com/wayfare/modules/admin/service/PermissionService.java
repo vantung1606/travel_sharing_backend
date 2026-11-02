@@ -352,41 +352,63 @@ public class PermissionService {
         // Get before state for audit log
         EffectivePermissionsDto beforeState = getEffectivePermissions(targetUserId);
 
-        // Clear existing overrides
-        userPermissionRepository.deleteByUserId(targetUserId);
+        // Load existing overrides mapped by permission ID to support safe in-place upsert (avoids UK duplicate key collision)
+        List<UserPermission> existingList = userPermissionRepository.findByUserId(targetUserId);
+        Map<Long, UserPermission> existingByPermId = existingList.stream()
+            .collect(Collectors.toMap(up -> up.getPermission().getId(), up -> up, (a, b) -> a));
 
         List<Permission> allPerms = permissionRepository.findAll();
         Map<String, Permission> permMap = allPerms.stream().collect(Collectors.toMap(Permission::getCode, p -> p));
 
-        // Save ALLOW overrides
+        // Build unique target overrides: permission -> effect (ALLOW or DENY)
+        Map<Permission, String> targetOverrides = new LinkedHashMap<>();
         if (allowCodes != null) {
             for (String code : allowCodes) {
                 Permission p = permMap.get(code);
                 if (p != null) {
-                    userPermissionRepository.save(UserPermission.builder()
-                        .user(targetUser)
-                        .permission(p)
-                        .effect("ALLOW")
-                        .grantedBy(adminId)
-                        .build());
+                    targetOverrides.put(p, "ALLOW");
                 }
             }
         }
 
-        // Save DENY overrides
         if (denyCodes != null) {
             for (String code : denyCodes) {
                 Permission p = permMap.get(code);
-                if (p != null && (allowCodes == null || !allowCodes.contains(code))) {
-                    userPermissionRepository.save(UserPermission.builder()
-                        .user(targetUser)
-                        .permission(p)
-                        .effect("DENY")
-                        .grantedBy(adminId)
-                        .build());
+                if (p != null && !targetOverrides.containsKey(p)) {
+                    targetOverrides.put(p, "DENY");
                 }
             }
         }
+
+        // Safe in-place upsert: update existing rows, insert only brand new rows
+        List<UserPermission> toSave = new ArrayList<>();
+        for (Map.Entry<Permission, String> entry : targetOverrides.entrySet()) {
+            Permission p = entry.getKey();
+            String effect = entry.getValue();
+
+            UserPermission existing = existingByPermId.remove(p.getId());
+            if (existing != null) {
+                existing.setEffect(effect);
+                existing.setGrantedBy(adminId);
+                toSave.add(existing);
+            } else {
+                toSave.add(UserPermission.builder()
+                    .user(targetUser)
+                    .permission(p)
+                    .effect(effect)
+                    .grantedBy(adminId)
+                    .build());
+            }
+        }
+
+        // Delete any overrides that are no longer present in target
+        if (!existingByPermId.isEmpty()) {
+            userPermissionRepository.deleteAll(existingByPermId.values());
+        }
+
+        // Save all and immediately flush to guarantee DB synchronization
+        userPermissionRepository.saveAll(toSave);
+        userPermissionRepository.flush();
 
         // Invalidate cache immediately
         clearUserCache(targetUser.getEmail());
