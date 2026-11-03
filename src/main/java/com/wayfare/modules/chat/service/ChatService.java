@@ -129,6 +129,27 @@ public class ChatService {
         for (ChatRoom room : rooms) {
             if ("DIRECT".equalsIgnoreCase(room.getType())) {
                 List<ChatMember> members = chatMemberRepository.findByChatRoomId(room.getId());
+                // Tự động làm sạch nếu phòng 1-1 bị dính thêm thành viên thứ 3
+                if (members.size() > 2) {
+                    log.warn("Corrupted DIRECT room #{} has {} members. Sanitizing...", room.getId(), members.size());
+                    User creator = room.getCreator() != null ? room.getCreator() : members.get(0).getUser();
+                    ChatMember keep1 = members.stream()
+                            .filter(m -> m.getUser().getId().equals(creator.getId()))
+                            .findFirst()
+                            .orElse(members.get(0));
+                    ChatMember keep2 = members.stream()
+                            .filter(m -> !m.getUser().getId().equals(keep1.getUser().getId()))
+                            .findFirst()
+                            .orElse(null);
+                    for (ChatMember m : members) {
+                        if (!m.getId().equals(keep1.getId()) && (keep2 == null || !m.getId().equals(keep2.getId()))) {
+                            log.info("Evicting unauthorized member {} from DIRECT room #{}", m.getUser().getEmail(), room.getId());
+                            chatMemberRepository.delete(m);
+                        }
+                    }
+                    members = chatMemberRepository.findByChatRoomId(room.getId());
+                }
+
                 Optional<User> other = members.stream()
                         .map(ChatMember::getUser)
                         .filter(u -> !u.getId().equals(currentUser.getId()))
@@ -177,6 +198,10 @@ public class ChatService {
         // Tự động gia nhập phòng nếu là người dùng hợp lệ
         ChatMember member = chatMemberRepository.findByChatRoomIdAndUserId(roomId, currentUser.getId())
                 .orElseGet(() -> {
+                    if ("DIRECT".equalsIgnoreCase(room.getType())) {
+                        log.warn("Blocked unauthorized attempt to enter DIRECT room {} by user {}", roomId, currentUser.getEmail());
+                        throw new ResourceNotFoundException("Bạn không phải thành viên của cuộc trò chuyện 1-1 này.");
+                    }
                     ChatMember newMember = ChatMember.builder()
                             .chatRoom(room)
                             .user(currentUser)
@@ -227,6 +252,10 @@ public class ChatService {
         // Đảm bảo là thành viên phòng
         ChatMember member = chatMemberRepository.findByChatRoomIdAndUserId(roomId, currentUser.getId())
                 .orElseGet(() -> {
+                    if ("DIRECT".equalsIgnoreCase(room.getType())) {
+                        log.warn("Blocked unauthorized attempt to send to DIRECT room {} by user {}", roomId, currentUser.getEmail());
+                        throw new ResourceNotFoundException("Bạn không thể gửi tin nhắn vào cuộc trò chuyện 1-1 của người khác.");
+                    }
                     ChatMember newMember = ChatMember.builder()
                             .chatRoom(room)
                             .user(currentUser)
@@ -258,7 +287,7 @@ public class ChatService {
         ChatMessageDto dto = mapToMessageDto(saved, currentUser);
         dto.setIsRead(false);
 
-        // Phát sóng thời gian thực qua WebSocket STOMP tới tất cả thành viên trong phòng (DTO trung lập không thiên vị người gửi)
+        // Phát sóng thời gian thực qua WebSocket STOMP tới phòng đang mở
         try {
             ChatMessageDto broadcastDto = mapToMessageDto(saved, null);
             broadcastDto.setIsRead(false);
@@ -266,6 +295,25 @@ public class ChatService {
             log.info("Broadcasted chat message {} to /topic/room.{}", saved.getId(), roomId);
         } catch (Exception e) {
             log.warn("Could not broadcast message via WebSocket broker: {}", e.getMessage());
+        }
+
+        // Phát sóng cập nhật danh sách Hộp thư và tin nhắn mới (realtime bên ngoài) tới từng thành viên
+        try {
+            List<ChatMember> allRoomMembers = chatMemberRepository.findByChatRoomId(roomId);
+            for (ChatMember cm : allRoomMembers) {
+                if (cm.getUser() != null) {
+                    ChatRoomDto memberRoomDto = mapToRoomDto(room, cm.getUser());
+                    String userTopic = "/topic/user." + cm.getUser().getId() + ".chat";
+                    messagingTemplate.convertAndSend(userTopic, memberRoomDto);
+                    if (cm.getUser().getEmail() != null) {
+                        String emailTopic = "/topic/user." + cm.getUser().getEmail().toLowerCase().trim() + ".chat";
+                        messagingTemplate.convertAndSend(emailTopic, memberRoomDto);
+                    }
+                }
+            }
+            log.info("Broadcasted room update for room {} to all members", roomId);
+        } catch (Exception e) {
+            log.warn("Could not broadcast room updates to members: {}", e.getMessage());
         }
 
         // Gửi thông báo hệ thống real-time đến các thành viên khác trong phòng
@@ -399,7 +447,22 @@ public class ChatService {
                 .build();
         chatMessageRepository.save(welcome);
 
-        return mapToRoomDto(savedRoom, currentUser);
+        ChatRoomDto createdDto = mapToRoomDto(savedRoom, currentUser);
+
+        // Phát sóng cho cả 2 người biết có phòng chat mới được tạo (realtime bên ngoài)
+        try {
+            messagingTemplate.convertAndSend("/topic/user." + currentUser.getId() + ".chat", createdDto);
+            if (currentUser.getEmail() != null) {
+                messagingTemplate.convertAndSend("/topic/user." + currentUser.getEmail().toLowerCase().trim() + ".chat", createdDto);
+            }
+            ChatRoomDto targetDto = mapToRoomDto(savedRoom, targetUser);
+            messagingTemplate.convertAndSend("/topic/user." + targetUser.getId() + ".chat", targetDto);
+            if (targetUser.getEmail() != null) {
+                messagingTemplate.convertAndSend("/topic/user." + targetUser.getEmail().toLowerCase().trim() + ".chat", targetDto);
+            }
+        } catch (Exception ignored) {}
+
+        return createdDto;
     }
 
     @Transactional
@@ -934,6 +997,10 @@ public class ChatService {
 
         ChatMember member = chatMemberRepository.findByChatRoomIdAndUserId(roomId, currentUser.getId())
                 .orElseGet(() -> {
+                    if ("DIRECT".equalsIgnoreCase(room.getType())) {
+                        log.warn("Blocked unauthorized attempt to mark read in DIRECT room {} by user {}", roomId, currentUser.getEmail());
+                        throw new ResourceNotFoundException("Bạn không phải thành viên của cuộc trò chuyện 1-1 này.");
+                    }
                     ChatMember newMember = ChatMember.builder()
                             .chatRoom(room)
                             .user(currentUser)
@@ -966,6 +1033,13 @@ public class ChatService {
             );
             messagingTemplate.convertAndSend("/topic/room." + roomId + "/read", receipt);
             log.info("Broadcasted read receipt for room {} to /topic/room.{}/read", roomId, roomId);
+
+            // Cập nhật trạng thái unread cho user bên ngoài realtime
+            ChatRoomDto readRoomDto = mapToRoomDto(room, currentUser);
+            messagingTemplate.convertAndSend("/topic/user." + currentUser.getId() + ".chat", readRoomDto);
+            if (currentUser.getEmail() != null) {
+                messagingTemplate.convertAndSend("/topic/user." + currentUser.getEmail().toLowerCase().trim() + ".chat", readRoomDto);
+            }
         } catch (Exception e) {
             log.warn("Failed to broadcast read receipt for room {}: {}", roomId, e.getMessage());
         }
