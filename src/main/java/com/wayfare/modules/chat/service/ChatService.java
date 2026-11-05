@@ -132,15 +132,33 @@ public class ChatService {
                 // Tự động làm sạch nếu phòng 1-1 bị dính thêm thành viên thứ 3
                 if (members.size() > 2) {
                     log.warn("Corrupted DIRECT room #{} has {} members. Sanitizing...", room.getId(), members.size());
-                    User creator = room.getCreator() != null ? room.getCreator() : members.get(0).getUser();
-                    ChatMember keep1 = members.stream()
-                            .filter(m -> m.getUser().getId().equals(creator.getId()))
-                            .findFirst()
-                            .orElse(members.get(0));
-                    ChatMember keep2 = members.stream()
-                            .filter(m -> !m.getUser().getId().equals(keep1.getUser().getId()))
-                            .findFirst()
-                            .orElse(null);
+                    Long creatorId = room.getCreator() != null ? room.getCreator().getId() : members.get(0).getUser().getId();
+                    ChatMember keep1 = null;
+                    for (ChatMember m : members) {
+                        if (m.getUser().getId().equals(creatorId)) {
+                            keep1 = m;
+                            break;
+                        }
+                    }
+                    if (keep1 == null) {
+                        keep1 = members.get(0);
+                    }
+
+                    ChatMember keep2 = null;
+                    for (ChatMember m : members) {
+                        if (!m.getUser().getId().equals(keep1.getUser().getId()) && m.getUser().getId().equals(currentUser.getId())) {
+                            keep2 = m;
+                            break;
+                        }
+                    }
+                    if (keep2 == null) {
+                        for (ChatMember m : members) {
+                            if (!m.getUser().getId().equals(keep1.getUser().getId())) {
+                                keep2 = m;
+                                break;
+                            }
+                        }
+                    }
                     for (ChatMember m : members) {
                         if (!m.getId().equals(keep1.getId()) && (keep2 == null || !m.getId().equals(keep2.getId()))) {
                             log.info("Evicting unauthorized member {} from DIRECT room #{}", m.getUser().getEmail(), room.getId());
@@ -199,6 +217,15 @@ public class ChatService {
         ChatMember member = chatMemberRepository.findByChatRoomIdAndUserId(roomId, currentUser.getId())
                 .orElseGet(() -> {
                     if ("DIRECT".equalsIgnoreCase(room.getType())) {
+                        if (room.getCreator() != null && room.getCreator().getId().equals(currentUser.getId())) {
+                            log.info("Restoring missing OWNER member for creator {} in DIRECT room {}", currentUser.getEmail(), roomId);
+                            ChatMember restored = ChatMember.builder()
+                                    .chatRoom(room)
+                                    .user(currentUser)
+                                    .role("OWNER")
+                                    .build();
+                            return chatMemberRepository.save(restored);
+                        }
                         log.warn("Blocked unauthorized attempt to enter DIRECT room {} by user {}", roomId, currentUser.getEmail());
                         throw new ResourceNotFoundException("Bạn không phải thành viên của cuộc trò chuyện 1-1 này.");
                     }
@@ -253,6 +280,15 @@ public class ChatService {
         ChatMember member = chatMemberRepository.findByChatRoomIdAndUserId(roomId, currentUser.getId())
                 .orElseGet(() -> {
                     if ("DIRECT".equalsIgnoreCase(room.getType())) {
+                        if (room.getCreator() != null && room.getCreator().getId().equals(currentUser.getId())) {
+                            log.info("Restoring missing OWNER member for creator {} in DIRECT room {}", currentUser.getEmail(), roomId);
+                            ChatMember restored = ChatMember.builder()
+                                    .chatRoom(room)
+                                    .user(currentUser)
+                                    .role("OWNER")
+                                    .build();
+                            return chatMemberRepository.save(restored);
+                        }
                         log.warn("Blocked unauthorized attempt to send to DIRECT room {} by user {}", roomId, currentUser.getEmail());
                         throw new ResourceNotFoundException("Bạn không thể gửi tin nhắn vào cuộc trò chuyện 1-1 của người khác.");
                     }
@@ -998,6 +1034,15 @@ public class ChatService {
         ChatMember member = chatMemberRepository.findByChatRoomIdAndUserId(roomId, currentUser.getId())
                 .orElseGet(() -> {
                     if ("DIRECT".equalsIgnoreCase(room.getType())) {
+                        if (room.getCreator() != null && room.getCreator().getId().equals(currentUser.getId())) {
+                            log.info("Restoring missing OWNER member for creator {} in DIRECT room {}", currentUser.getEmail(), roomId);
+                            ChatMember restored = ChatMember.builder()
+                                    .chatRoom(room)
+                                    .user(currentUser)
+                                    .role("OWNER")
+                                    .build();
+                            return chatMemberRepository.save(restored);
+                        }
                         log.warn("Blocked unauthorized attempt to mark read in DIRECT room {} by user {}", roomId, currentUser.getEmail());
                         throw new ResourceNotFoundException("Bạn không phải thành viên của cuộc trò chuyện 1-1 này.");
                     }
