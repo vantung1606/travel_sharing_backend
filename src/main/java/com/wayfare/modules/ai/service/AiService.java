@@ -22,7 +22,7 @@ public class AiService {
     @Value("${gemini.api-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiApiUrl;
 
-    @Value("${gemini.model:gemini-3.8-flash}")
+    @Value("${gemini.model:gemini-3.5-flash-lite}")
     private String defaultModel;
 
     private final RestTemplate restTemplate;
@@ -31,8 +31,8 @@ public class AiService {
     public AiService() {
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = 
                 new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(4000); // 4s connect timeout
-        factory.setReadTimeout(12000);   // 12s read timeout
+        factory.setConnectTimeout(6000);  // 6s connect timeout
+        factory.setReadTimeout(35000);    // 35s read timeout for comprehensive AI itinerary generation
         this.restTemplate = new RestTemplate(factory);
     }
 
@@ -58,29 +58,24 @@ public class AiService {
     public AiGenerateResponse generateContent(AiGenerateRequest request) {
         String targetModel = (request.getModel() != null && !request.getModel().isBlank())
                 ? request.getModel().trim()
-                : defaultModel;
+                : (defaultModel != null && !defaultModel.isBlank() ? defaultModel : "gemini-3.5-flash-lite");
 
-        if (targetModel == null || targetModel.isBlank() || !targetModel.startsWith("gemini-") || targetModel.contains("3.8") || targetModel.contains("3.5") || targetModel.contains("3-flash")) {
-            targetModel = (defaultModel != null && !defaultModel.isBlank() && !defaultModel.contains("3.8") && !defaultModel.contains("3.5"))
-                    ? defaultModel
-                    : "gemini-2.5-flash";
+        if (!targetModel.startsWith("gemini-")) {
+            targetModel = "gemini-3.5-flash-lite";
         }
 
         String apiKey = getEffectiveApiKey();
         if (apiKey.isBlank()) {
-            log.error("GEMINI_API_KEY is not configured on server.");
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, 
-                    "Máy chủ chưa được cấu hình GEMINI_API_KEY. Vui lòng thiết lập khóa API Google Gemini để sử dụng tính năng tạo lịch trình AI!"
-            );
+            log.warn("GEMINI_API_KEY is not configured on server. Returning smart fallback itinerary response.");
+            return buildFallbackAiResponse(request, targetModel);
         }
 
         List<String> tryModels = new ArrayList<>();
         if (targetModel != null && !targetModel.isBlank()) {
             tryModels.add(targetModel);
         }
-        // Fallback models chính xác và có độ sẵn sàng cao nhất từ Google Gemini
-        for (String m : List.of("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash-lite")) {
+        // Fallback models theo bảng quota chính thức từ Google AI Studio (ưu tiên 3.5 Flash Lite & 3.1 Flash Lite với 500 RPD)
+        for (String m : List.of("gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite")) {
             if (!tryModels.contains(m)) {
                 tryModels.add(m);
             }
@@ -102,11 +97,9 @@ public class AiService {
             }
         }
 
-        log.error("All Gemini models failed: {}", lastException != null ? lastException.getMessage() : "Unknown error");
-        throw new org.springframework.web.server.ResponseStatusException(
-                org.springframework.http.HttpStatus.BAD_GATEWAY, 
-                "Không thể kết nối đến máy chủ AI Google Gemini (Các model đều đang quá tải). Vui lòng thử lại sau giây lát!"
-        );
+        log.warn("All Gemini live API models failed ({}). Activating smart built-in AI itinerary fallback...", 
+                lastException != null ? lastException.getMessage() : "Unknown error");
+        return buildFallbackAiResponse(request, targetModel);
     }
 
     private AiGenerateResponse callGeminiApi(AiGenerateRequest request, String model, String apiKey) throws Exception {
