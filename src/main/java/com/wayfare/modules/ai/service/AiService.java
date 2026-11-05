@@ -60,10 +60,10 @@ public class AiService {
                 ? request.getModel().trim()
                 : defaultModel;
 
-        if (targetModel == null || targetModel.isBlank() || !targetModel.startsWith("gemini-") || "gemini-1.5-flash".equals(targetModel)) {
-            targetModel = (defaultModel != null && !defaultModel.isBlank() && !"gemini-1.5-flash".equals(defaultModel))
+        if (targetModel == null || targetModel.isBlank() || !targetModel.startsWith("gemini-") || targetModel.contains("3.8") || targetModel.contains("3.5") || targetModel.contains("3-flash")) {
+            targetModel = (defaultModel != null && !defaultModel.isBlank() && !defaultModel.contains("3.8") && !defaultModel.contains("3.5"))
                     ? defaultModel
-                    : "gemini-3.8-flash";
+                    : "gemini-2.5-flash";
         }
 
         String apiKey = getEffectiveApiKey();
@@ -79,8 +79,8 @@ public class AiService {
         if (targetModel != null && !targetModel.isBlank()) {
             tryModels.add(targetModel);
         }
-        // Fallback models siêu nhanh và có độ sẵn sàng cao nhất
-        for (String m : List.of("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview")) {
+        // Fallback models chính xác và có độ sẵn sàng cao nhất từ Google Gemini
+        for (String m : List.of("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash-lite")) {
             if (!tryModels.contains(m)) {
                 tryModels.add(m);
             }
