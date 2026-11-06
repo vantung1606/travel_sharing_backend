@@ -236,6 +236,12 @@ public class PostService {
         Post sharedOriginalPost = null;
         if (request.getSharedPostId() != null) {
             sharedOriginalPost = postRepository.findById(request.getSharedPostId()).orElse(null);
+            if (sharedOriginalPost != null) {
+                // Flatten nested repost: always reference the root original post
+                while (sharedOriginalPost.getSharedPost() != null) {
+                    sharedOriginalPost = sharedOriginalPost.getSharedPost();
+                }
+            }
         }
 
         String title = request.getTitle();
@@ -259,10 +265,6 @@ public class PostService {
             }
         } else if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
             imgList.add(request.getImageUrl().trim());
-        }
-
-        if (imgList.isEmpty() && sharedOriginalPost != null && sharedOriginalPost.getFirstImage() != null && !sharedOriginalPost.getFirstImage().isBlank()) {
-            imgList.add(sharedOriginalPost.getFirstImage());
         }
 
         // 1. Run WanderAI Content Moderation & Safety Inspection
