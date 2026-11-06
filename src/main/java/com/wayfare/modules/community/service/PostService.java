@@ -304,6 +304,7 @@ public class PostService {
                 .sharedPost(sharedOriginalPost)
                 .likeCount(0)
                 .commentCount(0)
+                .commentLocked(Boolean.TRUE.equals(request.getCommentLocked()))
                 .reportsCount(0)
                 .reportReason(null)
                 .flagSource(aiResult.isApproved() ? null : "AI")
@@ -551,6 +552,28 @@ public class PostService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
+    public PostDto toggleCommentLock(Long postId, String currentUserEmail) {
+        log.info("Toggle comment lock for post {} by {}", postId, currentUserEmail);
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại với ID: " + postId));
+
+        User currentUser = requireUser(currentUserEmail);
+        boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().stream().anyMatch(r -> r.getName().contains("ADMIN"));
+
+        if (!post.getAuthor().getId().equals(currentUser.getId()) && !isAdmin) {
+            throw new RuntimeException("Bạn không có quyền bật/tắt bình luận cho bài viết này!");
+        }
+
+        boolean currentLocked = post.isCommentLocked();
+        post.setCommentLocked(!currentLocked);
+        Post saved = postRepository.save(post);
+        log.info("Post {} comment lock changed to: {}", postId, saved.isCommentLocked());
+
+        return mapToDto(saved, currentUser);
+    }
+
     @Transactional(readOnly = true)
     public List<CommentDto> getPostComments(Long postId) {
         List<PostComment> allComments = postCommentRepository.findByPostIdOrderByCreatedAtAsc(postId);
@@ -590,6 +613,11 @@ public class PostService {
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Bài viết không tồn tại: " + postId));
+
+        if (post.isCommentLocked()) {
+            log.warn("Blocked comment attempt on locked post {} by user {}", postId, currentUserEmail);
+            throw new RuntimeException("Tác giả đã tắt tính năng bình luận cho bài viết này.");
+        }
 
         User user = requireUser(currentUserEmail);
 
@@ -924,6 +952,7 @@ public class PostService {
         post.setImages(imagesStr);
         if (request.getVideoUrl() != null) post.setVideoUrl(request.getVideoUrl());
         if (request.getVisibility() != null && !request.getVisibility().isBlank()) post.setVisibility(request.getVisibility());
+        if (request.getCommentLocked() != null) post.setCommentLocked(request.getCommentLocked());
         post.setCategory(postCategory);
         post.setStatus(status);
         post.setAiSafetyScore(aiResult.getSafetyScore());
@@ -1070,6 +1099,7 @@ public class PostService {
                 .isOwner(isOwner)
                 .likeCount(p.getLikeCount() != null ? p.getLikeCount() : 0)
                 .commentCount(p.getCommentCount() != null ? p.getCommentCount() : 0)
+                .commentLocked(p.isCommentLocked())
                 .isLiked(liked)
                 .isBookmarked(bookmarked)
                 .category(p.getCategory())

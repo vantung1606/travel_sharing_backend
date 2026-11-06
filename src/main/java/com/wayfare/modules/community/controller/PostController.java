@@ -115,6 +115,26 @@ public class PostController {
         return ResponseEntity.ok(ApiResponse.success("Đã cập nhật chế độ hiển thị bài viết!", updated));
     }
 
+    @PatchMapping("/{id}/toggle-comment-lock")
+    public ResponseEntity<ApiResponse<PostDto>> toggleCommentLock(
+            @PathVariable Long id,
+            Authentication authentication) {
+        String email = requireAuthEmail(authentication);
+        log.info("REST request to toggle comment lock on post #{}: email={}", id, email);
+        PostDto updated = postService.toggleCommentLock(id, email);
+        String msg = Boolean.TRUE.equals(updated.getCommentLocked())
+                ? "Đã tắt tính năng bình luận cho bài viết này!"
+                : "Đã mở lại tính năng bình luận cho bài viết này!";
+        return ResponseEntity.ok(ApiResponse.success(msg, updated));
+    }
+
+    @PutMapping("/{id}/toggle-comment-lock")
+    public ResponseEntity<ApiResponse<PostDto>> toggleCommentLockPut(
+            @PathVariable Long id,
+            Authentication authentication) {
+        return toggleCommentLock(id, authentication);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deletePost(
             @PathVariable Long id,

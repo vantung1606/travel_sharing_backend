@@ -318,6 +318,7 @@ CREATE TABLE IF NOT EXISTS `posts` (
   `images` text,
   `video_url` varchar(500) DEFAULT NULL,
   `visibility` varchar(20) NOT NULL DEFAULT 'PUBLIC',
+  `comment_locked` bit(1) NOT NULL DEFAULT b'0',
   `shared_post_id` bigint DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `FK5lidm6cqbc7u4xhqpxm898qme` (`user_id`),

@@ -32,6 +32,7 @@ public class PostDto {
     private java.time.ZonedDateTime createdAt;
     private String videoUrl;
     private String visibility; // PUBLIC, PRIVATE
+    private Boolean commentLocked;
     private String timeAgo;
     private String formattedDate;
     private Boolean isOwner;

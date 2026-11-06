@@ -25,5 +25,6 @@ public class UpdatePostRequest {
     private Long itineraryId;
     private Long placeId;
     private String visibility; // PUBLIC, PRIVATE
+    private Boolean commentLocked;
 }
 

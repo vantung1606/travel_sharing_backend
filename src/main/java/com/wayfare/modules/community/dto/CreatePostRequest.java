@@ -26,5 +26,6 @@ public class CreatePostRequest {
     private Long sharedPostId;
     private String videoUrl;
     private String visibility; // PUBLIC, PRIVATE
+    private Boolean commentLocked;
 }
 

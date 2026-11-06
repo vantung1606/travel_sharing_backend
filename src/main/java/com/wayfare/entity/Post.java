@@ -64,6 +64,10 @@ public class Post {
     private Integer commentCount = 0;
 
     @Builder.Default
+    @Column(name = "comment_locked")
+    private Boolean commentLocked = false;
+
+    @Builder.Default
     @Column(name = "status", length = 30)
     private String status = "ACTIVE"; // ACTIVE, PENDING_REPORT, HIDDEN, REMOVED
 
@@ -97,6 +101,10 @@ public class Post {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    public boolean isCommentLocked() {
+        return Boolean.TRUE.equals(commentLocked);
+    }
 
     public String getFirstImage() {
         if (images != null && !images.isBlank()) {
