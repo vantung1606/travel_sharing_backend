@@ -231,7 +231,7 @@ public class AdminReportService {
                         null,
                         "POST_APPROVED",
                         "Quản trị viên đã phê duyệt bài viết '" + post.getTitle() + "' của bạn! Bài viết hiện đã được đăng công khai trên Cộng đồng Wayfare.",
-                        "/community"
+                        "/community?postId=" + post.getId()
                 );
             } catch (Exception e) {
                 log.warn("Failed to notify author on post approval: {}", e.getMessage());
@@ -285,7 +285,7 @@ public class AdminReportService {
                         null,
                         "REPORT_DISMISSED",
                         "Báo cáo vi phạm đối với bài viết '" + post.getTitle() + "' đã được Ban Quản Trị xem xét và bác bỏ. Bài viết của bạn hoàn toàn hợp lệ.",
-                        "/community"
+                        "/community?postId=" + post.getId()
                 );
             } catch (Exception e) {
                 log.warn("Failed to notify author on report dismissal: {}", e.getMessage());

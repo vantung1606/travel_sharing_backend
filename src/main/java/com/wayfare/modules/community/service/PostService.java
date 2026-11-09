@@ -450,7 +450,7 @@ public class PostService {
                             user,
                             "LIKE",
                             user.getFullName() + " đã thích bài viết '" + post.getTitle() + "' của bạn.",
-                            "/community"
+                            "/community?postId=" + post.getId()
                     );
                 } catch (Exception e) {
                     log.warn("Failed to send LIKE notification: {}", e.getMessage());
@@ -659,7 +659,7 @@ public class PostService {
                         user,
                         "COMMENT_REPLY",
                         user.getFullName() + " đã trả lời bình luận của bạn trong bài viết '" + post.getTitle() + "'.",
-                        "/community"
+                        "/community?postId=" + post.getId()
                 );
             } else if (!post.getAuthor().getId().equals(user.getId())) {
                 notificationService.sendNotification(
@@ -667,7 +667,7 @@ public class PostService {
                         user,
                         "COMMENT",
                         user.getFullName() + " đã bình luận về bài viết của bạn: '" + (request.getContent().length() > 40 ? request.getContent().substring(0, 37) + "..." : request.getContent()) + "'",
-                        "/community"
+                        "/community?postId=" + post.getId()
                 );
             }
         } catch (Exception e) {
@@ -871,7 +871,7 @@ public class PostService {
                     post.getAuthor(),
                     "AI_READY",
                     "Bạn đã sao chép thành công chuyến đi '" + original.getTitle() + "' từ " + post.getAuthor().getFullName() + " vào kho Lịch trình của bạn!",
-                    "/itineraries"
+                    "/itineraries?itineraryId=" + savedClone.getId()
             );
         } catch (Exception e) {
             log.warn("Failed to send notification for itinerary clone: {}", e.getMessage());
@@ -885,7 +885,7 @@ public class PostService {
                         user,
                         "ITINERARY_SHARED",
                         user.getFullName() + " đã lưu bản sao chuyến đi '" + original.getTitle() + "' từ bài viết của bạn vào Lịch trình cá nhân.",
-                        "/itineraries"
+                        "/itineraries?itineraryId=" + original.getId()
                 );
             } catch (Exception e) {
                 log.warn("Failed to send clone notification to original author: {}", e.getMessage());
@@ -1233,7 +1233,7 @@ public class PostService {
                             author,
                             "TAG",
                             msg,
-                            "/community"
+                            "/community?postId=" + post.getId()
                     );
                 }
             }

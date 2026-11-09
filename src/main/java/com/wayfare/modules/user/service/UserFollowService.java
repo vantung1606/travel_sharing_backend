@@ -76,7 +76,7 @@ public class UserFollowService {
                         currentUser,
                         "FOLLOW",
                         currentUser.getFullName() + " đã bắt đầu theo dõi bạn trên Wayfare!",
-                        "/community"
+                        "/profile/" + currentUser.getId()
                 );
             } catch (Exception e) {
                 log.warn("Failed to send follow notification: {}", e.getMessage());
