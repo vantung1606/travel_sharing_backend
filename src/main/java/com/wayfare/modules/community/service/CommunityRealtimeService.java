@@ -1,7 +1,9 @@
 package com.wayfare.modules.community.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -12,14 +14,15 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Realtime community event hub based on Server-Sent Events (SSE).
+ * Realtime community event hub based on Server-Sent Events (SSE) and STOMP WebSocket.
  * <p>
- * Clients subscribe once via {@code GET /api/realtime/community/stream} and receive
- * lightweight events (comment added/deleted, like changed). Event payloads only contain
+ * Clients subscribe once via {@code GET /api/realtime/community/stream} or STOMP topic {@code /topic/community}
+ * and receive lightweight events (comment added/deleted, like changed). Event payloads only contain
  * IDs & counters - clients re-fetch comment content through the normal REST API, so no
  * private data is leaked through the broadcast channel.
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class CommunityRealtimeService {
 
@@ -27,6 +30,7 @@ public class CommunityRealtimeService {
     private static final long EMITTER_TIMEOUT_MS = 180_000L;
 
     private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final SimpMessagingTemplate messagingTemplate;
 
     public SseEmitter subscribe() {
         SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
@@ -103,13 +107,23 @@ public class CommunityRealtimeService {
     }
 
     private void broadcast(String eventName, Map<String, Object> payload) {
-        log.info("[Realtime] Broadcasting '{}' {} to {} subscriber(s)", eventName, payload.get("type"), emitters.size());
+        log.info("[Realtime] Broadcasting '{}' {} to {} SSE subscriber(s)", eventName, payload.get("type"), emitters.size());
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event().name(eventName).data(payload, MediaType.APPLICATION_JSON));
             } catch (Exception e) {
                 removeEmitter(emitter, "send failed: " + e.getMessage());
             }
+        }
+
+        // Phát sóng đồng thời qua STOMP WebSocket topic /topic/community cho Mobile và Web
+        try {
+            if (messagingTemplate != null) {
+                messagingTemplate.convertAndSend("/topic/community", payload);
+                log.info("[Realtime] Dispatched community event to /topic/community: {}", payload.get("type"));
+            }
+        } catch (Exception e) {
+            log.warn("[Realtime] Failed to broadcast community event to /topic/community: {}", e.getMessage());
         }
     }
 
