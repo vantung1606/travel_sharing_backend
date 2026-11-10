@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -36,6 +38,8 @@ public class AuthService {
     private final com.wayfare.security.JwtTokenProvider tokenProvider;
     private final GoogleOAuthService googleOAuthService;
     private final org.springframework.beans.factory.ObjectProvider<com.wayfare.modules.admin.service.PermissionService> permissionServiceProvider;
+    private final com.wayfare.repository.PasswordResetTokenRepository passwordResetTokenRepository;
+    private final ResendEmailService resendEmailService;
 
     private Set<String> resolvePermissions(String email) {
         if (email == null || email.isBlank()) return Set.of();
@@ -297,5 +301,120 @@ public class AuthService {
                 .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
                 .permissions(resolvePermissions(user.getEmail()))
                 .build();
+    }
+
+    @Transactional
+    public Map<String, Object> forgotPassword(com.wayfare.modules.auth.dto.ForgotPasswordRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        log.info("Xử lý yêu cầu quên mật khẩu cho email: {}", email);
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new com.wayfare.exception.ResourceNotFoundException("Không tìm thấy tài khoản với email: " + email));
+
+        // Hủy các mã OTP chưa dùng trước đó của email này
+        passwordResetTokenRepository.findTopByEmailAndIsUsedFalseOrderByCreatedAtDesc(email)
+                .ifPresent(prev -> {
+                    prev.setIsUsed(true);
+                    passwordResetTokenRepository.save(prev);
+                });
+
+        // Tạo mã OTP ngẫu nhiên 6 chữ số
+        int randomPin = 100000 + new java.security.SecureRandom().nextInt(900000);
+        String otp = String.valueOf(randomPin);
+
+        com.wayfare.entity.PasswordResetToken token = com.wayfare.entity.PasswordResetToken.builder()
+                .email(email)
+                .otpCode(otp)
+                .expiryTime(LocalDateTime.now().plusMinutes(5))
+                .isUsed(false)
+                .attempts(0)
+                .build();
+        passwordResetTokenRepository.save(token);
+
+        // Gửi qua Resend API
+        boolean emailSent = resendEmailService.sendPasswordResetOtp(email, otp, user.getFullName());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("email", email);
+        response.put("expiresInSeconds", 300);
+        response.put("emailSent", emailSent);
+        // Nếu Resend gặp giới hạn sandbox với email người nhận, trả về devOtp để phục vụ kiểm thử / demo trơn tru
+        if (!emailSent) {
+            response.put("devOtp", otp);
+            log.info("Chế độ thử nghiệm / Sandbox: Mã OTP cho {} là {}", email, otp);
+        }
+        return response;
+    }
+
+    @Transactional
+    public Map<String, Object> verifyOtp(com.wayfare.modules.auth.dto.VerifyOtpRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        String otp = request.getOtp().trim();
+        log.info("Xác thực mã OTP cho email: {}", email);
+
+        com.wayfare.entity.PasswordResetToken token = passwordResetTokenRepository
+                .findTopByEmailAndIsUsedFalseOrderByCreatedAtDesc(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy yêu cầu đặt lại mật khẩu hoặc mã OTP đã hết hạn!"));
+
+        if (LocalDateTime.now().isAfter(token.getExpiryTime())) {
+            token.setIsUsed(true);
+            passwordResetTokenRepository.save(token);
+            throw new RuntimeException("Mã OTP đã hết hạn! Vui lòng yêu cầu gửi lại mã mới.");
+        }
+
+        if (token.getAttempts() >= 5) {
+            token.setIsUsed(true);
+            passwordResetTokenRepository.save(token);
+            throw new RuntimeException("Bạn đã nhập sai mã OTP quá 5 lần. Vui lòng yêu cầu gửi mã mới!");
+        }
+
+        if (!token.getOtpCode().equals(otp)) {
+            token.setAttempts(token.getAttempts() + 1);
+            passwordResetTokenRepository.save(token);
+            int remaining = 5 - token.getAttempts();
+            throw new RuntimeException("Mã OTP không chính xác! Bạn còn " + remaining + " lần thử.");
+        }
+
+        // OTP hợp lệ: cấp resetToken dùng 1 lần trong 10 phút
+        String resetToken = UUID.randomUUID().toString();
+        token.setResetToken(resetToken);
+        token.setExpiryTime(LocalDateTime.now().plusMinutes(10));
+        passwordResetTokenRepository.save(token);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("email", email);
+        response.put("resetToken", resetToken);
+        return response;
+    }
+
+    @Transactional
+    public void resetPassword(com.wayfare.modules.auth.dto.ResetPasswordRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        String resetToken = request.getResetToken().trim();
+        log.info("Đặt lại mật khẩu mới cho email: {}", email);
+
+        com.wayfare.entity.PasswordResetToken token = passwordResetTokenRepository
+                .findByResetTokenAndIsUsedFalse(resetToken)
+                .orElseThrow(() -> new RuntimeException("Mã xác thực không hợp lệ hoặc đã qua sử dụng!"));
+
+        if (!token.getEmail().equalsIgnoreCase(email)) {
+            throw new RuntimeException("Thông tin xác thực không trùng khớp!");
+        }
+
+        if (LocalDateTime.now().isAfter(token.getExpiryTime())) {
+            token.setIsUsed(true);
+            passwordResetTokenRepository.save(token);
+            throw new RuntimeException("Phiên đặt lại mật khẩu đã hết hạn. Vui lòng thực hiện lại từ đầu.");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new com.wayfare.exception.ResourceNotFoundException("Tài khoản không tồn tại!"));
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword().trim()));
+        userRepository.save(user);
+
+        token.setIsUsed(true);
+        passwordResetTokenRepository.save(token);
+        log.info("Đặt lại mật khẩu thành công cho tài khoản: {}", email);
     }
 }

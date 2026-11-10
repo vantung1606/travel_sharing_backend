@@ -57,6 +57,30 @@ public class AuthController {
         authService.logout(authEmail, httpRequest);
         return ResponseEntity.ok(ApiResponse.success("Đăng xuất thành công!", null));
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> forgotPassword(
+            @Valid @RequestBody com.wayfare.modules.auth.dto.ForgotPasswordRequest request) {
+        log.info("REST request forgot password for email: {}", request.getEmail());
+        java.util.Map<String, Object> result = authService.forgotPassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Mã xác thực OTP đã được gửi đến email của bạn!", result));
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> verifyOtp(
+            @Valid @RequestBody com.wayfare.modules.auth.dto.VerifyOtpRequest request) {
+        log.info("REST request verify OTP for email: {}", request.getEmail());
+        java.util.Map<String, Object> result = authService.verifyOtp(request);
+        return ResponseEntity.ok(ApiResponse.success("Xác thực mã OTP thành công!", result));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody com.wayfare.modules.auth.dto.ResetPasswordRequest request) {
+        log.info("REST request reset password for email: {}", request.getEmail());
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Đặt lại mật khẩu thành công! Bạn có thể đăng nhập bằng mật khẩu mới.", null));
+    }
 }
 
 

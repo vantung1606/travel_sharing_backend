@@ -448,5 +448,21 @@ CREATE TABLE IF NOT EXISTS `users` (
 ) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SET FOREIGN_KEY_CHECKS = 1;
 -- =============================================================================
+-- PASSWORD RESET TOKENS TABLE (Mã xác thực quên mật khẩu qua Resend Email)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(150) NOT NULL,
+    otp_code VARCHAR(6) NOT NULL,
+    reset_token VARCHAR(100) NULL,
+    expiry_time DATETIME NOT NULL,
+    is_used BOOLEAN DEFAULT FALSE,
+    attempts INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_reset_email_otp (email, otp_code),
+    INDEX idx_reset_token (reset_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================
