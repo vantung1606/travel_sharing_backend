@@ -200,7 +200,7 @@ public class UserFollowService {
         // Get Itineraries
         List<Itinerary> userItineraries = itineraryRepository.findByCreatorOrderByCreatedAtDesc(targetUser);
         List<ItineraryDto> itinDtos = userItineraries.stream()
-                .filter(i -> isOwnProfile || "ACTIVE".equalsIgnoreCase(i.getStatus()))
+                .filter(i -> isOwnProfile || Boolean.TRUE.equals(i.getIsPublic()) || "ACTIVE".equalsIgnoreCase(i.getStatus()))
                 .map(i -> ItineraryDto.builder()
                         .id(i.getId())
                         .creatorId(i.getCreator() != null ? i.getCreator().getId() : null)
@@ -214,6 +214,8 @@ public class UserFollowService {
                         .budgetTotal(i.getBudgetTotal())
                         .coverImageUrl(i.getCoverImageUrl())
                         .isAiGenerated(i.getIsAiGenerated())
+                        .isPublic(Boolean.TRUE.equals(i.getIsPublic()))
+                        .groupType(i.getGroupType())
                         .status(i.getStatus())
                         .createdAt(i.getCreatedAt())
                         .updatedAt(i.getUpdatedAt())
