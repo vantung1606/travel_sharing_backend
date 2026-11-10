@@ -244,6 +244,43 @@ public class DataInitializer implements CommandLineRunner {
                 }
         );
 
+        // Seed Account: vantung2k44@gmail.com / password123 (Chủ tài khoản hệ thống Wayfare & Resend Email Owner)
+        userRepository.findByEmail("vantung2k44@gmail.com").ifPresentOrElse(
+                vt -> {
+                    boolean needSave = false;
+                    if (vt.getRoles() == null || !vt.getRoles().contains(adminRole)) {
+                        Set<Role> roles = new java.util.HashSet<>(vt.getRoles() != null ? vt.getRoles() : Set.of());
+                        roles.add(adminRole);
+                        roles.add(userRole);
+                        vt.setRoles(roles);
+                        needSave = true;
+                    }
+                    if (Boolean.TRUE.equals(vt.getIsLocked())) {
+                        vt.setIsLocked(false);
+                        needSave = true;
+                    }
+                    if (needSave) {
+                        userRepository.save(vt);
+                    }
+                },
+                () -> {
+                    userRepository.save(User.builder()
+                            .email("vantung2k44@gmail.com")
+                            .password(passwordEncoder.encode("password123"))
+                            .fullName("Văn Tùng")
+                            .handle("@vantung_wayfare")
+                            .avatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80")
+                            .bio("Chủ tài khoản quản trị Wayfare Travel Platform 🚀")
+                            .status("ACTIVE")
+                            .isLocked(false)
+                            .isVerified(true)
+                            .tier("diamond")
+                            .roles(Set.of(adminRole, userRole))
+                            .build());
+                    log.info(">>> SUCCESS: Seeded Account -> Email: vantung2k44@gmail.com | Password: password123");
+                }
+        );
+
         // Seed Manager (Content Moderator): manager@gmail.com / manager123
         userRepository.findByEmail("manager@gmail.com").ifPresentOrElse(
                 manager -> {

@@ -334,15 +334,16 @@ public class AuthService {
         // Gửi qua Resend API
         boolean emailSent = resendEmailService.sendPasswordResetOtp(email, otp, user.getFullName());
 
+        if (!emailSent) {
+            log.error("Không thể gửi email OTP qua Resend tới {}", email);
+            throw new RuntimeException("Không thể gửi email xác thực OTP qua Resend. Vui lòng thử lại sau ít phút!");
+        }
+
         Map<String, Object> response = new HashMap<>();
         response.put("email", email);
         response.put("expiresInSeconds", 300);
-        response.put("emailSent", emailSent);
-        // Nếu Resend gặp giới hạn sandbox với email người nhận, trả về devOtp để phục vụ kiểm thử / demo trơn tru
-        if (!emailSent) {
-            response.put("devOtp", otp);
-            log.info("Chế độ thử nghiệm / Sandbox: Mã OTP cho {} là {}", email, otp);
-        }
+        response.put("emailSent", true);
+        response.put("message", "Mã xác thực OTP đã được gửi thành công đến hòm thư " + email + ". Vui lòng kiểm tra hộp thư đến hoặc mục Spam!");
         return response;
     }
 
