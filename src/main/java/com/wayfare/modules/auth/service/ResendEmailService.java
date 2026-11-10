@@ -102,7 +102,9 @@ public class ResendEmailService {
         if (from.isEmpty()) {
             from = cleanValue(System.getenv("RESEND_FROM_EMAIL"));
         }
-        if (from.isEmpty()) {
+        // Resend Sandbox KHÔNG cho phép người gửi (FROM) là email cá nhân như @gmail.com, @yahoo.com
+        // Bắt buộc phải là "onboarding@resend.dev" nếu chưa cấu hình custom domain trong Resend Dashboard
+        if (from.isEmpty() || from.toLowerCase().contains("@gmail.com") || from.toLowerCase().contains("@yahoo.com") || from.toLowerCase().contains("@hotmail.com") || from.toLowerCase().contains("@outlook.com")) {
             from = "onboarding@resend.dev";
         }
         return from;
