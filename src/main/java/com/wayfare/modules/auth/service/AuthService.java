@@ -332,11 +332,11 @@ public class AuthService {
         passwordResetTokenRepository.save(token);
 
         // Gửi qua Resend API
-        boolean emailSent = resendEmailService.sendPasswordResetOtp(email, otp, user.getFullName());
+        ResendEmailService.SendResult sendResult = resendEmailService.sendPasswordResetOtp(email, otp, user.getFullName());
 
-        if (!emailSent) {
-            log.error("Không thể gửi email OTP qua Resend tới {}", email);
-            throw new RuntimeException("Không thể gửi email xác thực OTP qua Resend. Vui lòng thử lại sau ít phút!");
+        if (!sendResult.isSuccess()) {
+            log.error("Không thể gửi email OTP qua Resend tới {}: HTTP {} -> {}", email, sendResult.getStatusCode(), sendResult.getMessage());
+            throw new RuntimeException("Lỗi gửi Resend (HTTP " + sendResult.getStatusCode() + "): " + sendResult.getMessage());
         }
 
         Map<String, Object> response = new HashMap<>();

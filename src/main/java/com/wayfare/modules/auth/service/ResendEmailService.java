@@ -1,6 +1,7 @@
 package com.wayfare.modules.auth.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -38,25 +39,73 @@ public class ResendEmailService {
         this.objectMapper = new ObjectMapper();
     }
 
+    @Getter
+    public static class SendResult {
+        private final boolean success;
+        private final int statusCode;
+        private final String message;
+
+        public SendResult(boolean success, int statusCode, String message) {
+            this.success = success;
+            this.statusCode = statusCode;
+            this.message = message;
+        }
+
+        public static SendResult ok(int statusCode, String message) {
+            return new SendResult(true, statusCode, message);
+        }
+
+        public static SendResult fail(int statusCode, String message) {
+            return new SendResult(false, statusCode, message);
+        }
+    }
+
+    private String cleanValue(String val) {
+        if (val == null) return "";
+        String s = val.trim();
+        if ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'"))) {
+            if (s.length() >= 2) {
+                s = s.substring(1, s.length() - 1).trim();
+            }
+        }
+        return s;
+    }
+
     /**
      * Lấy khóa Resend API: Ưu tiên biến môi trường / application.yml,
      * nếu không có sẽ tự động giải mã khóa hệ thống được cấu hình sẵn.
      */
     private String getEffectiveApiKey() {
-        if (resendApiKey != null && !resendApiKey.trim().isEmpty()) {
-            return resendApiKey.trim();
+        String key = cleanValue(resendApiKey);
+        if (key.isEmpty()) {
+            key = cleanValue(System.getenv("RESEND_API_KEY"));
         }
-        String envKey = System.getenv("RESEND_API_KEY");
-        if (envKey != null && !envKey.trim().isEmpty()) {
-            return envKey.trim();
+        if (key.isEmpty()) {
+            try {
+                byte[] decoded = Base64.getDecoder().decode("cmVfN2ZyTXZmRG1fOUtVdkIzQjNaUkFWZ0hhekphdENDd3Nk");
+                key = new String(decoded, StandardCharsets.UTF_8).trim();
+            } catch (Exception e) {
+                log.error("Lỗi giải mã khóa Resend API mặc định: {}", e.getMessage());
+                return "";
+            }
         }
-        try {
-            byte[] decoded = Base64.getDecoder().decode("cmVfN2ZyTXZmRG1fOUtVdkIzQjNaUkFWZ0hhekphdENDd3Nk");
-            return new String(decoded, StandardCharsets.UTF_8).trim();
-        } catch (Exception e) {
-            log.error("Lỗi giải mã khóa Resend API mặc định: {}", e.getMessage());
-            return "";
+
+        // Loại bỏ tiền tố "Bearer " nếu người dùng vô tình dán cả Bearer vào biến Railway
+        if (key.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            key = key.substring(7).trim();
         }
+        return key;
+    }
+
+    private String getEffectiveFromEmail() {
+        String from = cleanValue(resendFromEmail);
+        if (from.isEmpty()) {
+            from = cleanValue(System.getenv("RESEND_FROM_EMAIL"));
+        }
+        if (from.isEmpty()) {
+            from = "onboarding@resend.dev";
+        }
+        return from;
     }
 
     /**
@@ -64,16 +113,17 @@ public class ResendEmailService {
      * @param toEmail Email người nhận
      * @param otpCode Mã OTP 6 chữ số
      * @param userName Tên người dùng
-     * @return true nếu email đã được chuyển phát thành công đến hòm thư
+     * @return SendResult chứa trạng thái và mã lỗi cụ thể từ Resend
      */
-    public boolean sendPasswordResetOtp(String toEmail, String otpCode, String userName) {
+    public SendResult sendPasswordResetOtp(String toEmail, String otpCode, String userName) {
         String apiKey = getEffectiveApiKey();
         if (apiKey.isEmpty()) {
             log.error("Không tìm thấy Resend API Key để gửi email tới {}", toEmail);
-            return false;
+            return SendResult.fail(500, "RESEND_API_KEY chưa được cấu hình trên server!");
         }
 
-        log.info("Bắt đầu gửi email OTP thật tới hòm thư: {}", toEmail);
+        String fromEmail = getEffectiveFromEmail();
+        log.info("Bắt đầu gửi email OTP tới hòm thư: {} từ sender: {}", toEmail, fromEmail);
         try {
             String greeting = (userName != null && !userName.trim().isEmpty())
                     ? "Xin chào <strong>" + userName + "</strong>,"
@@ -81,37 +131,39 @@ public class ResendEmailService {
 
             String htmlContent = buildEmailTemplate(greeting, otpCode, toEmail);
 
-            // 1. Thử gửi trực tiếp tới toEmail
-            boolean sent = doSendEmail(apiKey, toEmail, "[Wayfare] Mã xác thực đặt lại mật khẩu: " + otpCode, htmlContent);
-            if (sent) {
+            // 1. Gửi trực tiếp tới toEmail
+            SendResult directResult = doSendEmail(apiKey, fromEmail, toEmail, "[Wayfare] Mã xác thực đặt lại mật khẩu: " + otpCode, htmlContent);
+            if (directResult.isSuccess()) {
                 log.info(">>> THÀNH CÔNG: Đã gửi email OTP tới hòm thư {} qua Resend API!", toEmail);
-                return true;
+                return directResult;
             }
 
-            // 2. Nếu Resend trả về lỗi (do sandbox của gói miễn phí chỉ cho phép gửi về email chủ sở hữu)
+            // 2. Nếu Resend trả về lỗi Sandbox (chỉ cho phép gửi tới hòm thư chủ sở hữu đã đăng ký)
             // thì tự động chuyển tiếp OTP về hòm thư chủ sở hữu vantung2k44@gmail.com
             if (!toEmail.equalsIgnoreCase(OWNER_EMAIL)) {
-                log.warn("Resend Sandbox chỉ cho phép gửi về email chủ sở hữu ({}). Đang chuyển tiếp email OTP sang {}...", OWNER_EMAIL, OWNER_EMAIL);
+                log.warn("Resend Sandbox trả về HTTP {}: {}. Đang chuyển tiếp email OTP sang chủ tài khoản {}...", 
+                        directResult.getStatusCode(), directResult.getMessage(), OWNER_EMAIL);
                 String fallbackSubject = "[Wayfare OTP] Mã xác thực cho tài khoản " + toEmail + ": " + otpCode;
-                String fallbackHtml = buildEmailTemplate(greeting + " (Yêu cầu cho tài khoản: " + toEmail + ")", otpCode, toEmail);
-                boolean fallbackSent = doSendEmail(apiKey, OWNER_EMAIL, fallbackSubject, fallbackHtml);
-                if (fallbackSent) {
-                    log.info(">>> THÀNH CÔNG: Đã chuyển tiếp email OTP sang hòm thư {}!", OWNER_EMAIL);
-                    return true;
+                String fallbackHtml = buildEmailTemplate(greeting + " (Mã cho tài khoản: " + toEmail + ")", otpCode, toEmail);
+                SendResult fallbackResult = doSendEmail(apiKey, fromEmail, OWNER_EMAIL, fallbackSubject, fallbackHtml);
+                if (fallbackResult.isSuccess()) {
+                    log.info(">>> THÀNH CÔNG: Đã chuyển tiếp email OTP sang hòm thư chủ sở hữu {}!", OWNER_EMAIL);
+                    return fallbackResult;
                 }
+                return fallbackResult;
             }
 
-            return false;
+            return directResult;
         } catch (Exception e) {
-            log.error("Lỗi khi kết nối Resend Email API: {}", e.getMessage(), e);
-            return false;
+            log.error("Lỗi ngoại lệ khi gửi Resend Email API: {}", e.getMessage(), e);
+            return SendResult.fail(500, "Lỗi kết nối Resend: " + e.getMessage());
         }
     }
 
-    private boolean doSendEmail(String apiKey, String recipient, String subject, String html) {
+    private SendResult doSendEmail(String apiKey, String fromEmail, String recipient, String subject, String html) {
         try {
             Map<String, Object> payload = new HashMap<>();
-            payload.put("from", resendFromEmail);
+            payload.put("from", fromEmail);
             payload.put("to", List.of(recipient));
             payload.put("subject", subject);
             payload.put("html", html);
@@ -121,18 +173,24 @@ public class ResendEmailService {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("https://api.resend.com/emails"))
                     .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(10))
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .header("Content-Type", "application/json; charset=UTF-8")
+                    .timeout(Duration.ofSeconds(12))
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            log.info("Phản hồi Resend API cho {}: HTTP {} -> {}", recipient, response.statusCode(), response.body());
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            int status = response.statusCode();
+            String body = response.body();
+            log.info("Phản hồi Resend API cho {}: HTTP {} -> {}", recipient, status, body);
 
-            return response.statusCode() >= 200 && response.statusCode() < 300;
+            if (status >= 200 && status < 300) {
+                return SendResult.ok(status, body);
+            } else {
+                return SendResult.fail(status, body != null ? body : "HTTP " + status);
+            }
         } catch (Exception e) {
-            log.error("Lỗi gửi HTTP request tới Resend API: {}", e.getMessage());
-            return false;
+            log.error("Lỗi gửi HTTP request tới Resend API: {}", e.getMessage(), e);
+            return SendResult.fail(500, e.getMessage());
         }
     }
 
