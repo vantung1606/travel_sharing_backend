@@ -55,11 +55,30 @@ public class ItineraryService {
         if (user == null) {
             return java.util.Collections.emptyList();
         }
-        List<Itinerary> list = itineraryRepository.findByCreatorOrderByCreatedAtDesc(user);
+        List<Itinerary> owned = itineraryRepository.findByCreatorOrderByCreatedAtDesc(user);
+        List<ItineraryMember> memberships = itineraryMemberRepository.findByUserId(user.getId());
+        java.util.LinkedHashMap<Long, Itinerary> mergedMap = new java.util.LinkedHashMap<>();
+        for (Itinerary it : owned) {
+            mergedMap.put(it.getId(), it);
+        }
+        for (ItineraryMember m : memberships) {
+            if (m.getItinerary() != null && m.getItinerary().getId() != null) {
+                mergedMap.putIfAbsent(m.getItinerary().getId(), m.getItinerary());
+            }
+        }
+        List<Itinerary> list = new ArrayList<>(mergedMap.values());
+        list.sort((a, b) -> {
+            if (a.getCreatedAt() == null && b.getCreatedAt() == null) return 0;
+            if (a.getCreatedAt() == null) return 1;
+            if (b.getCreatedAt() == null) return -1;
+            return b.getCreatedAt().compareTo(a.getCreatedAt());
+        });
         return list.stream().map(i -> {
             ItineraryDto dto = mapToSummaryDto(i);
             List<ItineraryDetail> details = itineraryDetailRepository.findByItineraryOrderByDayNumberAscVisitOrderAsc(i);
             dto.setDetails(details.stream().map(this::mapDetailToDto).collect(Collectors.toList()));
+            List<ItineraryMember> itMembers = itineraryMemberRepository.findByItinerary(i);
+            dto.setMembers(itMembers.stream().map(this::mapMemberToDto).collect(Collectors.toList()));
             return dto;
         }).collect(Collectors.toList());
     }
@@ -441,6 +460,21 @@ public class ItineraryService {
                 .build();
 
         ItineraryMember saved = itineraryMemberRepository.save(member);
+
+        // Gửi thông báo realtime cho thành viên được mời
+        try {
+            notificationService.sendNotification(
+                    user,
+                    requester,
+                    "ITINERARY_INVITE",
+                    (requester.getFullName() != null ? requester.getFullName() : requester.getEmail())
+                            + " đã mời bạn đồng hành trong lịch trình \"" + itinerary.getTitle() + "\"!",
+                    "/itineraries?id=" + itinerary.getId()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send itinerary invite notification to {}: {}", user.getEmail(), e.getMessage());
+        }
+
         return mapMemberToDto(saved);
     }
 

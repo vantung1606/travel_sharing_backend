@@ -16,6 +16,8 @@ public interface ItineraryMemberRepository extends JpaRepository<ItineraryMember
 
     List<ItineraryMember> findByItineraryId(Long itineraryId);
 
+    List<ItineraryMember> findByUserId(Long userId);
+
     Optional<ItineraryMember> findByItineraryAndUser(Itinerary itinerary, User user);
 
     Optional<ItineraryMember> findByItineraryIdAndUserId(Long itineraryId, Long userId);
