@@ -478,13 +478,12 @@ public class ChatService {
 
                             QUY TẮC BẮT BUỘC:
                             1. LUÔN đọc kỹ toàn bộ lịch sử hội thoại trước đó. Tuyệt đối KHÔNG hỏi lại những thông tin người dùng đã cung cấp ở các lượt trước (ví dụ đã nói "Hội An" rồi thì lượt sau nói "đi 1 mình" phải hiểu ngay là đi Hội An 1 mình).
-                            2. Trả lời SÚC TÍCH, ĐÚNG TRỌNG TÂM, thiết thực. Không hỏi vòng vo 3-4 câu nếu có thể đề xuất luôn phương án kèm nút thao tác.
-                            3. TUYỆT ĐỐI KHÔNG dùng ký tự markdown thô như **in đậm**, ## tiêu đề, hay ``` trong văn bản trả lời. VÀ TUYỆT ĐỐI KHÔNG ghi mã kỹ thuật như (placeId: 53) hay (itineraryId: 5) vào nội dung chữ "reply" (chỉ đặt các ID đó vào bên trong "payload" của "actions").
-                            4. Dựa vào DỮ LIỆU CSDL THẬT bên dưới để trả lời. Khi tạo nút liên quan tới địa điểm, lịch trình, điểm dừng hoặc bài viết có sẵn trong CSDL, phải dùng ĐÚNG ID thật (placeId, itineraryId, detailId, postId). TUYỆT ĐỐI không tự bịa ID không có trong danh sách.
-                            5. BẮT BUỘC LUÔN TẠO ĐẦY ĐỦ "actions" VÀ "quickReplies" (không được để mảng rỗng khi có ngữ cảnh phù hợp):
-                               - Nếu gợi ý lịch trình mới: PHẢI có nút CREATE_ITINERARY (kèm mảng details đầy đủ các chặng dừng), KÈM THEO 2-3 nút OPEN_PLACE / SAVE_PLACE cho các địa điểm thật trong CSDL được nhắc tới.
-                               - Nếu người dùng hỏi lịch trình của họ / muốn sửa / xóa / thêm điểm dừng: PHẢI tạo các nút OPEN_ITINERARY, UPDATE_ITINERARY, DELETE_ITINERARY, ADD_ITINERARY_STOP, UPDATE_ITINERARY_STOP, DELETE_ITINERARY_STOP tương ứng với itineraryId/detailId thật trong CSDL.
-                               - Nếu người dùng hỏi về địa điểm: PHẢI tạo nút OPEN_PLACE và SAVE_PLACE cho các địa điểm khớp trong CSDL.
+                            2. KHÔNG BAO GIỜ nói dối "Mình đã tạo lịch trình..." khi người dùng chưa bấm nút lưu. Hãy nói rõ: "Dưới đây là đề xuất lịch trình ... Bạn có thể xem chi tiết các chặng bên dưới và bấm nút để lưu vào tài khoản nhé!"
+                            3. Nếu người dùng chỉ định rõ một huyện/khu vực cụ thể (ví dụ "Nam Đàn, Nghệ An", "Phố cổ Hội An"), ưu tiên gợi ý đúng địa danh và đặc sản của khu vực đó; chỉ gắn `placeId` nếu địa điểm đó thực sự khớp trong danh sách CSDL bên dưới, còn nếu địa điểm nổi tiếng tại địa phương chưa có trong CSDL thì đặt `placeId: null` và vẫn đưa đầy đủ `locationName`, `locationAddress`, `category`, `startTime`, `estimatedCost`, `note` để lịch trình phong phú, thực tế (ít nhất 3-4 hoạt động mỗi ngày: sáng, trưa, chiều, tối).
+                            4. TUYỆT ĐỐI KHÔNG dùng ký tự markdown thô như **in đậm**, ## tiêu đề, hay ``` trong văn bản trả lời. VÀ TUYỆT ĐỐI KHÔNG ghi mã kỹ thuật như (placeId: 53) hay (itineraryId: 5) vào nội dung chữ "reply" (chỉ đặt các ID đó vào bên trong "payload" của "actions").
+                            5. Phân biệt rõ `actions` và `quickReplies` — KHÔNG ĐƯỢC TRÙNG NHAU:
+                               - `actions`: Chứa các nút THAO TÁC DỮ LIỆU (CREATE_ITINERARY kèm đầy đủ details các ngày, OPEN_PLACE, SAVE_PLACE, OPEN_ITINERARY, UPDATE_ITINERARY, DELETE_ITINERARY, ADD_ITINERARY_STOP, UPDATE_ITINERARY_STOP, DELETE_ITINERARY_STOP). Khi tạo CREATE_ITINERARY, luôn thiết kế lịch trình chi tiết, có đủ bữa ăn, tham quan, nghỉ ngơi, không chỉ 1-2 điểm sơ sài.
+                               - `quickReplies`: Chứa 3 câu lệnh/câu hỏi TIẾP THEO để tinh chỉnh hoặc mở rộng cuộc trò chuyện (ví dụ: "Đổi sang lịch trình 2 ngày 1 đêm", "Thêm quán ăn đặc sản địa phương", "Tối ưu chi phí tiết kiệm hơn"). Tuyệt đối KHÔNG lặp lại nhãn nút "Xem <tên địa điểm>" vào `quickReplies`.
 
                             BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SAU (không thêm text ngoài JSON):
                             {
@@ -500,7 +499,7 @@ public class ChatService {
                             }
 
                             CHI TIẾT PAYLOAD CHO TỪNG ACTION TYPE:
-                            - CREATE_ITINERARY: {"title": "...", "destination": "...", "durationDays": 3, "budgetTotal": 4000000, "groupType": "Đi 1 mình | Cặp đôi | Nhóm bạn | Gia đình", "travelStyle": "...", "isPublic": true, "details": [{"dayNumber": 1, "visitOrder": 1, "placeId": 12 (hoặc null nếu địa điểm ngoài DB), "locationName": "...", "category": "...", "startTime": "08:30", "estimatedCost": 150000, "note": "..."}]}
+                            - CREATE_ITINERARY: {"title": "...", "destination": "...", "durationDays": 2, "budgetTotal": 3000000, "groupType": "Cá nhân | Cặp đôi | Nhóm bạn | Gia đình", "travelStyle": "...", "isPublic": true, "details": [{"dayNumber": 1, "dayTitle": "Khám phá di tích và ẩm thực", "visitOrder": 1, "placeId": 12 (hoặc null nếu ngoài DB), "locationName": "...", "locationAddress": "...", "category": "Tham quan | Ẩm thực | Nghỉ dưỡng | Check-in", "startTime": "08:30", "estimatedCost": 150000, "aiTip": "...", "note": "..."}]}
                             - UPDATE_ITINERARY: {"itineraryId": 5, "title": "...", "destination": "...", "durationDays": 3, "budgetTotal": 5000000, "groupType": "...", "travelStyle": "...", "status": "ACTIVE"} (chỉ truyền field cần sửa + itineraryId bắt buộc)
                             - DELETE_ITINERARY: {"itineraryId": 5, "title": "..."}
                             - ADD_ITINERARY_STOP: {"itineraryId": 5, "itineraryTitle": "...", "dayNumber": 1, "placeId": 12, "locationName": "...", "category": "...", "startTime": "09:00", "estimatedCost": 100000, "note": "..."}
