@@ -414,26 +414,35 @@ public class ChatService {
     }
 
     private void triggerAiAssistantReply(ChatRoom room, User user, String userQuestion) {
+        final Long roomId = room.getId();
+        final Long userId = user.getId();
         CompletableFuture.runAsync(() -> {
             User assistant = null;
             try {
                 assistant = getOrCreateAiAssistantUser();
-                sendAiTypingEvent(room.getId(), assistant, true);
+                ChatRoom freshRoom = chatRoomRepository.findById(roomId).orElse(null);
+                User freshUser = userRepository.findById(userId).orElse(null);
+                if (freshRoom == null || freshUser == null) {
+                    log.warn("Cannot generate AI reply: room {} or user {} not found", roomId, userId);
+                    return;
+                }
+
+                sendAiTypingEvent(roomId, assistant, true);
 
                 String rawResponseText;
                 String finalMessageType = "TEXT";
 
                 if (aiService != null && aiService.isApiKeyConfigured()) {
-                    // Lấy 12 tin nhắn gần nhất để AI nhớ ngữ cảnh hội thoại đa lượt
-                    List<ChatMessage> recentDesc = chatMessageRepository.findByChatRoomIdOrderByCreatedAtDesc(
-                            room.getId(), PageRequest.of(0, 12));
+                    // Lấy 12 tin nhắn gần nhất (JOIN FETCH sender để tránh LazyInitializationException trong async thread)
+                    List<ChatMessage> recentDesc = chatMessageRepository.findRecentWithSender(
+                            roomId, PageRequest.of(0, 12));
                     List<ChatMessage> recentAsc = new ArrayList<>(recentDesc);
                     Collections.reverse(recentAsc);
 
                     // Bỏ tin nhắn cuối nếu trùng với userQuestion vừa lưu để tránh lặp trong contents
                     if (!recentAsc.isEmpty()) {
                         ChatMessage last = recentAsc.get(recentAsc.size() - 1);
-                        if (last.getSender() != null && last.getSender().getId().equals(user.getId())
+                        if (last.getSender() != null && last.getSender().getId().equals(freshUser.getId())
                                 && userQuestion.equals(last.getContent() != null ? last.getContent().trim() : "")) {
                             recentAsc.remove(recentAsc.size() - 1);
                         }
@@ -463,7 +472,7 @@ public class ChatService {
                         }
                     }
 
-                    String dbContext = aiAssistantContextService.buildDatabaseContext(user, userQuestion, recentAsc);
+                    String dbContext = aiAssistantContextService.buildDatabaseContext(freshUser, userQuestion, recentAsc);
                     String systemPrompt = """
                             Bạn là Trợ lý Wayfare VIP — trợ lý du lịch thông minh, đi thẳng vào trọng tâm và có khả năng đọc dữ liệu thật từ CSDL Wayfare cũng như tạo các nút hành động (thêm/sửa/xóa/lưu/mở trang) cho người dùng.
 
@@ -528,25 +537,25 @@ public class ChatService {
                 }
 
                 ChatMessage botMsg = ChatMessage.builder()
-                        .chatRoom(room)
+                        .chatRoom(freshRoom)
                         .sender(assistant)
                         .content(rawResponseText)
                         .messageType(finalMessageType)
                         .build();
                 ChatMessage savedBotMsg = chatMessageRepository.save(botMsg);
 
-                room.setUpdatedAt(LocalDateTime.now());
-                chatRoomRepository.save(room);
+                freshRoom.setUpdatedAt(LocalDateTime.now());
+                chatRoomRepository.save(freshRoom);
 
                 // Broadcast tin nhắn của Trợ lý AI qua WebSocket tới cả Web và Mobile
                 ChatMessageDto botDto = mapToMessageDto(savedBotMsg, null);
                 botDto.setIsRead(false);
-                messagingTemplate.convertAndSend("/topic/room." + room.getId(), botDto);
-                log.info("AI Assistant ({}) reply saved and broadcasted to room {}", finalMessageType, room.getId());
+                messagingTemplate.convertAndSend("/topic/room." + roomId, botDto);
+                log.info("AI Assistant ({}) reply saved and broadcasted to room {}", finalMessageType, roomId);
             } catch (Exception e) {
-                log.error("Failed to generate AI Assistant reply for room {}: {}", room.getId(), e.getMessage(), e);
+                log.error("Failed to generate AI Assistant reply for room {}: {}", roomId, e.getMessage(), e);
             } finally {
-                sendAiTypingEvent(room.getId(), assistant, false);
+                sendAiTypingEvent(roomId, assistant, false);
             }
         });
     }

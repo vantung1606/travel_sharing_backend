@@ -17,6 +17,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     List<ChatMessage> findByChatRoomIdOrderByCreatedAtDesc(Long roomId, Pageable pageable);
 
+    @Query("SELECT m FROM ChatMessage m JOIN FETCH m.sender WHERE m.chatRoom.id = :roomId ORDER BY m.createdAt DESC")
+    List<ChatMessage> findRecentWithSender(@Param("roomId") Long roomId, Pageable pageable);
+
     Optional<ChatMessage> findTop1ByChatRoomIdOrderByCreatedAtDesc(Long roomId);
 
     @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.chatRoom.id = :roomId AND (:lastReadId IS NULL OR m.id > :lastReadId)")
