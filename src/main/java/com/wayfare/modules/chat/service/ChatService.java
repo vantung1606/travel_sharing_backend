@@ -498,11 +498,12 @@ public class ChatService {
                               ]
                             }
 
-                            CHI TIẾT PAYLOAD CHO TỪNG ACTION TYPE:
-                            - CREATE_ITINERARY: {"title": "...", "destination": "...", "durationDays": 2, "budgetTotal": 3000000, "groupType": "Cá nhân | Cặp đôi | Nhóm bạn | Gia đình", "travelStyle": "...", "isPublic": true, "details": [{"dayNumber": 1, "dayTitle": "Khám phá di tích và ẩm thực", "visitOrder": 1, "placeId": 12 (hoặc null nếu ngoài DB), "locationName": "...", "locationAddress": "...", "category": "Tham quan | Ẩm thực | Nghỉ dưỡng | Check-in", "startTime": "08:30", "estimatedCost": 150000, "aiTip": "...", "note": "..."}]}
-                            - UPDATE_ITINERARY: {"itineraryId": 5, "title": "...", "destination": "...", "durationDays": 3, "budgetTotal": 5000000, "groupType": "...", "travelStyle": "...", "status": "ACTIVE"} (chỉ truyền field cần sửa + itineraryId bắt buộc)
+                            CHI TIẾT PAYLOAD CHO TỪNG ACTION TYPE (PHẢI KHỚP 100% SCHEMA HỆ THỐNG WAYFARE):
+                            - CREATE_ITINERARY: {"title": "...", "destination": "...", "durationDays": 2, "budgetTotal": 3000000, "groupType": "Cá nhân | Cặp đôi | Bạn bè | Gia đình", "travelStyle": "Nghỉ dưỡng | Phượt / Khám phá | Ẩm thực | Văn hóa & Lịch sử | Sinh thái | Check-in sống ảo", "status": "ACTIVE", "isPublic": true, "details": [{"dayNumber": 1, "dayTitle": "Ngày 1: Khám phá di tích và ẩm thực", "visitOrder": 1, "placeId": 12 (hoặc null nếu ngoài DB), "locationName": "...", "locationAddress": "...", "category": "Tham quan | Ẩm thực | Nghỉ dưỡng | Check-in | Di chuyển", "startTime": "08:30", "estimatedCost": 150000, "transitInfo": "Xe máy / Taxi ~15 phút", "aiTip": "Nên đi buổi sáng sớm để tránh nắng", "note": "..."}]}
+                              (Lưu ý: Mỗi ngày trong CREATE_ITINERARY PHẢI có 3-4 chặng Sáng-Trưa-Chiều-Tối đầy đủ, thực tế).
+                            - UPDATE_ITINERARY: {"itineraryId": 5, "title": "...", "destination": "...", "budgetTotal": 5000000, "groupType": "Cá nhân | Cặp đôi | Bạn bè | Gia đình", "travelStyle": "...", "status": "ACTIVE | DRAFT | COMPLETED | CANCELLED", "isPublic": true} (chỉ truyền field cần sửa + itineraryId bắt buộc)
                             - DELETE_ITINERARY: {"itineraryId": 5, "title": "..."}
-                            - ADD_ITINERARY_STOP: {"itineraryId": 5, "itineraryTitle": "...", "dayNumber": 1, "placeId": 12, "locationName": "...", "category": "...", "startTime": "09:00", "estimatedCost": 100000, "note": "..."}
+                            - ADD_ITINERARY_STOP: {"itineraryId": 5, "itineraryTitle": "...", "dayNumber": 1, "placeId": 12, "locationName": "...", "locationAddress": "...", "category": "Tham quan | Ẩm thực | Nghỉ dưỡng | Check-in", "startTime": "09:00", "estimatedCost": 100000, "transitInfo": "...", "aiTip": "...", "note": "..."}
                             - UPDATE_ITINERARY_STOP: {"detailId": 21, "locationName": "...", "dayNumber": 1, "startTime": "10:00", "estimatedCost": 120000, "note": "..."}
                             - DELETE_ITINERARY_STOP: {"detailId": 21, "locationName": "..."}
                             - SAVE_PLACE / UNSAVE_PLACE / OPEN_PLACE: {"placeId": 12, "placeName": "..."}
