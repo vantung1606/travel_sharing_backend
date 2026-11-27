@@ -499,8 +499,8 @@ public class ChatService {
                             }
 
                             CHI TIẾT PAYLOAD CHO TỪNG ACTION TYPE (PHẢI KHỚP 100% SCHEMA HỆ THỐNG WAYFARE):
-                            - CREATE_ITINERARY: {"title": "...", "destination": "...", "durationDays": 2, "budgetTotal": 3000000, "groupType": "Cá nhân | Cặp đôi | Bạn bè | Gia đình", "travelStyle": "Nghỉ dưỡng | Phượt / Khám phá | Ẩm thực | Văn hóa & Lịch sử | Sinh thái | Check-in sống ảo", "status": "ACTIVE", "isPublic": true, "details": [{"dayNumber": 1, "dayTitle": "Ngày 1: Khám phá di tích và ẩm thực", "visitOrder": 1, "placeId": 12 (hoặc null nếu ngoài DB), "locationName": "...", "locationAddress": "...", "category": "Tham quan | Ẩm thực | Nghỉ dưỡng | Check-in | Di chuyển", "startTime": "08:30", "estimatedCost": 150000, "transitInfo": "Xe máy / Taxi ~15 phút", "aiTip": "Nên đi buổi sáng sớm để tránh nắng", "note": "..."}]}
-                              (Lưu ý: Mỗi ngày trong CREATE_ITINERARY PHẢI có 3-4 chặng Sáng-Trưa-Chiều-Tối đầy đủ, thực tế).
+                            - CREATE_ITINERARY: {"title": "...", "destination": "...", "durationDays": 2, "budgetTotal": 3000000, "groupType": "Cá nhân | Cặp đôi | Bạn bè | Gia đình", "travelStyle": "Nghỉ dưỡng | Phượt / Khám phá | Ẩm thực | Văn hóa & Lịch sử | Sinh thái | Check-in sống ảo", "status": "ACTIVE", "isPublic": true, "details": [{"dayNumber": 1, "dayTitle": "Ngày 1: Khám phá di tích và ẩm thực", "visitOrder": 1, "placeId": 12 (hoặc null nếu ngoài DB), "locationName": "...", "locationAddress": "...", "category": "Tham quan | Ẩm thực | Nghỉ dưỡng | Check-in | Di chuyển", "startTime": "08:30", "estimatedCost": 150000, "transitInfo": "Xe máy / Taxi", "aiTip": "Mẹo ngắn 1 câu", "note": "Ghi chú ngắn"}]}
+                              (Lưu ý: Mỗi ngày có 3-4 chặng Sáng-Trưa-Chiều-Tối; nếu chuyến đi dài >= 5 ngày thì viết aiTip/note thật ngắn gọn để JSON không bị quá dài. CHỈ TRẢ VỀ DUY NHẤT 1 KHỐI JSON, KHÔNG VIẾT BẤT KỲ CHỮ NÀO BÊN NGOÀI DẤU { }).
                             - UPDATE_ITINERARY: {"itineraryId": 5, "title": "...", "destination": "...", "budgetTotal": 5000000, "groupType": "Cá nhân | Cặp đôi | Bạn bè | Gia đình", "travelStyle": "...", "status": "ACTIVE | DRAFT | COMPLETED | CANCELLED", "isPublic": true} (chỉ truyền field cần sửa + itineraryId bắt buộc)
                             - DELETE_ITINERARY: {"itineraryId": 5, "title": "..."}
                             - ADD_ITINERARY_STOP: {"itineraryId": 5, "itineraryTitle": "Tên lịch trình đích trong CSDL", "dayNumber": 1, "placeId": 12, "locationName": "...", "locationAddress": "...", "category": "Tham quan | Ẩm thực | Nghỉ dưỡng | Check-in", "startTime": "12:00", "estimatedCost": 150000, "transitInfo": "...", "aiTip": "...", "note": "..."}
@@ -524,7 +524,7 @@ public class ChatService {
                             .history(historyTurns)
                             .prompt(userQuestion)
                             .temperature(0.4)
-                            .maxTokens(2500)
+                            .maxTokens(8192)
                             .responseMimeType("application/json")
                             .build();
 
@@ -535,7 +535,7 @@ public class ChatService {
                         rawResponseText = parsedRich;
                         finalMessageType = "AI_RICH";
                     } else if (!candidate.isBlank()) {
-                        rawResponseText = candidate.replace("**", "");
+                        rawResponseText = extractSafePlainReply(candidate);
                     } else {
                         rawResponseText = "Mình đã ghi nhận yêu cầu của bạn. Bạn muốn mình tạo lịch trình hay tìm địa điểm cụ thể nào?";
                     }
@@ -608,6 +608,29 @@ public class ChatService {
             log.warn("Could not parse AI_RICH JSON, falling back to TEXT: {}", e.getMessage());
         }
         return null;
+    }
+
+    private String extractSafePlainReply(String raw) {
+        if (raw == null || raw.isBlank()) return "";
+        String trimmed = raw.trim();
+        // Nếu chuỗi bị cắt ngang nhưng vẫn có trường "reply": "..." thì trích ra cho sạch, không để lộ JSON thô
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\"reply\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
+                .matcher(trimmed);
+        if (m.find()) {
+            try {
+                return objectMapper.readValue("\"" + m.group(1) + "\"", String.class).replace("**", "").trim();
+            } catch (Exception ignored) {
+            }
+        }
+        int braceIdx = trimmed.indexOf('{');
+        if (braceIdx > 15) {
+            return trimmed.substring(0, braceIdx).replace("**", "").trim();
+        }
+        if (trimmed.startsWith("{") || trimmed.contains("\"actions\"")) {
+            return "Nội dung lịch trình hơi dài nên bị gián đoạn. Bạn thử yêu cầu số ngày ngắn hơn (3–5 ngày) để mình xuất đầy đủ chi tiết và nút lưu nhé!";
+        }
+        return trimmed.replace("**", "");
     }
 
     private String extractAiReplyPreview(String content) {
