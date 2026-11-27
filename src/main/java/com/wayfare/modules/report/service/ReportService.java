@@ -4,6 +4,7 @@ import com.wayfare.entity.*;
 import com.wayfare.exception.ResourceNotFoundException;
 import com.wayfare.modules.admin.service.ActivityLogService;
 import com.wayfare.modules.notification.service.NotificationService;
+import com.wayfare.modules.place.service.ReviewService;
 import com.wayfare.modules.report.dto.CreateReportRequest;
 import com.wayfare.modules.report.dto.ReportDto;
 import com.wayfare.repository.*;
@@ -26,6 +27,7 @@ public class ReportService {
     private final PostRepository postRepository;
     private final PlaceRepository placeRepository;
     private final ReviewRepository reviewRepository;
+    private final ReviewService reviewService;
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
 
@@ -139,24 +141,115 @@ public class ReportService {
 
         User admin = userRepository.findByEmail(adminEmail).orElse(null);
         String act = action != null ? action.toUpperCase().trim() : "RESOLVED";
+        String targetType = report.getTargetType() != null ? report.getTargetType().toUpperCase().trim() : "";
+        Long targetId = report.getTargetId();
+        String enforcementSummary = act;
 
         if ("DISMISS".equalsIgnoreCase(act) || "DISMISSED".equalsIgnoreCase(act)) {
             report.setStatus("DISMISSED");
+            enforcementSummary = "Bác bỏ báo cáo";
+            if ("POST".equals(targetType) && targetId != null) {
+                postRepository.findById(targetId).ifPresent(p -> {
+                    if ("PENDING_REPORT".equalsIgnoreCase(p.getStatus())) {
+                        p.setStatus("ACTIVE");
+                        postRepository.save(p);
+                    }
+                });
+            }
         } else {
             report.setStatus("RESOLVED");
+            boolean isHide = "HIDE_TARGET".equalsIgnoreCase(act) || "RESOLVE".equalsIgnoreCase(act) || "RESOLVED".equalsIgnoreCase(act);
+            boolean isDelete = "DELETE_TARGET".equalsIgnoreCase(act);
+
+            if (targetId != null) {
+                switch (targetType) {
+                    case "REVIEW" -> {
+                        if (isDelete) {
+                            reviewRepository.findById(targetId).ifPresent(r -> {
+                                User reviewAuthor = r.getAuthor();
+                                reviewService.deleteReviewByModerator(targetId);
+                                if (reviewAuthor != null) {
+                                    notificationService.sendNotification(
+                                            reviewAuthor, admin, "MODERATION_ALERT",
+                                            "Đánh giá của bạn tại \"" + (r.getPlace() != null ? r.getPlace().getName() : "địa điểm") + "\" đã bị xóa do vi phạm tiêu chuẩn cộng đồng.",
+                                            "/explore"
+                                    );
+                                }
+                            });
+                            enforcementSummary = "Đã xóa đánh giá vi phạm";
+                        } else if (isHide) {
+                            reviewRepository.findById(targetId).ifPresent(r -> {
+                                reviewService.setReviewHidden(targetId, true);
+                                if (r.getAuthor() != null) {
+                                    notificationService.sendNotification(
+                                            r.getAuthor(), admin, "MODERATION_ALERT",
+                                            "Đánh giá của bạn tại \"" + (r.getPlace() != null ? r.getPlace().getName() : "địa điểm") + "\" đã bị ẩn do vi phạm tiêu chuẩn cộng đồng.",
+                                            "/explore"
+                                    );
+                                }
+                            });
+                            enforcementSummary = "Đã ẩn đánh giá vi phạm";
+                        }
+                    }
+                    case "POST" -> {
+                        postRepository.findById(targetId).ifPresent(p -> {
+                            p.setStatus(isDelete ? "REMOVED" : "HIDDEN");
+                            p.setUpdatedAt(LocalDateTime.now());
+                            postRepository.save(p);
+                            if (p.getAuthor() != null) {
+                                notificationService.sendNotification(
+                                        p.getAuthor(), admin, "MODERATION_ALERT",
+                                        "Bài viết \"" + (p.getTitle() != null ? p.getTitle() : "#" + p.getId()) + "\" đã bị " + (isDelete ? "gỡ bỏ" : "ẩn") + " do báo cáo vi phạm.",
+                                        "/community"
+                                );
+                            }
+                        });
+                        enforcementSummary = isDelete ? "Đã gỡ bài viết" : "Đã ẩn bài viết";
+                    }
+                    case "PLACE" -> {
+                        placeRepository.findById(targetId).ifPresent(pl -> {
+                            pl.setStatus(isDelete ? "REJECTED" : "HIDDEN");
+                            placeRepository.save(pl);
+                        });
+                        enforcementSummary = isDelete ? "Đã gỡ địa điểm" : "Đã ẩn địa điểm";
+                    }
+                    case "USER" -> {
+                        userRepository.findById(targetId).ifPresent(u -> {
+                            u.setStatus("LOCKED");
+                            u.setIsLocked(true);
+                            userRepository.save(u);
+                        });
+                        enforcementSummary = "Đã khóa tài khoản vi phạm";
+                    }
+                    default -> log.warn("No enforcement handler for targetType={}", targetType);
+                }
+            }
         }
+
         report.setActionTaken(act);
-        report.setModeratorNotes(notes != null ? notes.trim() : null);
+        report.setModeratorNotes(notes != null && !notes.isBlank() ? notes.trim() : enforcementSummary);
         report.setResolvedBy(admin);
         report.setResolvedAt(LocalDateTime.now());
 
         Report updated = reportRepository.save(report);
 
+        // Thông báo lại cho người gửi báo cáo
+        try {
+            if (report.getReporter() != null) {
+                String reporterMsg = "DISMISSED".equals(report.getStatus())
+                        ? "Báo cáo #" + reportId + " của bạn đã được xem xét nhưng chưa đủ căn cứ vi phạm."
+                        : "Báo cáo #" + reportId + " của bạn đã được xử lý (" + enforcementSummary + "). Cảm ơn bạn đã đóng góp cho cộng đồng Wayfare!";
+                notificationService.sendNotification(report.getReporter(), admin, "REPORT_RESULT", reporterMsg, "/explore");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify reporter for report {}: {}", reportId, e.getMessage());
+        }
+
         try {
             activityLogService.recordLog(
                     admin,
                     "ADMIN_RESOLVE_REPORT",
-                    "Quản trị viên " + adminEmail + " đã xử lý báo cáo #" + reportId + " (Hành động: " + act + ")"
+                    "Quản trị viên " + adminEmail + " đã xử lý báo cáo #" + reportId + " [" + targetType + " #" + targetId + "] (" + enforcementSummary + ")"
             );
         } catch (Exception ignored) {}
 
