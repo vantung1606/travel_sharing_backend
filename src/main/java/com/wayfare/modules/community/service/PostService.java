@@ -1255,10 +1255,25 @@ public class PostService {
             String firstImage = null;
             if (!rawImages.isBlank()) {
                 for (String part : rawImages.split(";;;")) {
-                    if (part != null && !part.trim().isEmpty()) {
-                        firstImage = part.trim();
-                        break;
+                    if (part == null || part.trim().isEmpty()) continue;
+                    String cleaned = sanitizeMediaUrl(part.trim());
+                    if (cleaned == null || cleaned.isBlank()) continue;
+                    String lower = cleaned.toLowerCase();
+                    boolean isVideo = lower.contains("/video/upload/")
+                            || lower.matches(".*\\.(mp4|webm|mov|mkv)(\\?.*)?$");
+                    if (isVideo) {
+                        // Convert Cloudinary video URL to a valid JPG poster thumbnail if possible
+                        if (lower.contains("res.cloudinary.com") && lower.contains("/video/upload/")) {
+                            String poster = cleaned.replaceFirst("\\.(mp4|webm|mov|mkv)(\\?.*)?$", ".jpg");
+                            if (!poster.equals(cleaned)) {
+                                firstImage = poster;
+                                break;
+                            }
+                        }
+                        continue;
                     }
+                    firstImage = cleaned;
+                    break;
                 }
             }
             Map<String, Object> item = new LinkedHashMap<>();
