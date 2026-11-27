@@ -58,4 +58,13 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE Post p SET p.commentCount = GREATEST(0, p.commentCount + :delta) WHERE p.id = :postId")
     void updateCommentCount(@Param("postId") Long postId, @Param("delta") int delta);
+
+    @Query("SELECT TRIM(p.locationTag), COUNT(p), MAX(p.images) " +
+           "FROM Post p " +
+           "WHERE p.status = 'ACTIVE' AND p.visibility = 'PUBLIC' " +
+           "AND p.locationTag IS NOT NULL AND TRIM(p.locationTag) <> '' " +
+           "AND LOWER(TRIM(p.locationTag)) <> 'việt nam' " +
+           "GROUP BY TRIM(p.locationTag) " +
+           "ORDER BY COUNT(p) DESC")
+    List<Object[]> findTopLocationsAllTime(org.springframework.data.domain.Pageable pageable);
 }

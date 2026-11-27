@@ -1241,6 +1241,35 @@ public class PostService {
             log.warn("Failed to send mention notification for post {}: {}", post.getId(), e.getMessage());
         }
     }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getTopLocations(int limit) {
+        log.info("Aggregating all-time system-wide top post locations, limit={}", limit);
+        List<Object[]> rows = postRepository.findTopLocationsAllTime(org.springframework.data.domain.PageRequest.of(0, limit));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            String location = row[0] != null ? String.valueOf(row[0]).trim() : "";
+            if (location.isEmpty()) continue;
+            long count = row[1] instanceof Number ? ((Number) row[1]).longValue() : 0L;
+            String rawImages = row[2] != null ? String.valueOf(row[2]) : "";
+            String firstImage = null;
+            if (!rawImages.isBlank()) {
+                for (String part : rawImages.split(";;;")) {
+                    if (part != null && !part.trim().isEmpty()) {
+                        firstImage = part.trim();
+                        break;
+                    }
+                }
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", location);
+            item.put("location", location);
+            item.put("count", count);
+            item.put("image", firstImage);
+            result.add(item);
+        }
+        return result;
+    }
 }
 
 

@@ -71,6 +71,15 @@ public class PostController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách bài viết thành công", posts));
     }
 
+    @GetMapping("/top-locations")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getTopLocations(
+            @RequestParam(defaultValue = "10") int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 20));
+        log.info("REST request to get system-wide all-time top post locations, limit={}", safeLimit);
+        List<Map<String, Object>> result = postService.getTopLocations(safeLimit);
+        return ResponseEntity.ok(ApiResponse.success("Lấy thống kê địa điểm toàn hệ thống thành công", result));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<PostDto>> getPostById(
             @PathVariable Long id,
