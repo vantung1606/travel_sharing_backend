@@ -42,10 +42,19 @@ public class ReportService {
         String targetType = request.getTargetType().toUpperCase().trim();
         String targetTitle = "ID: " + request.getTargetId();
 
+        // Chặn spam: không cho gửi trùng lặp khi đã có báo cáo PENDING cho cùng đối tượng
+        if (reportRepository.existsByReporterIdAndTargetTypeAndTargetIdAndStatus(
+                reporter.getId(), targetType, request.getTargetId(), "PENDING")) {
+            throw new IllegalArgumentException("Bạn đã gửi báo cáo cho nội dung này rồi và đang chờ quản trị viên xem xét.");
+        }
+
         switch (targetType) {
             case "POST" -> {
                 Post post = postRepository.findById(request.getTargetId())
                         .orElseThrow(() -> new ResourceNotFoundException("Bài viết không tồn tại với ID: " + request.getTargetId()));
+                if (post.getAuthor() != null && post.getAuthor().getId().equals(reporter.getId())) {
+                    throw new IllegalArgumentException("Bạn không thể tự báo cáo bài viết của chính mình.");
+                }
                 targetTitle = post.getTitle() != null ? post.getTitle() : "Bài viết #" + post.getId();
                 // Update post report counter and status
                 int count = post.getReportsCount() != null ? post.getReportsCount() : 0;
@@ -65,12 +74,28 @@ public class ReportService {
             case "USER" -> {
                 User targetUser = userRepository.findById(request.getTargetId())
                         .orElseThrow(() -> new ResourceNotFoundException("Người dùng bị báo cáo không tồn tại"));
+                if (targetUser.getId().equals(reporter.getId())) {
+                    throw new IllegalArgumentException("Bạn không thể tự báo cáo tài khoản của chính mình.");
+                }
                 targetTitle = targetUser.getFullName() + " (" + targetUser.getEmail() + ")";
             }
             case "REVIEW" -> {
                 Review review = reviewRepository.findById(request.getTargetId())
                         .orElseThrow(() -> new ResourceNotFoundException("Đánh giá không tồn tại với ID: " + request.getTargetId()));
-                targetTitle = "Đánh giá tại " + (review.getPlace() != null ? review.getPlace().getName() : "địa điểm");
+                if (review.getAuthor() != null && review.getAuthor().getId().equals(reporter.getId())) {
+                    throw new IllegalArgumentException("Bạn không thể tự báo cáo đánh giá của chính mình.");
+                }
+                String placeName = review.getPlace() != null ? review.getPlace().getName() : "địa điểm";
+                String commentSnippet = review.getComment() != null ? review.getComment().trim().replaceAll("\\s+", " ") : "";
+                if (commentSnippet.length() > 90) {
+                    commentSnippet = commentSnippet.substring(0, 87) + "...";
+                }
+                targetTitle = commentSnippet.isEmpty()
+                        ? "Đánh giá tại " + placeName
+                        : "Đánh giá tại " + placeName + ": \"" + commentSnippet + "\"";
+                if (targetTitle.length() > 240) {
+                    targetTitle = targetTitle.substring(0, 237) + "...";
+                }
             }
             default -> log.warn("Unknown targetType in report: {}", targetType);
         }
@@ -214,11 +239,17 @@ public class ReportService {
                         enforcementSummary = isDelete ? "Đã gỡ địa điểm" : "Đã ẩn địa điểm";
                     }
                     case "USER" -> {
-                        userRepository.findById(targetId).ifPresent(u -> {
-                            u.setStatus("LOCKED");
-                            u.setIsLocked(true);
-                            userRepository.save(u);
-                        });
+                        User targetUser = userRepository.findById(targetId).orElse(null);
+                        if (targetUser != null) {
+                            boolean isTargetAdmin = targetUser.getRoles() != null && targetUser.getRoles().stream()
+                                    .anyMatch(r -> r.getName() != null && r.getName().toUpperCase().contains("ADMIN"));
+                            if (isTargetAdmin || (admin != null && targetUser.getId().equals(admin.getId()))) {
+                                throw new IllegalArgumentException("Không thể khóa tài khoản Quản trị viên hoặc chính bạn!");
+                            }
+                            targetUser.setStatus("LOCKED");
+                            targetUser.setIsLocked(true);
+                            userRepository.save(targetUser);
+                        }
                         enforcementSummary = "Đã khóa tài khoản vi phạm";
                     }
                     default -> log.warn("No enforcement handler for targetType={}", targetType);

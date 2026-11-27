@@ -417,11 +417,21 @@ public class ItineraryService {
         Itinerary itinerary = itineraryRepository.findById(itineraryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
 
+        User requester = getUserByEmail(requesterEmail);
+        boolean isOwner = itinerary.getCreator() != null && itinerary.getCreator().getId().equals(requester.getId());
+        if (!isOwner) {
+            throw new IllegalArgumentException("Chỉ chủ sở hữu lịch trình mới có quyền mời thành viên.");
+        }
+
         User user = userRepository.findByEmail(memberEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + memberEmail));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản với email: " + memberEmail));
+
+        if (itinerary.getCreator() != null && itinerary.getCreator().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("Chủ sở hữu đã thuộc chuyến đi này.");
+        }
 
         if (itineraryMemberRepository.existsByItineraryIdAndUserId(itineraryId, user.getId())) {
-            throw new RuntimeException("Người dùng đã là thành viên của chuyến đi này.");
+            throw new IllegalArgumentException("Người dùng đã là thành viên của chuyến đi này.");
         }
 
         ItineraryMember member = ItineraryMember.builder()
@@ -437,6 +447,13 @@ public class ItineraryService {
     @Transactional
     public void removeMember(Long itineraryId, Long userId, String requesterEmail) {
         log.info("Removing member userId {} from itinerary {}", userId, itineraryId);
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
+        User requester = getUserByEmail(requesterEmail);
+        boolean isOwner = itinerary.getCreator() != null && itinerary.getCreator().getId().equals(requester.getId());
+        if (!isOwner && !requester.getId().equals(userId)) {
+            throw new IllegalArgumentException("Bạn không có quyền xóa thành viên khỏi chuyến đi này.");
+        }
         itineraryMemberRepository.deleteByItineraryIdAndUserId(itineraryId, userId);
     }
 
@@ -446,9 +463,16 @@ public class ItineraryService {
         Itinerary itinerary = itineraryRepository.findById(itineraryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
 
+        User requester = getUserByEmail(payerEmail);
+        boolean isOwner = itinerary.getCreator() != null && itinerary.getCreator().getId().equals(requester.getId());
+        boolean isMember = itineraryMemberRepository.existsByItineraryIdAndUserId(itineraryId, requester.getId());
+        if (!isOwner && !isMember) {
+            throw new IllegalArgumentException("Chỉ chủ chuyến đi hoặc thành viên mới có thể ghi nhận chi tiêu.");
+        }
+
         User payer = dto.getPayerId() != null
-                ? userRepository.findById(dto.getPayerId()).orElseGet(() -> getUserByEmail(payerEmail))
-                : getUserByEmail(payerEmail);
+                ? userRepository.findById(dto.getPayerId()).orElse(requester)
+                : requester;
 
         ItineraryExpense expense = ItineraryExpense.builder()
                 .itinerary(itinerary)
@@ -468,6 +492,13 @@ public class ItineraryService {
         log.info("Deleting expense id: {} by user: {}", expenseId, email);
         ItineraryExpense expense = itineraryExpenseRepository.findById(expenseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Expense not found with id: " + expenseId));
+        User requester = getUserByEmail(email);
+        boolean isOwner = expense.getItinerary() != null && expense.getItinerary().getCreator() != null
+                && expense.getItinerary().getCreator().getId().equals(requester.getId());
+        boolean isPayer = expense.getPayer() != null && expense.getPayer().getId().equals(requester.getId());
+        if (!isOwner && !isPayer) {
+            throw new IllegalArgumentException("Bạn không có quyền xóa khoản chi tiêu này.");
+        }
         itineraryExpenseRepository.delete(expense);
     }
 
