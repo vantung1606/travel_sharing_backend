@@ -731,7 +731,7 @@ public class ItineraryService {
 
         Itinerary itinerary = Itinerary.builder()
                 .creator(requester)
-                .title(destination + ": Lộ Trình AI Thông Minh (" + daysCount + "N" + (daysCount - 1) + "Đ)")
+                .title("Khám phá " + destination.replaceAll("(?i),\\s*Việt Nam$", "").trim() + " (" + daysCount + "N" + Math.max(1, daysCount - 1) + "Đ)")
                 .destination(destination)
                 .startDate(startDate)
                 .endDate(endDate)
