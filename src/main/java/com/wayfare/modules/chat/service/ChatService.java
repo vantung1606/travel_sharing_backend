@@ -479,10 +479,12 @@ public class ChatService {
                             QUY TẮC BẮT BUỘC:
                             1. LUÔN đọc kỹ toàn bộ lịch sử hội thoại trước đó. Tuyệt đối KHÔNG hỏi lại những thông tin người dùng đã cung cấp ở các lượt trước (ví dụ đã nói "Hội An" rồi thì lượt sau nói "đi 1 mình" phải hiểu ngay là đi Hội An 1 mình).
                             2. Trả lời SÚC TÍCH, ĐÚNG TRỌNG TÂM, thiết thực. Không hỏi vòng vo 3-4 câu nếu có thể đề xuất luôn phương án kèm nút thao tác.
-                            3. TUYỆT ĐỐI KHÔNG dùng ký tự markdown thô như **in đậm**, ## tiêu đề, hay ``` trong văn bản trả lời. Viết văn bản thuần sạch sẽ, dùng xuống dòng và gạch đầu dòng (-) gọn gàng.
+                            3. TUYỆT ĐỐI KHÔNG dùng ký tự markdown thô như **in đậm**, ## tiêu đề, hay ``` trong văn bản trả lời. VÀ TUYỆT ĐỐI KHÔNG ghi mã kỹ thuật như (placeId: 53) hay (itineraryId: 5) vào nội dung chữ "reply" (chỉ đặt các ID đó vào bên trong "payload" của "actions").
                             4. Dựa vào DỮ LIỆU CSDL THẬT bên dưới để trả lời. Khi tạo nút liên quan tới địa điểm, lịch trình, điểm dừng hoặc bài viết có sẵn trong CSDL, phải dùng ĐÚNG ID thật (placeId, itineraryId, detailId, postId). TUYỆT ĐỐI không tự bịa ID không có trong danh sách.
-                            5. Nếu người dùng muốn tạo lịch trình mới (ngay cả khi mới nói điểm đến + số người), hãy tóm tắt ngắn gọn lịch trình gợi ý VÀ tạo ngay nút CREATE_ITINERARY kèm danh sách chặng dừng (details) hợp lý để người dùng bấm 1 lần là tạo xong.
-                            6. Nếu người dùng muốn xem/sửa/xóa lịch trình hoặc điểm dừng, hãy kiểm tra danh sách lịch trình của họ trong CSDL bên dưới và tạo nút UPDATE_ITINERARY / DELETE_ITINERARY / ADD_ITINERARY_STOP / UPDATE_ITINERARY_STOP / DELETE_ITINERARY_STOP tương ứng.
+                            5. BẮT BUỘC LUÔN TẠO ĐẦY ĐỦ "actions" VÀ "quickReplies" (không được để mảng rỗng khi có ngữ cảnh phù hợp):
+                               - Nếu gợi ý lịch trình mới: PHẢI có nút CREATE_ITINERARY (kèm mảng details đầy đủ các chặng dừng), KÈM THEO 2-3 nút OPEN_PLACE / SAVE_PLACE cho các địa điểm thật trong CSDL được nhắc tới.
+                               - Nếu người dùng hỏi lịch trình của họ / muốn sửa / xóa / thêm điểm dừng: PHẢI tạo các nút OPEN_ITINERARY, UPDATE_ITINERARY, DELETE_ITINERARY, ADD_ITINERARY_STOP, UPDATE_ITINERARY_STOP, DELETE_ITINERARY_STOP tương ứng với itineraryId/detailId thật trong CSDL.
+                               - Nếu người dùng hỏi về địa điểm: PHẢI tạo nút OPEN_PLACE và SAVE_PLACE cho các địa điểm khớp trong CSDL.
 
                             BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SAU (không thêm text ngoài JSON):
                             {
@@ -574,7 +576,28 @@ public class ChatService {
             }
             JsonNode root = objectMapper.readTree(cleaned);
             if (root != null && root.isObject() && root.hasNonNull("reply")) {
-                return objectMapper.writeValueAsString(root);
+                com.fasterxml.jackson.databind.node.ObjectNode obj = (com.fasterxml.jackson.databind.node.ObjectNode) root;
+                // Dọn sạch dấu ** và mã kỹ thuật (placeId: 123) nếu AI lỡ chèn vào text hiển thị
+                String replyStr = obj.get("reply").asText("")
+                        .replace("**", "")
+                        .replaceAll("\\s*\\((?:placeId|itineraryId|detailId|postId)\\s*:\\s*\\d+\\)", "")
+                        .trim();
+                obj.put("reply", replyStr);
+
+                // Bảo đảm luôn có quickReplies để hiển thị chip gợi ý dưới tin nhắn
+                if (!obj.has("quickReplies") || !obj.get("quickReplies").isArray() || obj.get("quickReplies").isEmpty()) {
+                    com.fasterxml.jackson.databind.node.ArrayNode defaultQr = objectMapper.createArrayNode();
+                    defaultQr.add("✨ Tạo lịch trình chi tiết hơn");
+                    defaultQr.add("📋 Xem lịch trình của tôi");
+                    defaultQr.add("🗺️ Gợi ý thêm địa điểm gần đây");
+                    obj.set("quickReplies", defaultQr);
+                }
+
+                // Bảo đảm actions luôn là mảng hợp lệ
+                if (!obj.has("actions") || !obj.get("actions").isArray()) {
+                    obj.set("actions", objectMapper.createArrayNode());
+                }
+                return objectMapper.writeValueAsString(obj);
             }
         } catch (Exception e) {
             log.warn("Could not parse AI_RICH JSON, falling back to TEXT: {}", e.getMessage());
