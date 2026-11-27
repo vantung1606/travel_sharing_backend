@@ -491,7 +491,7 @@ public class ChatService {
                               "quickReplies": ["Gợi ý ngắn 1", "Gợi ý ngắn 2", "Gợi ý ngắn 3"],
                               "actions": [
                                 {
-                                  "type": "CREATE_ITINERARY | UPDATE_ITINERARY | DELETE_ITINERARY | ADD_ITINERARY_STOP | UPDATE_ITINERARY_STOP | DELETE_ITINERARY_STOP | SAVE_PLACE | UNSAVE_PLACE | OPEN_PLACE | OPEN_ITINERARY | OPEN_POST | NAVIGATE",
+                                  "type": "CREATE_ITINERARY | UPDATE_ITINERARY | DELETE_ITINERARY | CLONE_ITINERARY | TOGGLE_ITINERARY_VISIBILITY | ADD_ITINERARY_STOP | UPDATE_ITINERARY_STOP | DELETE_ITINERARY_STOP | ADD_EXPENSE | SAVE_PLACE | UNSAVE_PLACE | OPEN_PLACE | OPEN_ITINERARY | OPEN_POST | CREATE_POST | NAVIGATE",
                                   "label": "Nhãn nút ngắn gọn có emoji phù hợp",
                                   "payload": {}
                                 }
@@ -507,6 +507,10 @@ public class ChatService {
                               (Bắt buộc: Khi tạo ADD_ITINERARY_STOP, trong "reply" phải nêu rõ tên điểm ăn uống/tham quan cụ thể, địa chỉ/món nổi bật, giá ước tính và nói rõ sẽ thêm vào lịch trình nào, Ngày mấy, Giờ nào!)
                             - UPDATE_ITINERARY_STOP: {"detailId": 21, "itineraryTitle": "...", "locationName": "...", "dayNumber": 1, "startTime": "10:00", "estimatedCost": 120000, "note": "..."}
                             - DELETE_ITINERARY_STOP: {"detailId": 21, "itineraryTitle": "...", "dayNumber": 1, "locationName": "..."}
+                            - CLONE_ITINERARY: {"itineraryId": 5, "title": "..."}
+                            - TOGGLE_ITINERARY_VISIBILITY: {"itineraryId": 5, "isPublic": true, "title": "..."}
+                            - ADD_EXPENSE: {"itineraryId": 5, "itineraryTitle": "...", "amount": 350000, "category": "Ăn uống | Di chuyển | Lưu trú | Tham quan | Mua sắm | Khác", "description": "..."}
+                            - CREATE_POST: {"title": "...", "content": "...", "locationTag": "...", "itineraryId": 5}
                             - SAVE_PLACE / UNSAVE_PLACE / OPEN_PLACE: {"placeId": 12, "placeName": "..."}
                             - OPEN_ITINERARY: {"itineraryId": 5, "title": "..."}
                             - OPEN_POST: {"postId": 8, "title": "..."}
