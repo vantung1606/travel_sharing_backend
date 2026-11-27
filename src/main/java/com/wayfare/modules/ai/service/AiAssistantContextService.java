@@ -26,6 +26,9 @@ public class AiAssistantContextService {
     private final ProvinceRepository provinceRepository;
     private final ItineraryRepository itineraryRepository;
     private final ItineraryDetailRepository itineraryDetailRepository;
+    private final ItineraryExpenseRepository itineraryExpenseRepository;
+    private final ReviewRepository reviewRepository;
+    private final UserProvinceVisitRepository userProvinceVisitRepository;
     private final SavedPlaceRepository savedPlaceRepository;
     private final PostRepository postRepository;
 
@@ -33,7 +36,7 @@ public class AiAssistantContextService {
     public String buildDatabaseContext(User user, String currentQuestion, List<ChatMessage> recentMessages) {
         StringBuilder sb = new StringBuilder();
         try {
-            // 1. Thông tin người dùng hiện tại
+            // 1. Thông tin người dùng hiện tại + Dấu chân tỉnh thành đã đi
             sb.append("=== THÔNG TIN NGƯỜI DÙNG HIỆN TẠI ===\n");
             if (user != null) {
                 sb.append(String.format("- ID: %d | Tên: %s | Cấp bậc: %s | Phong cách: %s | Ngân sách ưa thích: %s\n",
@@ -42,6 +45,12 @@ public class AiAssistantContextService {
                         safe(user.getTier(), "bronze"),
                         safe(user.getTravelStyle(), "Linh hoạt"),
                         safe(user.getBudgetPreference(), "Trung bình")));
+                List<UserProvinceVisit> visits = userProvinceVisitRepository.findByUserIdOrderByVisitedAtDesc(user.getId());
+                if (!visits.isEmpty()) {
+                    sb.append("- Các mã tỉnh/thành đã từng check-in: ")
+                            .append(visits.stream().limit(15).map(UserProvinceVisit::getProvinceCode).collect(Collectors.joining(", ")))
+                            .append("\n");
+                }
             }
 
             // 2. Ghép văn bản hội thoại gần đây để nhận diện địa danh / từ khóa ngữ cảnh
@@ -70,6 +79,7 @@ public class AiAssistantContextService {
             if (matchedPlaces.isEmpty()) {
                 sb.append("(Chưa có địa điểm khớp trực tiếp trong CSDL; có thể gợi ý địa điểm nổi bật hoặc đề xuất thêm địa điểm)\n");
             } else {
+                int reviewSampleCount = 0;
                 for (Place p : matchedPlaces) {
                     sb.append(String.format("- [placeId=%d] %s | TP/Tỉnh: %s | Loại: %s | Đánh giá: %.1f (%d lượt) | Địa chỉ: %s\n",
                             p.getId(),
@@ -79,6 +89,18 @@ public class AiAssistantContextService {
                             p.getAverageRating() != null ? p.getAverageRating() : 0.0,
                             p.getReviewCount() != null ? p.getReviewCount() : 0,
                             safe(p.getAddress(), "")));
+                    if (reviewSampleCount < 5) {
+                        List<Review> revs = reviewRepository.findByPlaceIdOrderByCreatedAtDesc(p.getId());
+                        if (!revs.isEmpty()) {
+                            reviewSampleCount++;
+                            String revSnippets = revs.stream().limit(2)
+                                    .map(r -> String.format("%d★ \"%s\"",
+                                            r.getRating() != null ? r.getRating() : 5,
+                                            safe(r.getComment(), "").replaceAll("\\s+", " ").substring(0, Math.min(safe(r.getComment(), "").length(), 90))))
+                                    .collect(Collectors.joining("; "));
+                            sb.append("  Đánh giá thực tế: ").append(revSnippets).append("\n");
+                        }
+                    }
                 }
             }
 
@@ -95,12 +117,14 @@ public class AiAssistantContextService {
                             long days = java.time.temporal.ChronoUnit.DAYS.between(it.getStartDate(), it.getEndDate()) + 1;
                             daysStr = String.valueOf(Math.max(1, days));
                         }
-                        sb.append(String.format("- [itineraryId=%d] \"%s\" | Điểm đến: %s | Số ngày: %s | Ngân sách: %s VNĐ | Nhóm: %s | Trạng thái: %s\n",
+                        java.math.BigDecimal spent = itineraryExpenseRepository.getTotalExpensesByItineraryId(it.getId());
+                        sb.append(String.format("- [itineraryId=%d] \"%s\" | Điểm đến: %s | Số ngày: %s | Ngân sách: %s VNĐ | Đã chi: %s VNĐ | Nhóm: %s | Trạng thái: %s\n",
                                 it.getId(),
                                 safe(it.getTitle(), "Chưa đặt tên"),
                                 safe(it.getDestination(), ""),
                                 daysStr,
                                 it.getBudgetTotal() != null ? it.getBudgetTotal().toPlainString() : "0",
+                                spent != null ? spent.toPlainString() : "0",
                                 safe(it.getGroupType(), "Cá nhân"),
                                 safe(it.getStatus(), "DRAFT")));
 
