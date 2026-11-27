@@ -31,8 +31,8 @@ public class AiService {
     public AiService() {
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = 
                 new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(6000);  // 6s connect timeout
-        factory.setReadTimeout(35000);    // 35s read timeout for comprehensive AI itinerary generation
+        factory.setConnectTimeout(8000);  // 8s connect timeout
+        factory.setReadTimeout(75000);    // 75s read timeout for long 7-14 day AI itinerary generation
         this.restTemplate = new RestTemplate(factory);
     }
 
