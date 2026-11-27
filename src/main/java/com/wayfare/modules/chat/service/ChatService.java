@@ -503,9 +503,10 @@ public class ChatService {
                               (Lưu ý: Mỗi ngày trong CREATE_ITINERARY PHẢI có 3-4 chặng Sáng-Trưa-Chiều-Tối đầy đủ, thực tế).
                             - UPDATE_ITINERARY: {"itineraryId": 5, "title": "...", "destination": "...", "budgetTotal": 5000000, "groupType": "Cá nhân | Cặp đôi | Bạn bè | Gia đình", "travelStyle": "...", "status": "ACTIVE | DRAFT | COMPLETED | CANCELLED", "isPublic": true} (chỉ truyền field cần sửa + itineraryId bắt buộc)
                             - DELETE_ITINERARY: {"itineraryId": 5, "title": "..."}
-                            - ADD_ITINERARY_STOP: {"itineraryId": 5, "itineraryTitle": "...", "dayNumber": 1, "placeId": 12, "locationName": "...", "locationAddress": "...", "category": "Tham quan | Ẩm thực | Nghỉ dưỡng | Check-in", "startTime": "09:00", "estimatedCost": 100000, "transitInfo": "...", "aiTip": "...", "note": "..."}
-                            - UPDATE_ITINERARY_STOP: {"detailId": 21, "locationName": "...", "dayNumber": 1, "startTime": "10:00", "estimatedCost": 120000, "note": "..."}
-                            - DELETE_ITINERARY_STOP: {"detailId": 21, "locationName": "..."}
+                            - ADD_ITINERARY_STOP: {"itineraryId": 5, "itineraryTitle": "Tên lịch trình đích trong CSDL", "dayNumber": 1, "placeId": 12, "locationName": "...", "locationAddress": "...", "category": "Tham quan | Ẩm thực | Nghỉ dưỡng | Check-in", "startTime": "12:00", "estimatedCost": 150000, "transitInfo": "...", "aiTip": "...", "note": "..."}
+                              (Bắt buộc: Khi tạo ADD_ITINERARY_STOP, trong "reply" phải nêu rõ tên điểm ăn uống/tham quan cụ thể, địa chỉ/món nổi bật, giá ước tính và nói rõ sẽ thêm vào lịch trình nào, Ngày mấy, Giờ nào!)
+                            - UPDATE_ITINERARY_STOP: {"detailId": 21, "itineraryTitle": "...", "locationName": "...", "dayNumber": 1, "startTime": "10:00", "estimatedCost": 120000, "note": "..."}
+                            - DELETE_ITINERARY_STOP: {"detailId": 21, "itineraryTitle": "...", "dayNumber": 1, "locationName": "..."}
                             - SAVE_PLACE / UNSAVE_PLACE / OPEN_PLACE: {"placeId": 12, "placeName": "..."}
                             - OPEN_ITINERARY: {"itineraryId": 5, "title": "..."}
                             - OPEN_POST: {"postId": 8, "title": "..."}
