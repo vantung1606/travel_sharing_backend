@@ -22,6 +22,6 @@ public interface SavedPlaceRepository extends JpaRepository<SavedPlace, Long> {
      * place để không bị LazyInitializationException khi serialize ngoài
      * transaction.
      */
-    @Query("select sp from SavedPlace sp join fetch sp.place where sp.user.id = :userId order by sp.createdAt desc")
+    @Query("select sp from SavedPlace sp join fetch sp.place p left join fetch p.owner where sp.user.id = :userId order by sp.createdAt desc")
     List<SavedPlace> findAllByUserIdWithPlace(@Param("userId") Long userId);
 }

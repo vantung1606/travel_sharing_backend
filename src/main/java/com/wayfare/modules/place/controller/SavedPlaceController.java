@@ -1,8 +1,8 @@
 package com.wayfare.modules.place.controller;
 
 import com.wayfare.common.dto.ApiResponse;
-import com.wayfare.entity.Place;
 import com.wayfare.exception.ResourceNotFoundException;
+import com.wayfare.modules.place.dto.PlaceDto;
 import com.wayfare.modules.place.service.SavedPlaceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,9 +37,9 @@ public class SavedPlaceController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<Place>>> getSavedPlaces(Authentication authentication) {
+    public ResponseEntity<ApiResponse<List<PlaceDto>>> getSavedPlaces(Authentication authentication) {
         String email = requireAuthEmail(authentication);
-        List<Place> places = savedPlaceService.getSavedPlaces(email);
+        List<PlaceDto> places = savedPlaceService.getSavedPlaces(email);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách địa điểm yêu thích thành công", places));
     }
 

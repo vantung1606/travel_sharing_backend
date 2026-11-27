@@ -4,6 +4,7 @@ import com.wayfare.entity.Place;
 import com.wayfare.entity.SavedPlace;
 import com.wayfare.entity.User;
 import com.wayfare.exception.ResourceNotFoundException;
+import com.wayfare.modules.place.dto.PlaceDto;
 import com.wayfare.repository.PlaceRepository;
 import com.wayfare.repository.SavedPlaceRepository;
 import com.wayfare.repository.UserRepository;
@@ -28,6 +29,7 @@ public class SavedPlaceService {
     private final SavedPlaceRepository savedPlaceRepository;
     private final PlaceRepository placeRepository;
     private final UserRepository userRepository;
+    private final PlaceService placeService;
 
     private User requireUser(String email) {
         if (email == null || email.isBlank()) {
@@ -38,11 +40,11 @@ public class SavedPlaceService {
     }
 
     @Transactional(readOnly = true)
-    public List<Place> getSavedPlaces(String email) {
+    public List<PlaceDto> getSavedPlaces(String email) {
         User user = requireUser(email);
         return savedPlaceRepository.findAllByUserIdWithPlace(user.getId())
                 .stream()
-                .map(SavedPlace::getPlace)
+                .map(sp -> placeService.toDto(sp.getPlace()))
                 .collect(Collectors.toList());
     }
 
