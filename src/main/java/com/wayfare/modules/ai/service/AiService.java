@@ -105,11 +105,25 @@ public class AiService {
     private AiGenerateResponse callGeminiApi(AiGenerateRequest request, String model, String apiKey) throws Exception {
         Map<String, Object> payload = new HashMap<>();
 
-        // Contents
-        Map<String, Object> userContent = Map.of(
+        // Contents (hỗ trợ lịch sử hội thoại đa lượt nếu có)
+        List<Map<String, Object>> contents = new ArrayList<>();
+        if (request.getHistory() != null && !request.getHistory().isEmpty()) {
+            for (Map<String, String> turn : request.getHistory()) {
+                if (turn == null) continue;
+                String text = turn.get("text");
+                if (text == null || text.isBlank()) continue;
+                String role = "model".equalsIgnoreCase(turn.get("role")) ? "model" : "user";
+                contents.add(Map.of(
+                        "role", role,
+                        "parts", List.of(Map.of("text", text))
+                ));
+            }
+        }
+        contents.add(Map.of(
+                "role", "user",
                 "parts", List.of(Map.of("text", request.getPrompt()))
-        );
-        payload.put("contents", List.of(userContent));
+        ));
+        payload.put("contents", contents);
 
         // Generation Config
         Map<String, Object> genConfig = new HashMap<>();

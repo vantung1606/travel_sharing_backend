@@ -10,9 +10,13 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wayfare.modules.ai.dto.AiGenerateRequest;
 import com.wayfare.modules.ai.dto.AiGenerateResponse;
+import com.wayfare.modules.ai.service.AiAssistantContextService;
 import com.wayfare.modules.ai.service.AiService;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -34,6 +38,8 @@ public class ChatService {
     private final SimpMessagingTemplate messagingTemplate;
     private final com.wayfare.modules.notification.service.NotificationService notificationService;
     private final AiService aiService;
+    private final AiAssistantContextService aiAssistantContextService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public static final String AI_ASSISTANT_EMAIL = "assistant@wayfare.com";
     public static final String AI_ASSISTANT_NAME = "Trợ lý Wayfare";
@@ -396,39 +402,136 @@ public class ChatService {
         return dto;
     }
 
+    private void sendAiTypingEvent(Long roomId, User assistant, boolean isTyping) {
+        try {
+            messagingTemplate.convertAndSend("/topic/room." + roomId + ".typing", Map.of(
+                    "email", AI_ASSISTANT_EMAIL,
+                    "userName", assistant != null && assistant.getFullName() != null ? assistant.getFullName() : AI_ASSISTANT_NAME,
+                    "isTyping", isTyping
+            ));
+        } catch (Exception ignored) {
+        }
+    }
+
     private void triggerAiAssistantReply(ChatRoom room, User user, String userQuestion) {
         CompletableFuture.runAsync(() -> {
+            User assistant = null;
             try {
-                User assistant = getOrCreateAiAssistantUser();
-                String replyText;
+                assistant = getOrCreateAiAssistantUser();
+                sendAiTypingEvent(room.getId(), assistant, true);
+
+                String rawResponseText;
+                String finalMessageType = "TEXT";
+
                 if (aiService != null && aiService.isApiKeyConfigured()) {
+                    // Lấy 12 tin nhắn gần nhất để AI nhớ ngữ cảnh hội thoại đa lượt
+                    List<ChatMessage> recentDesc = chatMessageRepository.findByChatRoomIdOrderByCreatedAtDesc(
+                            room.getId(), PageRequest.of(0, 12));
+                    List<ChatMessage> recentAsc = new ArrayList<>(recentDesc);
+                    Collections.reverse(recentAsc);
+
+                    // Bỏ tin nhắn cuối nếu trùng với userQuestion vừa lưu để tránh lặp trong contents
+                    if (!recentAsc.isEmpty()) {
+                        ChatMessage last = recentAsc.get(recentAsc.size() - 1);
+                        if (last.getSender() != null && last.getSender().getId().equals(user.getId())
+                                && userQuestion.equals(last.getContent() != null ? last.getContent().trim() : "")) {
+                            recentAsc.remove(recentAsc.size() - 1);
+                        }
+                    }
+
+                    List<Map<String, String>> historyTurns = new ArrayList<>();
+                    for (ChatMessage m : recentAsc) {
+                        if (m.getContent() == null || m.getContent().isBlank()) continue;
+                        boolean isBot = m.getSender() != null && AI_ASSISTANT_EMAIL.equalsIgnoreCase(m.getSender().getEmail());
+                        String msgText = m.getContent().trim();
+                        if (isBot && "AI_RICH".equalsIgnoreCase(m.getMessageType())) {
+                            try {
+                                JsonNode node = objectMapper.readTree(msgText);
+                                if (node.hasNonNull("reply")) {
+                                    msgText = node.get("reply").asText("");
+                                }
+                            } catch (Exception ignored) {
+                            }
+                        } else if (!"TEXT".equalsIgnoreCase(m.getMessageType()) && !"AI_RICH".equalsIgnoreCase(m.getMessageType())) {
+                            msgText = "[" + m.getMessageType() + "]";
+                        }
+                        if (!msgText.isBlank()) {
+                            historyTurns.add(Map.of(
+                                    "role", isBot ? "model" : "user",
+                                    "text", msgText
+                            ));
+                        }
+                    }
+
+                    String dbContext = aiAssistantContextService.buildDatabaseContext(user, userQuestion, recentAsc);
+                    String systemPrompt = """
+                            Bạn là Trợ lý Wayfare VIP — trợ lý du lịch thông minh, đi thẳng vào trọng tâm và có khả năng đọc dữ liệu thật từ CSDL Wayfare cũng như tạo các nút hành động (thêm/sửa/xóa/lưu/mở trang) cho người dùng.
+
+                            QUY TẮC BẮT BUỘC:
+                            1. LUÔN đọc kỹ toàn bộ lịch sử hội thoại trước đó. Tuyệt đối KHÔNG hỏi lại những thông tin người dùng đã cung cấp ở các lượt trước (ví dụ đã nói "Hội An" rồi thì lượt sau nói "đi 1 mình" phải hiểu ngay là đi Hội An 1 mình).
+                            2. Trả lời SÚC TÍCH, ĐÚNG TRỌNG TÂM, thiết thực. Không hỏi vòng vo 3-4 câu nếu có thể đề xuất luôn phương án kèm nút thao tác.
+                            3. TUYỆT ĐỐI KHÔNG dùng ký tự markdown thô như **in đậm**, ## tiêu đề, hay ``` trong văn bản trả lời. Viết văn bản thuần sạch sẽ, dùng xuống dòng và gạch đầu dòng (-) gọn gàng.
+                            4. Dựa vào DỮ LIỆU CSDL THẬT bên dưới để trả lời. Khi tạo nút liên quan tới địa điểm, lịch trình, điểm dừng hoặc bài viết có sẵn trong CSDL, phải dùng ĐÚNG ID thật (placeId, itineraryId, detailId, postId). TUYỆT ĐỐI không tự bịa ID không có trong danh sách.
+                            5. Nếu người dùng muốn tạo lịch trình mới (ngay cả khi mới nói điểm đến + số người), hãy tóm tắt ngắn gọn lịch trình gợi ý VÀ tạo ngay nút CREATE_ITINERARY kèm danh sách chặng dừng (details) hợp lý để người dùng bấm 1 lần là tạo xong.
+                            6. Nếu người dùng muốn xem/sửa/xóa lịch trình hoặc điểm dừng, hãy kiểm tra danh sách lịch trình của họ trong CSDL bên dưới và tạo nút UPDATE_ITINERARY / DELETE_ITINERARY / ADD_ITINERARY_STOP / UPDATE_ITINERARY_STOP / DELETE_ITINERARY_STOP tương ứng.
+
+                            BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SAU (không thêm text ngoài JSON):
+                            {
+                              "reply": "Câu trả lời tiếng Việt sạch sẽ, không chứa ** markdown",
+                              "quickReplies": ["Gợi ý ngắn 1", "Gợi ý ngắn 2", "Gợi ý ngắn 3"],
+                              "actions": [
+                                {
+                                  "type": "CREATE_ITINERARY | UPDATE_ITINERARY | DELETE_ITINERARY | ADD_ITINERARY_STOP | UPDATE_ITINERARY_STOP | DELETE_ITINERARY_STOP | SAVE_PLACE | UNSAVE_PLACE | OPEN_PLACE | OPEN_ITINERARY | OPEN_POST | NAVIGATE",
+                                  "label": "Nhãn nút ngắn gọn có emoji phù hợp",
+                                  "payload": {}
+                                }
+                              ]
+                            }
+
+                            CHI TIẾT PAYLOAD CHO TỪNG ACTION TYPE:
+                            - CREATE_ITINERARY: {"title": "...", "destination": "...", "durationDays": 3, "budgetTotal": 4000000, "groupType": "Đi 1 mình | Cặp đôi | Nhóm bạn | Gia đình", "travelStyle": "...", "isPublic": true, "details": [{"dayNumber": 1, "visitOrder": 1, "placeId": 12 (hoặc null nếu địa điểm ngoài DB), "locationName": "...", "category": "...", "startTime": "08:30", "estimatedCost": 150000, "note": "..."}]}
+                            - UPDATE_ITINERARY: {"itineraryId": 5, "title": "...", "destination": "...", "durationDays": 3, "budgetTotal": 5000000, "groupType": "...", "travelStyle": "...", "status": "ACTIVE"} (chỉ truyền field cần sửa + itineraryId bắt buộc)
+                            - DELETE_ITINERARY: {"itineraryId": 5, "title": "..."}
+                            - ADD_ITINERARY_STOP: {"itineraryId": 5, "itineraryTitle": "...", "dayNumber": 1, "placeId": 12, "locationName": "...", "category": "...", "startTime": "09:00", "estimatedCost": 100000, "note": "..."}
+                            - UPDATE_ITINERARY_STOP: {"detailId": 21, "locationName": "...", "dayNumber": 1, "startTime": "10:00", "estimatedCost": 120000, "note": "..."}
+                            - DELETE_ITINERARY_STOP: {"detailId": 21, "locationName": "..."}
+                            - SAVE_PLACE / UNSAVE_PLACE / OPEN_PLACE: {"placeId": 12, "placeName": "..."}
+                            - OPEN_ITINERARY: {"itineraryId": 5, "title": "..."}
+                            - OPEN_POST: {"postId": 8, "title": "..."}
+                            - NAVIGATE: {"path": "/explore | /itineraries | /community | /profile"}
+
+                            """ + "\n" + dbContext;
+
                     AiGenerateRequest aiReq = AiGenerateRequest.builder()
                             .model("gemini-3.5-flash-lite")
-                            .systemPrompt("""
-                                    Bạn là Trợ lý Wayfare - Trợ lý du lịch ảo thông minh và thân thiện của mạng xã hội du lịch Wayfare (Việt Nam).
-                                    Nhiệm vụ của bạn:
-                                    1. Tư vấn điểm đến, ẩm thực đặc sản vùng miền, gợi ý lịch trình, thời tiết và kinh nghiệm du lịch thực tế.
-                                    2. Trả lời súc tích, tự nhiên, truyền cảm hứng và nhiệt tình bằng tiếng Việt, chèn emoji sinh động.
-                                    3. Nếu người dùng hỏi điều không liên quan đến du lịch/đời sống, hãy trả lời vui vẻ và khéo léo kết nối sang chủ đề du lịch.
-                                    """)
+                            .systemPrompt(systemPrompt)
+                            .history(historyTurns)
                             .prompt(userQuestion)
-                            .temperature(0.7)
-                            .maxTokens(1500)
+                            .temperature(0.4)
+                            .maxTokens(2500)
+                            .responseMimeType("application/json")
                             .build();
 
                     AiGenerateResponse aiRes = aiService.generateContent(aiReq);
-                    replyText = (aiRes != null && aiRes.getText() != null && !aiRes.getText().isBlank())
-                            ? aiRes.getText().trim()
-                            : "Mình đã nhận được câu hỏi từ bạn. Bạn có thể cho mình biết rõ hơn về điểm đến hoặc ngân sách dự kiến không?";
+                    String candidate = (aiRes != null && aiRes.getText() != null) ? aiRes.getText().trim() : "";
+                    String parsedRich = normalizeAiRichJson(candidate);
+                    if (parsedRich != null) {
+                        rawResponseText = parsedRich;
+                        finalMessageType = "AI_RICH";
+                    } else if (!candidate.isBlank()) {
+                        rawResponseText = candidate.replace("**", "");
+                    } else {
+                        rawResponseText = "Mình đã ghi nhận yêu cầu của bạn. Bạn muốn mình tạo lịch trình hay tìm địa điểm cụ thể nào?";
+                    }
                 } else {
-                    replyText = "Cảm ơn bạn đã nhắn tin cho Trợ lý Wayfare! Hiện tại kết nối AI đang được bảo trì, bạn thử lại sau ít phút nhé.";
+                    rawResponseText = "Cảm ơn bạn đã nhắn tin cho Trợ lý Wayfare! Hiện tại kết nối AI đang được bảo trì, bạn thử lại sau ít phút nhé.";
                 }
 
                 ChatMessage botMsg = ChatMessage.builder()
                         .chatRoom(room)
                         .sender(assistant)
-                        .content(replyText)
-                        .messageType("TEXT")
+                        .content(rawResponseText)
+                        .messageType(finalMessageType)
                         .build();
                 ChatMessage savedBotMsg = chatMessageRepository.save(botMsg);
 
@@ -439,11 +542,47 @@ public class ChatService {
                 ChatMessageDto botDto = mapToMessageDto(savedBotMsg, null);
                 botDto.setIsRead(false);
                 messagingTemplate.convertAndSend("/topic/room." + room.getId(), botDto);
-                log.info("AI Assistant reply saved and broadcasted to room {}", room.getId());
+                log.info("AI Assistant ({}) reply saved and broadcasted to room {}", finalMessageType, room.getId());
             } catch (Exception e) {
-                log.error("Failed to generate AI Assistant reply for room {}: {}", room.getId(), e.getMessage());
+                log.error("Failed to generate AI Assistant reply for room {}: {}", room.getId(), e.getMessage(), e);
+            } finally {
+                sendAiTypingEvent(room.getId(), assistant, false);
             }
         });
+    }
+
+    private String normalizeAiRichJson(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            String cleaned = raw.trim();
+            if (cleaned.startsWith("```")) {
+                cleaned = cleaned.replaceFirst("^```(?:json)?\\s*", "").replaceFirst("\\s*```$", "").trim();
+            }
+            int firstBrace = cleaned.indexOf('{');
+            int lastBrace = cleaned.lastIndexOf('}');
+            if (firstBrace >= 0 && lastBrace > firstBrace) {
+                cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+            }
+            JsonNode root = objectMapper.readTree(cleaned);
+            if (root != null && root.isObject() && root.hasNonNull("reply")) {
+                return objectMapper.writeValueAsString(root);
+            }
+        } catch (Exception e) {
+            log.warn("Could not parse AI_RICH JSON, falling back to TEXT: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private String extractAiReplyPreview(String content) {
+        if (content == null || content.isBlank()) return "Trợ lý Wayfare";
+        try {
+            JsonNode node = objectMapper.readTree(content);
+            if (node != null && node.hasNonNull("reply")) {
+                return node.get("reply").asText("Trợ lý Wayfare");
+            }
+        } catch (Exception ignored) {
+        }
+        return content;
     }
 
     @Transactional
@@ -623,6 +762,8 @@ public class ChatService {
                 lastMsgText = "[Video 🎬]";
             } else if ("LOCATION".equalsIgnoreCase(msg.getMessageType())) {
                 lastMsgText = "[Vị trí 📍]";
+            } else if ("AI_RICH".equalsIgnoreCase(msg.getMessageType())) {
+                lastMsgText = extractAiReplyPreview(msg.getContent());
             } else {
                 lastMsgText = msg.getContent();
             }

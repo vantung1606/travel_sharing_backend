@@ -6,6 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+import java.util.Map;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -19,4 +22,9 @@ public class AiGenerateRequest {
     private Double temperature;
     private Integer maxTokens;
     private String responseMimeType;
+
+    /**
+     * Lịch sử hội thoại đa lượt: mỗi phần tử gồm {"role": "user"|"model", "text": "..."}
+     */
+    private List<Map<String, String>> history;
 }
