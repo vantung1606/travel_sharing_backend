@@ -673,15 +673,6 @@ public class ChatService {
         ChatMember m2 = ChatMember.builder().chatRoom(savedRoom).user(targetUser).role("MEMBER").build();
         chatMemberRepository.saveAll(List.of(m1, m2));
 
-        // Tin nhắn chào mừng khởi tạo
-        ChatMessage welcome = ChatMessage.builder()
-                .chatRoom(savedRoom)
-                .sender(currentUser)
-                .content("Xin chào! Rất vui được kết nối cùng bạn trên Wayfare.")
-                .messageType("TEXT")
-                .build();
-        chatMessageRepository.save(welcome);
-
         ChatRoomDto createdDto = mapToRoomDto(savedRoom, currentUser);
 
         // Phát sóng cho cả 2 người biết có phòng chat mới được tạo (realtime bên ngoài)
@@ -1042,6 +1033,11 @@ public class ChatService {
         log.info("User {} deleting room {}", currentUser.getEmail(), roomId);
         ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ResourceNotFoundException("Phòng chat không tồn tại: " + roomId));
+
+        if (!chatMemberRepository.existsByChatRoomIdAndUserId(roomId, currentUser.getId())) {
+            log.warn("User {} attempted to delete room {} without membership", currentUser.getId(), roomId);
+            throw new IllegalArgumentException("Bạn không có quyền xóa cuộc trò chuyện này.");
+        }
 
         chatMessageRepository.deleteAll(chatMessageRepository.findByChatRoomIdOrderByCreatedAtAsc(roomId));
         chatMemberRepository.deleteAll(chatMemberRepository.findByChatRoomId(roomId));
